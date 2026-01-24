@@ -100,7 +100,9 @@ Plans:
 
 ---
 
-### Phase 4: Monitor Loop
+### Phase 4: Monitor Loop ✓
+
+**Status:** Complete (2026-01-24)
 
 **Goal:** Automated invariant checking runs continuously and creates tickets on violations.
 
@@ -109,16 +111,16 @@ Plans:
 - CORE-03: Monitor loop — periodic invariant checking with configurable interval
 
 **Success Criteria:**
-1. Tickets persist in SQLite with status transitions (created -> diagnosed -> resolved)
-2. Monitor loop runs at configurable intervals (e.g., every 30s) checking all registered invariants
-3. When an invariant fails, a ticket is automatically created with the violation details
+1. ✓ Tickets persist in SQLite with status transitions (created -> diagnosed -> resolved)
+2. ✓ Monitor loop runs at configurable intervals (e.g., every 30s) checking all registered invariants
+3. ✓ When an invariant fails, a ticket is automatically created with the violation details
 
 **Plans:** 3 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Ticket database with SQLite persistence and deduplication
-- [ ] 04-02-PLAN.md — MonitorLoop daemon with signal handling and heartbeat
-- [ ] 04-03-PLAN.md — CLI commands for tickets and monitor daemon
+- [x] 04-01-PLAN.md — Ticket database with SQLite persistence and deduplication
+- [x] 04-02-PLAN.md — MonitorLoop daemon with signal handling and heartbeat
+- [x] 04-03-PLAN.md — CLI commands for tickets and monitor daemon
 
 ---
 
@@ -194,4 +196,4 @@ All v1 requirements are mapped to exactly one phase.
 *Roadmap created: 2026-01-24*
 *Phase 2 complete: 2026-01-24*
 *Phase 3 complete: 2026-01-24*
-*Phase 4 planned: 2026-01-24*
+*Phase 4 complete: 2026-01-24*

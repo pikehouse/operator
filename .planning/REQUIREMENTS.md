@@ -10,8 +10,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Operator Core
 
 - [x] **CORE-01**: Subject adapter interface — clean separation between core and subject implementations
-- [ ] **CORE-02**: Ticket database — SQLite-backed ticket tracking (created, diagnosed, resolved)
-- [ ] **CORE-03**: Monitor loop — periodic invariant checking with configurable interval
+- [x] **CORE-02**: Ticket database — SQLite-backed ticket tracking (created, diagnosed, resolved)
+- [x] **CORE-03**: Monitor loop — periodic invariant checking with configurable interval
 - [ ] **CORE-04**: Agent runner — process tickets, invoke Claude for diagnosis
 
 ### TiKV Subject
@@ -83,8 +83,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CORE-01 | Phase 1 | Complete |
-| CORE-02 | Phase 4 | Pending |
-| CORE-03 | Phase 4 | Pending |
+| CORE-02 | Phase 4 | Complete |
+| CORE-03 | Phase 4 | Complete |
 | CORE-04 | Phase 5 | Pending |
 | TIKV-01 | Phase 2 | Complete |
 | TIKV-02 | Phase 2 | Complete |
@@ -109,4 +109,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after Phase 3 completion*
+*Last updated: 2026-01-24 after Phase 4 completion*
