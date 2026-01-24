@@ -1,0 +1,8 @@
+[project]
+name = "operator"
+version = "0.1.0"
+description = "AI-powered operator for distributed systems"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["packages/*"]
