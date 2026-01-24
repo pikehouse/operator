@@ -21,7 +21,7 @@ import signal
 from datetime import datetime
 from pathlib import Path
 
-from operator_core.db import TicketDB
+from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import make_violation_key
 from operator_tikv.invariants import InvariantChecker, InvariantViolation
 from operator_tikv.subject import TiKVSubject
