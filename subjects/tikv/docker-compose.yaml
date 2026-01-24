@@ -205,6 +205,28 @@ services:
       tikv2:
         condition: service_healthy
 
+  # Operator Container
+  operator:
+    build:
+      context: ../..
+      dockerfile: subjects/tikv/Dockerfile.operator
+    container_name: operator
+    environment:
+      - PD_ENDPOINT=http://pd0:2379
+      - PROMETHEUS_URL=http://prometheus:9090
+    depends_on:
+      tikv0:
+        condition: service_healthy
+      tikv1:
+        condition: service_healthy
+      tikv2:
+        condition: service_healthy
+      prometheus:
+        condition: service_started
+    profiles:
+      - operator
+    command: ["uv", "run", "python", "-c", "print('Operator container ready')"]
+
 volumes:
   pd0-data:
   pd1-data:
