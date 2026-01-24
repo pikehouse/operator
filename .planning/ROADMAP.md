@@ -45,6 +45,8 @@ Plans:
 
 ### Phase 2: TiKV Subject
 
+**Status:** Planned (2026-01-24)
+
 **Goal:** Operator can observe TiKV cluster state through a complete subject implementation.
 
 **Requirements:**
@@ -59,7 +61,14 @@ Plans:
 3. TiKV invariants detect when a store is down, latency exceeds threshold, or replication is degraded
 4. Log parser extracts leader election events, snapshot transfers, and slow operations from TiKV logs
 
-**Estimated plans:** 4-5
+**Plans:** 5 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Package setup with operator-tikv and Pydantic response types
+- [ ] 02-02-PLAN.md — PD API client (TDD) for cluster state observation
+- [ ] 02-03-PLAN.md — Prometheus metrics client (TDD) for performance metrics
+- [ ] 02-04-PLAN.md — Log parser (TDD) for leadership change extraction
+- [ ] 02-05-PLAN.md — TiKV invariants and TiKVSubject implementation
 
 ---
 
@@ -170,3 +179,4 @@ All v1 requirements are mapped to exactly one phase.
 
 ---
 *Roadmap created: 2026-01-24*
+*Phase 2 planned: 2026-01-24*
