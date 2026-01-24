@@ -5,6 +5,7 @@ description = "AI-powered operator for distributed systems"
 requires-python = ">=3.11"
 dependencies = [
     "operator-core",
+    "operator-tikv",
 ]
 
 [tool.uv.workspace]
@@ -12,3 +13,4 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 operator-core = { workspace = true }
+operator-tikv = { workspace = true }

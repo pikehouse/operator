@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 members = [
     "operator",
     "operator-core",
+    "operator-tikv",
 ]
 
 [[package]]
@@ -133,10 +134,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "operator-core" },
+    { name = "operator-tikv" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "operator-core", editable = "packages/operator-core" }]
+requires-dist = [
+    { name = "operator-core", editable = "packages/operator-core" },
+    { name = "operator-tikv", editable = "packages/operator-tikv" },
+]
 
 [[package]]
 name = "operator-core"
@@ -158,6 +163,17 @@ requires-dist = [
     { name = "rich", specifier = ">=14.0.0" },
     { name = "typer", specifier = ">=0.21.0" },
 ]
+
+[[package]]
+name = "operator-tikv"
+version = "0.1.0"
+source = { editable = "packages/operator-tikv" }
+dependencies = [
+    { name = "operator-core" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "operator-core", editable = "packages/operator-core" }]
 
 [[package]]
 name = "pydantic"
