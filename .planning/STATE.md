@@ -5,9 +5,9 @@
 **Phase:** 1 of 6 (Foundation)
 **Plan:** 3 of 4 in phase
 **Status:** In progress
-**Last activity:** 2026-01-24 - Completed 01-03-PLAN.md
+**Last activity:** 2026-01-24 - Completed 01-02-PLAN.md
 
-**Progress:** [##______________] 2/4 Phase 1 plans
+**Progress:** [###_____________] 3/4 Phase 1 plans
 
 ## Project Reference
 
@@ -21,7 +21,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 | Phase | Status | Plans |
 |-------|--------|-------|
-| 1 - Foundation | In progress | 2/4 |
+| 1 - Foundation | In progress | 3/4 |
 | 2 - TiKV Subject | Pending | 0/? |
 | 3 - Local Cluster | Pending | 0/? |
 | 4 - Monitor Loop | Pending | 0/? |
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T20:11:40Z
-**Stopped at:** Completed 01-03-PLAN.md (Deployment Abstraction)
-**Resume file:** .planning/phases/01-foundation/01-02-PLAN.md
+**Last session:** 2026-01-24T12:18:00Z
+**Stopped at:** Completed 01-02-PLAN.md (Subject Adapter Interface)
+**Resume file:** .planning/phases/01-foundation/01-04-PLAN.md
 
 ## Key Decisions
 
@@ -42,6 +42,9 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | No build-system at workspace root | 01-01 | Workspace root is coordinator only, not a buildable package |
 | Protocol not runtime_checkable - static typing only | 01-03 | Clean interface for deployment abstraction |
 | LocalDeployment lazy validates compose file | 01-03 | python-on-whales behavior - validates on operations |
+| Use @dataclass for internal types, Pydantic for API/config | 01-02 | Internal types don't need validation overhead |
+| All Subject methods async | 01-02 | Non-blocking I/O with httpx clients |
+| Subject Protocol uses @runtime_checkable | 01-02 | Enables isinstance() checks for debugging |
 
 ## Open Issues
 
