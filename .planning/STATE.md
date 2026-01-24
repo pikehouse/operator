@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 3 of 6 (Local Cluster)
-**Plan:** 4 of 4 in Phase 3
-**Status:** Phase Complete ✓ Verified
-**Last activity:** 2026-01-24 - Phase 3 verified
+**Phase:** 4 of 6 (Monitor Loop)
+**Plan:** 1 of ? in Phase 4
+**Status:** In progress
+**Last activity:** 2026-01-24 - Completed 04-01-PLAN.md
 
-**Progress:** [############____] ~80% (Phase 1 + Phase 2 + Phase 3 complete)
+**Progress:** [#############___] ~85% (Phase 1 + Phase 2 + Phase 3 + Phase 4 Plan 1 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Ready for Phase 4 - Monitor Loop
+**Current focus:** Phase 4 - Monitor Loop (ticket database foundation complete)
 
 ## Progress
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 1 - Foundation | ✓ Complete | 4/4 |
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
 | 3 - Local Cluster | ✓ Complete | 4/4 |
-| 4 - Monitor Loop | Pending | 0/? |
+| 4 - Monitor Loop | In Progress | 1/? |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T22:24:37Z
-**Stopped at:** Completed Phase 3 (03-04-PLAN.md)
+**Last session:** 2026-01-24T23:16:00Z
+**Stopped at:** Completed 04-01-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -67,10 +67,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Use uv for Python package management in container | 03-04 | Consistent with workspace tooling, fast installs |
 | Profile-based operator activation | 03-04 | Service doesn't start by default, run with --profile operator |
 | Environment variables for endpoints | 03-04 | PD_ENDPOINT and PROMETHEUS_URL configurable per deployment |
+| Use aiosqlite for non-blocking SQLite operations | 04-01 | Per RESEARCH.md - ensures async event loop not blocked by DB |
+| violation_key = invariant_name:store_id for deduplication | 04-01 | Consistent key format for ticket deduplication |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T23:00:00Z*
+*State updated: 2026-01-24T23:16:00Z*
