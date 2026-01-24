@@ -11,6 +11,12 @@ defined in operator-core. It includes:
 - Log parser for event extraction
 """
 
+from operator_tikv.log_parser import (
+    LeadershipChange,
+    LogEntry,
+    extract_leadership_changes,
+    parse_log_line,
+)
 from operator_tikv.types import (
     # PD API types
     PDRegionLeader,
@@ -43,4 +49,9 @@ __all__ = [
     "PrometheusRangeResult",
     "PrometheusData",
     "PrometheusQueryResponse",
+    # Log parser types and functions
+    "LogEntry",
+    "LeadershipChange",
+    "parse_log_line",
+    "extract_leadership_changes",
 ]
