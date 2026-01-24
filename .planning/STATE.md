@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 2 of 6 (TiKV Subject)
-**Plan:** 5 of 5 in Phase 2
-**Status:** Phase Complete
-**Last activity:** 2026-01-24 - Completed 02-05-PLAN.md
+**Phase:** 3 of 6 (Local Cluster)
+**Plan:** 1 of 4 in Phase 3
+**Status:** In progress
+**Last activity:** 2026-01-24 - Completed 03-01-PLAN.md
 
-**Progress:** [##########______] ~60% (Phase 1 + Phase 2 complete)
+**Progress:** [##########__#___] ~65% (Phase 1 + Phase 2 + Plan 03-01 complete)
 
 ## Project Reference
 
@@ -15,23 +15,23 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 3 - Local Cluster (next)
+**Current focus:** Phase 3 - Local Cluster (03-02 next: Prometheus/Grafana)
 
 ## Progress
 
 | Phase | Status | Plans |
 |-------|--------|-------|
-| 1 - Foundation | Complete | 4/4 |
-| 2 - TiKV Subject | Complete | 5/5 |
-| 3 - Local Cluster | Pending | 0/? |
+| 1 - Foundation | ✓ Complete | 4/4 |
+| 2 - TiKV Subject | ✓ Complete | 5/5 |
+| 3 - Local Cluster | In Progress | 1/4 |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T21:25:00Z
-**Stopped at:** Completed 02-05-PLAN.md (Phase 2 complete)
+**Last session:** 2026-01-24T22:00:20Z
+**Stopped at:** Completed 03-01-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -57,10 +57,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Store down has no grace period | 02-05 | Critical issue, immediate alerting needed |
 | High latency has 60s grace period | 02-05 | Allows transient spikes without alerting |
 | Actions raise NotImplementedError | 02-05 | Deferred to Phase 5 |
+| Use multi-arch images instead of -arm64 variants | 03-01 | pingcap/*:v8.5.5 is multi-arch, -arm64 images outdated |
+| Use curl for Docker healthchecks | 03-01 | Better handling of JSON and empty responses than wget |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T21:25:00Z*
+*State updated: 2026-01-24T22:00:20Z*
