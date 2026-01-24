@@ -1,5 +1,6 @@
 # TiKV Cluster for Operator Testing
-# 3 PD nodes + 3 TiKV nodes with multi-arch images (v8.5.5)
+# 3 PD nodes + 3 TiKV nodes + Prometheus + Grafana
+# Multi-arch images (v8.5.5)
 
 services:
   # PD Cluster (3 nodes)
@@ -153,6 +154,57 @@ services:
       start_period: 30s
     restart: on-failure
 
+  # Observability Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    depends_on:
+      tikv0:
+        condition: service_healthy
+    restart: on-failure
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+    restart: on-failure
+
+  # Load Generator (go-ycsb)
+  ycsb:
+    build:
+      context: .
+      dockerfile: Dockerfile.ycsb
+    container_name: ycsb
+    profiles:
+      - load
+    volumes:
+      - ./workloads:/custom-workloads:ro
+    depends_on:
+      tikv0:
+        condition: service_healthy
+      tikv1:
+        condition: service_healthy
+      tikv2:
+        condition: service_healthy
+
 volumes:
   pd0-data:
   pd1-data:
@@ -160,3 +212,5 @@ volumes:
   tikv0-data:
   tikv1-data:
   tikv2-data:
+  prometheus-data:
+  grafana-data:
