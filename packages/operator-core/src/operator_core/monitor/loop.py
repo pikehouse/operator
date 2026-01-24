@@ -127,10 +127,50 @@ class MonitorLoop:
         4. Create/update tickets for violations
         5. Auto-resolve tickets for cleared violations
         """
-        # Implementation in Task 2
-        pass
+        self._last_check = datetime.now()
+        violations: list[InvariantViolation] = []
+
+        # Get stores
+        stores = await self.subject.get_stores()
+
+        # Check store health (no grace period per CONTEXT.md)
+        violations.extend(self.checker.check_stores_up(stores))
+
+        # Check metrics for each up store
+        for store in stores:
+            if store.state == "Up":
+                try:
+                    metrics = await self.subject.get_store_metrics(store.id)
+
+                    if v := self.checker.check_latency(metrics):
+                        violations.append(v)
+                    if v := self.checker.check_disk_space(metrics):
+                        violations.append(v)
+                except Exception as e:
+                    # Log but don't crash on metrics fetch failure
+                    print(f"Failed to get metrics for store {store.id}: {e}")
+
+        # Track stats
+        self._invariant_count = 3  # stores_up, latency, disk_space
+        self._violation_count = len(violations)
+
+        # Create/update tickets for violations
+        if violations:
+            batch_key = f"batch-{datetime.now().isoformat()}"
+            for v in violations:
+                await db.create_or_update_ticket(v, batch_key=batch_key)
+
+        # Auto-resolve cleared violations (per CONTEXT.md)
+        current_keys = {make_violation_key(v) for v in violations}
+        resolved_count = await db.auto_resolve_cleared(current_keys)
+        if resolved_count > 0:
+            print(f"Auto-resolved {resolved_count} ticket(s)")
 
     def _log_heartbeat(self) -> None:
-        """Output periodic status message."""
-        # Implementation in Task 2
-        pass
+        """Output periodic status message per CONTEXT.md."""
+        status = (
+            "all passing"
+            if self._violation_count == 0
+            else f"{self._violation_count} violations"
+        )
+        print(f"Check complete: {self._invariant_count} invariants, {status}")
