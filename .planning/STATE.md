@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 3 of 6 (Local Cluster)
-**Plan:** 3 of 4 in Phase 3
-**Status:** In progress
-**Last activity:** 2026-01-24 - Completed 03-03-PLAN.md
+**Phase:** 3 of 6 (Local Cluster) - COMPLETE
+**Plan:** 4 of 4 in Phase 3
+**Status:** Phase 3 complete
+**Last activity:** 2026-01-24 - Completed 03-04-PLAN.md
 
-**Progress:** [##########__###_] ~75% (Phase 1 + Phase 2 + Plans 03-01, 03-02, 03-03 complete)
+**Progress:** [############____] ~80% (Phase 1 + Phase 2 + Phase 3 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 3 - Local Cluster (03-04 next: Cluster lifecycle scripts)
+**Current focus:** Ready for Phase 4 - Monitor Loop
 
 ## Progress
 
@@ -23,15 +23,15 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 |-------|--------|-------|
 | 1 - Foundation | Complete | 4/4 |
 | 2 - TiKV Subject | Complete | 5/5 |
-| 3 - Local Cluster | In Progress | 3/4 |
+| 3 - Local Cluster | Complete | 4/4 |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T22:08:01Z
-**Stopped at:** Completed 03-03-PLAN.md
+**Last session:** 2026-01-24T22:24:37Z
+**Stopped at:** Completed Phase 3 (03-04-PLAN.md)
 **Resume file:** None
 
 ## Key Decisions
@@ -64,10 +64,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Raw TiKV mode for YCSB | 03-03 | Simpler key-value operations without transaction overhead |
 | Docker Compose profiles for ycsb | 03-03 | On-demand service doesn't start with default 'up' |
 | Smaller workload config (10k records) | 03-03 | Suitable for local testing scenarios |
+| Use uv for Python package management in container | 03-04 | Consistent with workspace tooling, fast installs |
+| Profile-based operator activation | 03-04 | Service doesn't start by default, run with --profile operator |
+| Environment variables for endpoints | 03-04 | PD_ENDPOINT and PROMETHEUS_URL configurable per deployment |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T22:08:01Z*
+*State updated: 2026-01-24T22:24:37Z*
