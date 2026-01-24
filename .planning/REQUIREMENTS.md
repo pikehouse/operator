@@ -82,31 +82,31 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | TBD | Pending |
-| CORE-02 | TBD | Pending |
-| CORE-03 | TBD | Pending |
-| CORE-04 | TBD | Pending |
-| TIKV-01 | TBD | Pending |
-| TIKV-02 | TBD | Pending |
-| TIKV-03 | TBD | Pending |
-| TIKV-04 | TBD | Pending |
-| ENV-01 | TBD | Pending |
-| ENV-02 | TBD | Pending |
-| ENV-03 | TBD | Pending |
-| ENV-04 | TBD | Pending |
-| DEPLOY-01 | TBD | Pending |
-| DEPLOY-02 | TBD | Pending |
-| CHAOS-01 | TBD | Pending |
-| DIAG-01 | TBD | Pending |
-| DIAG-02 | TBD | Pending |
-| DIAG-03 | TBD | Pending |
-| DIAG-04 | TBD | Pending |
+| CORE-01 | Phase 1 | Pending |
+| CORE-02 | Phase 4 | Pending |
+| CORE-03 | Phase 4 | Pending |
+| CORE-04 | Phase 5 | Pending |
+| TIKV-01 | Phase 2 | Pending |
+| TIKV-02 | Phase 2 | Pending |
+| TIKV-03 | Phase 2 | Pending |
+| TIKV-04 | Phase 2 | Pending |
+| ENV-01 | Phase 3 | Pending |
+| ENV-02 | Phase 3 | Pending |
+| ENV-03 | Phase 3 | Pending |
+| ENV-04 | Phase 3 | Pending |
+| DEPLOY-01 | Phase 1 | Pending |
+| DEPLOY-02 | Phase 1 | Pending |
+| CHAOS-01 | Phase 6 | Pending |
+| DIAG-01 | Phase 5 | Pending |
+| DIAG-02 | Phase 5 | Pending |
+| DIAG-03 | Phase 5 | Pending |
+| DIAG-04 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 (pending roadmap creation)
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after initial definition*
+*Last updated: 2026-01-24 after roadmap creation*
