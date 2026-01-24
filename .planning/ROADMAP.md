@@ -72,7 +72,9 @@ Plans:
 
 ---
 
-### Phase 3: Local Cluster
+### Phase 3: Local Cluster ✓
+
+**Status:** Complete (2026-01-24)
 
 **Goal:** Fully containerized test environment with TiKV cluster, observability, and load generation.
 
@@ -83,18 +85,18 @@ Plans:
 - ENV-04: Containerized operator — the operator itself runs in Docker
 
 **Success Criteria:**
-1. `docker compose up` starts a 6-node TiKV/PD cluster with networking configured
-2. Prometheus scrapes all TiKV and PD metrics; Grafana dashboards show cluster health
-3. Load generator produces configurable traffic patterns against the cluster
-4. Operator container connects to cluster and observability stack without host dependencies
+1. ✓ `docker compose up` starts a 6-node TiKV/PD cluster with networking configured
+2. ✓ Prometheus scrapes all TiKV and PD metrics; Grafana dashboards show cluster health
+3. ✓ Load generator produces configurable traffic patterns against the cluster
+4. ✓ Operator container connects to cluster and observability stack without host dependencies
 
 **Plans:** 4 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — TiKV/PD cluster docker-compose (ENV-01)
-- [ ] 03-02-PLAN.md — Prometheus and Grafana observability (ENV-02)
-- [ ] 03-03-PLAN.md — go-ycsb load generator (ENV-03)
-- [ ] 03-04-PLAN.md — Operator container with verification (ENV-04)
+- [x] 03-01-PLAN.md — TiKV/PD cluster docker-compose (ENV-01)
+- [x] 03-02-PLAN.md — Prometheus and Grafana observability (ENV-02)
+- [x] 03-03-PLAN.md — go-ycsb load generator (ENV-03)
+- [x] 03-04-PLAN.md — Operator container with verification (ENV-04)
 
 ---
 
@@ -186,4 +188,4 @@ All v1 requirements are mapped to exactly one phase.
 ---
 *Roadmap created: 2026-01-24*
 *Phase 2 complete: 2026-01-24*
-*Phase 3 planned: 2026-01-24*
+*Phase 3 complete: 2026-01-24*

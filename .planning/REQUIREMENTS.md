@@ -23,10 +23,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Local Environment
 
-- [ ] **ENV-01**: Docker Compose cluster — 3 TiKV nodes, 3 PD nodes, all containerized
-- [ ] **ENV-02**: Containerized observability — Prometheus + Grafana in Docker (no host install)
-- [ ] **ENV-03**: Containerized load generator — traffic simulation in Docker
-- [ ] **ENV-04**: Containerized operator — the operator itself runs in Docker
+- [x] **ENV-01**: Docker Compose cluster — 3 TiKV nodes, 3 PD nodes, all containerized
+- [x] **ENV-02**: Containerized observability — Prometheus + Grafana in Docker (no host install)
+- [x] **ENV-03**: Containerized load generator — traffic simulation in Docker
+- [x] **ENV-04**: Containerized operator — the operator itself runs in Docker
 
 ### Deployment
 
@@ -90,10 +90,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TIKV-02 | Phase 2 | Complete |
 | TIKV-03 | Phase 2 | Complete |
 | TIKV-04 | Phase 2 | Complete |
-| ENV-01 | Phase 3 | Pending |
-| ENV-02 | Phase 3 | Pending |
-| ENV-03 | Phase 3 | Pending |
-| ENV-04 | Phase 3 | Pending |
+| ENV-01 | Phase 3 | Complete |
+| ENV-02 | Phase 3 | Complete |
+| ENV-03 | Phase 3 | Complete |
+| ENV-04 | Phase 3 | Complete |
 | DEPLOY-01 | Phase 1 | Complete |
 | DEPLOY-02 | Phase 1 | Complete |
 | CHAOS-01 | Phase 6 | Pending |
@@ -109,4 +109,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after Phase 2 completion*
+*Last updated: 2026-01-24 after Phase 3 completion*
