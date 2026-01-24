@@ -31,7 +31,13 @@
 2. Local deployment spins up containers via a single command (e.g., `operator deploy up`)
 3. Deployment abstraction allows swapping local for cloud without changing operator code
 
-**Estimated plans:** 3-4
+**Plans:** 4 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Project setup with uv workspace and operator-core package
+- [ ] 01-02-PLAN.md — Subject adapter interface (CORE-01) with Protocol and types
+- [ ] 01-03-PLAN.md — Deployment abstraction (DEPLOY-01) with LocalDeployment
+- [ ] 01-04-PLAN.md — CLI integration (DEPLOY-02) with deploy commands
 
 ---
 
