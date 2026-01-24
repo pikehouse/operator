@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 1 of 6 (Foundation) ✓ VERIFIED
-**Plan:** Phase 1 complete, verified
-**Status:** Phase 1 Complete — Ready for Phase 2
-**Last activity:** 2026-01-24 - Phase 1 verified
+**Phase:** 2 of 6 (TiKV Subject)
+**Plan:** 1 of ? in Phase 2
+**Status:** In Progress
+**Last activity:** 2026-01-24 - Completed 02-01-PLAN.md
 
-**Progress:** [####____________] 1/6 Phases complete
+**Progress:** [#####___________] ~25% (Phase 1 complete + 02-01)
 
 ## Project Reference
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Phase | Status | Plans |
 |-------|--------|-------|
 | 1 - Foundation | ✓ Complete | 4/4 |
-| 2 - TiKV Subject | Pending | 0/? |
+| 2 - TiKV Subject | In Progress | 1/? |
 | 3 - Local Cluster | Pending | 0/? |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Session Continuity
 
-**Last session:** 2026-01-24
-**Stopped at:** Phase 1 verified and complete
-**Resume file:** None (ready for Phase 2 planning)
+**Last session:** 2026-01-24T20:59:38Z
+**Stopped at:** Completed 02-01-PLAN.md
+**Resume file:** None
 
 ## Key Decisions
 
@@ -47,10 +47,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Subject Protocol uses @runtime_checkable | 01-02 | Enables isinstance() checks for debugging |
 | Subject defaults to 'tikv' in CLI commands | 01-04 | Per CONTEXT.md - tikv is primary subject |
 | Stub docker-compose uses nginx:alpine placeholder | 01-04 | Phase 1 testing - real TiKV in Phase 3 |
+| Pydantic for API response types, dataclass for internal types | 02-01 | External data needs validation, internal types don't |
+| Helper methods on Prometheus response models | 02-01 | get_single_value() handles string-to-float conversion pattern |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24*
+*State updated: 2026-01-24T20:59:38Z*
