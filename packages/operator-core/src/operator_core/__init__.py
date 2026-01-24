@@ -10,3 +10,21 @@ This package provides the foundational components including:
 """
 
 __version__ = "0.1.0"
+
+# Re-export public types for convenient imports
+from operator_core.deploy import (
+    DeploymentStatus,
+    DeploymentTarget,
+    LocalDeployment,
+    ServiceStatus,
+    create_local_deployment,
+)
+
+__all__ = [
+    "__version__",
+    "DeploymentTarget",
+    "LocalDeployment",
+    "ServiceStatus",
+    "DeploymentStatus",
+    "create_local_deployment",
+]
