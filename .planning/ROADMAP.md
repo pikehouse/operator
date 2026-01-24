@@ -66,7 +66,7 @@ Plans:
 Plans:
 - [ ] 02-01-PLAN.md — Package setup with operator-tikv and Pydantic response types
 - [ ] 02-02-PLAN.md — PD API client (TDD) for cluster state observation
-- [ ] 02-03-PLAN.md — Prometheus metrics client (TDD) for performance metrics
+- [x] 02-03-PLAN.md — Prometheus metrics client (TDD) for performance metrics
 - [ ] 02-04-PLAN.md — Log parser (TDD) for leadership change extraction
 - [ ] 02-05-PLAN.md — TiKV invariants and TiKVSubject implementation
 
