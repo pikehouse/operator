@@ -1,10 +1,10 @@
 # TiKV Cluster for Operator Testing
-# 3 PD nodes + 3 TiKV nodes with ARM64 images for OrbStack
+# 3 PD nodes + 3 TiKV nodes with multi-arch images (v8.5.5)
 
 services:
   # PD Cluster (3 nodes)
   pd0:
-    image: pingcap/pd-arm64:latest
+    image: pingcap/pd:v8.5.5
     container_name: pd0
     ports:
       - "2379:2379"
@@ -19,7 +19,7 @@ services:
       --advertise-peer-urls=http://pd0:2380
       --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:2379/pd/api/v1/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -27,7 +27,7 @@ services:
     restart: on-failure
 
   pd1:
-    image: pingcap/pd-arm64:latest
+    image: pingcap/pd:v8.5.5
     container_name: pd1
     volumes:
       - pd1-data:/data
@@ -40,7 +40,7 @@ services:
       --advertise-peer-urls=http://pd1:2380
       --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:2379/pd/api/v1/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -48,7 +48,7 @@ services:
     restart: on-failure
 
   pd2:
-    image: pingcap/pd-arm64:latest
+    image: pingcap/pd:v8.5.5
     container_name: pd2
     volumes:
       - pd2-data:/data
@@ -61,7 +61,7 @@ services:
       --advertise-peer-urls=http://pd2:2380
       --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
+      test: ["CMD", "curl", "-sf", "http://localhost:2379/pd/api/v1/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -70,7 +70,7 @@ services:
 
   # TiKV Cluster (3 nodes)
   tikv0:
-    image: pingcap/tikv-arm64:latest
+    image: pingcap/tikv:v8.5.5
     container_name: tikv0
     ports:
       - "20160:20160"
@@ -92,7 +92,7 @@ services:
       pd2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      test: ["CMD-SHELL", "curl -s http://localhost:20180/status || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -100,7 +100,7 @@ services:
     restart: on-failure
 
   tikv1:
-    image: pingcap/tikv-arm64:latest
+    image: pingcap/tikv:v8.5.5
     container_name: tikv1
     volumes:
       - tikv1-data:/data
@@ -119,7 +119,7 @@ services:
       pd2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      test: ["CMD-SHELL", "curl -s http://localhost:20180/status || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -127,7 +127,7 @@ services:
     restart: on-failure
 
   tikv2:
-    image: pingcap/tikv-arm64:latest
+    image: pingcap/tikv:v8.5.5
     container_name: tikv2
     volumes:
       - tikv2-data:/data
@@ -146,7 +146,7 @@ services:
       pd2:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      test: ["CMD-SHELL", "curl -s http://localhost:20180/status || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 5
