@@ -17,6 +17,8 @@ from operator_tikv.log_parser import (
     extract_leadership_changes,
     parse_log_line,
 )
+from operator_tikv.pd_client import PDClient
+from operator_tikv.prom_client import PrometheusClient
 from operator_tikv.types import (
     # PD API types
     PDRegionLeader,
@@ -35,6 +37,9 @@ from operator_tikv.types import (
 )
 
 __all__ = [
+    # Clients
+    "PDClient",
+    "PrometheusClient",
     # PD API types
     "PDStoreInfo",
     "PDStoreStatus",
