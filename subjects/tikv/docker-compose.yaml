@@ -1,15 +1,162 @@
-# Stub docker-compose for Phase 1 testing
-# Real TiKV cluster definition comes in Phase 3
+# TiKV Cluster for Operator Testing
+# 3 PD nodes + 3 TiKV nodes with ARM64 images for OrbStack
 
 services:
-  # Placeholder service to test deployment flow
-  placeholder:
-    image: nginx:alpine
+  # PD Cluster (3 nodes)
+  pd0:
+    image: pingcap/pd-arm64:latest
+    container_name: pd0
     ports:
-      - "8080:80"
+      - "2379:2379"
+    volumes:
+      - pd0-data:/data
+    command: >
+      --name=pd0
+      --data-dir=/data
+      --client-urls=http://0.0.0.0:2379
+      --advertise-client-urls=http://pd0:2379
+      --peer-urls=http://0.0.0.0:2380
+      --advertise-peer-urls=http://pd0:2380
+      --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
       interval: 5s
       timeout: 3s
-      retries: 3
-      start_period: 5s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
+  pd1:
+    image: pingcap/pd-arm64:latest
+    container_name: pd1
+    volumes:
+      - pd1-data:/data
+    command: >
+      --name=pd1
+      --data-dir=/data
+      --client-urls=http://0.0.0.0:2379
+      --advertise-client-urls=http://pd1:2379
+      --peer-urls=http://0.0.0.0:2380
+      --advertise-peer-urls=http://pd1:2380
+      --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
+  pd2:
+    image: pingcap/pd-arm64:latest
+    container_name: pd2
+    volumes:
+      - pd2-data:/data
+    command: >
+      --name=pd2
+      --data-dir=/data
+      --client-urls=http://0.0.0.0:2379
+      --advertise-client-urls=http://pd2:2379
+      --peer-urls=http://0.0.0.0:2380
+      --advertise-peer-urls=http://pd2:2380
+      --initial-cluster=pd0=http://pd0:2380,pd1=http://pd1:2380,pd2=http://pd2:2380
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2379/pd/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
+  # TiKV Cluster (3 nodes)
+  tikv0:
+    image: pingcap/tikv-arm64:latest
+    container_name: tikv0
+    ports:
+      - "20160:20160"
+      - "20180:20180"
+    volumes:
+      - tikv0-data:/data
+    command: >
+      --addr=0.0.0.0:20160
+      --advertise-addr=tikv0:20160
+      --status-addr=0.0.0.0:20180
+      --advertise-status-addr=tikv0:20180
+      --data-dir=/data
+      --pd=pd0:2379,pd1:2379,pd2:2379
+    depends_on:
+      pd0:
+        condition: service_healthy
+      pd1:
+        condition: service_healthy
+      pd2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+  tikv1:
+    image: pingcap/tikv-arm64:latest
+    container_name: tikv1
+    volumes:
+      - tikv1-data:/data
+    command: >
+      --addr=0.0.0.0:20160
+      --advertise-addr=tikv1:20160
+      --status-addr=0.0.0.0:20180
+      --advertise-status-addr=tikv1:20180
+      --data-dir=/data
+      --pd=pd0:2379,pd1:2379,pd2:2379
+    depends_on:
+      pd0:
+        condition: service_healthy
+      pd1:
+        condition: service_healthy
+      pd2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+  tikv2:
+    image: pingcap/tikv-arm64:latest
+    container_name: tikv2
+    volumes:
+      - tikv2-data:/data
+    command: >
+      --addr=0.0.0.0:20160
+      --advertise-addr=tikv2:20160
+      --status-addr=0.0.0.0:20180
+      --advertise-status-addr=tikv2:20180
+      --data-dir=/data
+      --pd=pd0:2379,pd1:2379,pd2:2379
+    depends_on:
+      pd0:
+        condition: service_healthy
+      pd1:
+        condition: service_healthy
+      pd2:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:20180/status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    restart: on-failure
+
+volumes:
+  pd0-data:
+  pd1-data:
+  pd2-data:
+  tikv0-data:
+  tikv1-data:
+  tikv2-data:
