@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 2 of 6 (TiKV Subject)
-**Plan:** 1 of ? in Phase 2
+**Plan:** 2 of 5 in Phase 2
 **Status:** In Progress
-**Last activity:** 2026-01-24 - Completed 02-01-PLAN.md
+**Last activity:** 2026-01-24 - Completed 02-04-PLAN.md
 
-**Progress:** [#####___________] ~25% (Phase 1 complete + 02-01)
+**Progress:** [######__________] ~33% (Phase 1 complete + 02-01, 02-04)
 
 ## Project Reference
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Phase | Status | Plans |
 |-------|--------|-------|
 | 1 - Foundation | ✓ Complete | 4/4 |
-| 2 - TiKV Subject | In Progress | 1/? |
+| 2 - TiKV Subject | In Progress | 2/5 |
 | 3 - Local Cluster | Pending | 0/? |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T20:59:38Z
-**Stopped at:** Completed 02-01-PLAN.md
+**Last session:** 2026-01-24T21:05:24Z
+**Stopped at:** Completed 02-04-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -49,10 +49,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Stub docker-compose uses nginx:alpine placeholder | 01-04 | Phase 1 testing - real TiKV in Phase 3 |
 | Pydantic for API response types, dataclass for internal types | 02-01 | External data needs validation, internal types don't |
 | Helper methods on Prometheus response models | 02-01 | get_single_value() handles string-to-float conversion pattern |
+| Naive datetime for log timestamps | 02-04 | Timezone handling deferred per RESEARCH.md Pitfall 5 |
+| Skip log lines without region_id | 02-04 | Not useful for diagnosis context |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T20:59:38Z*
+*State updated: 2026-01-24T21:05:24Z*
