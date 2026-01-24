@@ -1,0 +1,16 @@
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+RUN apk add --no-cache git make
+
+WORKDIR /build
+RUN git clone https://github.com/pingcap/go-ycsb.git .
+RUN make
+
+# Runtime stage
+FROM alpine:latest
+
+COPY --from=builder /build/bin/go-ycsb /usr/local/bin/
+COPY --from=builder /build/workloads /workloads
+
+ENTRYPOINT ["go-ycsb"]
