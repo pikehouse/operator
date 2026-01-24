@@ -16,10 +16,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### TiKV Subject
 
-- [ ] **TIKV-01**: PD API client — cluster state, region info, store info
-- [ ] **TIKV-02**: Prometheus metrics client — QPS, latency, disk, CPU, Raft lag
-- [ ] **TIKV-03**: TiKV invariants — health, latency, replication checks
-- [ ] **TIKV-04**: Log parser — leader elections, snapshots, slow operations
+- [x] **TIKV-01**: PD API client — cluster state, region info, store info
+- [x] **TIKV-02**: Prometheus metrics client — QPS, latency, disk, CPU, Raft lag
+- [x] **TIKV-03**: TiKV invariants — health, latency, replication checks
+- [x] **TIKV-04**: Log parser — leader elections, snapshots, slow operations
 
 ### Local Environment
 
@@ -86,10 +86,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-02 | Phase 4 | Pending |
 | CORE-03 | Phase 4 | Pending |
 | CORE-04 | Phase 5 | Pending |
-| TIKV-01 | Phase 2 | Pending |
-| TIKV-02 | Phase 2 | Pending |
-| TIKV-03 | Phase 2 | Pending |
-| TIKV-04 | Phase 2 | Pending |
+| TIKV-01 | Phase 2 | Complete |
+| TIKV-02 | Phase 2 | Complete |
+| TIKV-03 | Phase 2 | Complete |
+| TIKV-04 | Phase 2 | Complete |
 | ENV-01 | Phase 3 | Pending |
 | ENV-02 | Phase 3 | Pending |
 | ENV-03 | Phase 3 | Pending |
@@ -109,4 +109,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after roadmap creation*
+*Last updated: 2026-01-24 after Phase 2 completion*
