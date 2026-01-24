@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 4 of 6 (Monitor Loop)
-**Plan:** 2 of ? in Phase 4
-**Status:** In progress
-**Last activity:** 2026-01-24 - Completed 04-02-PLAN.md
+**Plan:** 3 of 3 in Phase 4
+**Status:** Phase complete
+**Last activity:** 2026-01-24 - Completed 04-03-PLAN.md
 
-**Progress:** [##############__] ~87% (Phase 1 + Phase 2 + Phase 3 + Phase 4 Plans 1-2 complete)
+**Progress:** [################] ~90% (Phase 1 + Phase 2 + Phase 3 + Phase 4 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 4 - Monitor Loop (MonitorLoop daemon complete)
+**Current focus:** Phase 4 - Monitor Loop (complete - CLI commands ready)
 
 ## Progress
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 1 - Foundation | ✓ Complete | 4/4 |
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
 | 3 - Local Cluster | ✓ Complete | 4/4 |
-| 4 - Monitor Loop | In Progress | 2/? |
+| 4 - Monitor Loop | ✓ Complete | 3/3 |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T23:15:12Z
-**Stopped at:** Completed 04-02-PLAN.md
+**Last session:** 2026-01-24T23:20:38Z
+**Stopped at:** Completed 04-03-PLAN.md (Phase 4 complete)
 **Resume file:** None
 
 ## Key Decisions
@@ -71,10 +71,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | violation_key = invariant_name:store_id for deduplication | 04-01 | Consistent key format for ticket deduplication |
 | asyncio.Event for shutdown coordination | 04-02 | Per RESEARCH.md - not busy polling, allows immediate signal response |
 | TicketDB wraps entire daemon loop | 04-02 | Single connection open for duration, consistent state |
+| Lazy import for MonitorLoop in monitor/__init__.py | 04-03 | Breaks circular import chain with db.tickets |
+| Direct submodule imports in CLI | 04-03 | Avoid __init__.py triggers that cause circular imports |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T23:15:12Z*
+*State updated: 2026-01-24T23:20:38Z*
