@@ -14,3 +14,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 operator-core = { workspace = true }
 operator-tikv = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+asyncio_mode = "auto"

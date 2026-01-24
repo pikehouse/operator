@@ -169,11 +169,15 @@ name = "operator-tikv"
 version = "0.1.0"
 source = { editable = "packages/operator-tikv" }
 dependencies = [
+    { name = "httpx" },
     { name = "operator-core" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "operator-core", editable = "packages/operator-core" }]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "operator-core", editable = "packages/operator-core" },
+]
 
 [[package]]
 name = "pydantic"
