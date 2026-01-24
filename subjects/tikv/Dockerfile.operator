@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+# Install uv for dependency management
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy workspace files
+COPY pyproject.toml uv.lock ./
+COPY packages/ ./packages/
+
+# Install dependencies using uv
+RUN uv sync --frozen
+
+# Set default command
+CMD ["uv", "run", "python", "-c", "print('Operator ready')"]
