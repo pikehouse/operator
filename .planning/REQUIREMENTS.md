@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Operator Core
 
-- [ ] **CORE-01**: Subject adapter interface — clean separation between core and subject implementations
+- [x] **CORE-01**: Subject adapter interface — clean separation between core and subject implementations
 - [ ] **CORE-02**: Ticket database — SQLite-backed ticket tracking (created, diagnosed, resolved)
 - [ ] **CORE-03**: Monitor loop — periodic invariant checking with configurable interval
 - [ ] **CORE-04**: Agent runner — process tickets, invoke Claude for diagnosis
@@ -30,8 +30,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Deployment
 
-- [ ] **DEPLOY-01**: Deployment abstraction — clean interface separating local vs. cloud deployment
-- [ ] **DEPLOY-02**: Local deployment — Docker Compose implementation (OrbStack-compatible)
+- [x] **DEPLOY-01**: Deployment abstraction — clean interface separating local vs. cloud deployment
+- [x] **DEPLOY-02**: Local deployment — Docker Compose implementation (OrbStack-compatible)
 
 ### Chaos Injection
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 1 | Pending |
+| CORE-01 | Phase 1 | Complete |
 | CORE-02 | Phase 4 | Pending |
 | CORE-03 | Phase 4 | Pending |
 | CORE-04 | Phase 5 | Pending |
@@ -94,8 +94,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENV-02 | Phase 3 | Pending |
 | ENV-03 | Phase 3 | Pending |
 | ENV-04 | Phase 3 | Pending |
-| DEPLOY-01 | Phase 1 | Pending |
-| DEPLOY-02 | Phase 1 | Pending |
+| DEPLOY-01 | Phase 1 | Complete |
+| DEPLOY-02 | Phase 1 | Complete |
 | CHAOS-01 | Phase 6 | Pending |
 | DIAG-01 | Phase 5 | Pending |
 | DIAG-02 | Phase 5 | Pending |

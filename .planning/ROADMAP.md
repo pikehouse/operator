@@ -17,7 +17,9 @@
 
 ## Phase Details
 
-### Phase 1: Foundation
+### Phase 1: Foundation ✓
+
+**Status:** Complete (2026-01-24)
 
 **Goal:** Core abstractions and local deployment infrastructure are ready for subject implementation.
 
@@ -27,17 +29,17 @@
 - DEPLOY-02: Local deployment — Docker Compose implementation (OrbStack-compatible)
 
 **Success Criteria:**
-1. A new subject can be added by implementing the adapter interface without modifying core code
-2. Local deployment spins up containers via a single command (e.g., `operator deploy up`)
-3. Deployment abstraction allows swapping local for cloud without changing operator code
+1. ✓ A new subject can be added by implementing the adapter interface without modifying core code
+2. ✓ Local deployment spins up containers via a single command (e.g., `operator deploy up`)
+3. ✓ Deployment abstraction allows swapping local for cloud without changing operator code
 
 **Plans:** 4 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Project setup with uv workspace and operator-core package
-- [ ] 01-02-PLAN.md — Subject adapter interface (CORE-01) with Protocol and types
-- [ ] 01-03-PLAN.md — Deployment abstraction (DEPLOY-01) with LocalDeployment
-- [ ] 01-04-PLAN.md — CLI integration (DEPLOY-02) with deploy commands
+- [x] 01-01-PLAN.md — Project setup with uv workspace and operator-core package
+- [x] 01-02-PLAN.md — Subject adapter interface (CORE-01) with Protocol and types
+- [x] 01-03-PLAN.md — Deployment abstraction (DEPLOY-01) with LocalDeployment
+- [x] 01-04-PLAN.md — CLI integration (DEPLOY-02) with deploy commands
 
 ---
 
