@@ -3,6 +3,12 @@ name = "operator"
 version = "0.1.0"
 description = "AI-powered operator for distributed systems"
 requires-python = ">=3.11"
+dependencies = [
+    "operator-core",
+]
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
+[tool.uv.sources]
+operator-core = { workspace = true }
