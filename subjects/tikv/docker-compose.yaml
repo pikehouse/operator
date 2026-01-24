@@ -1,0 +1,15 @@
+# Stub docker-compose for Phase 1 testing
+# Real TiKV cluster definition comes in Phase 3
+
+services:
+  # Placeholder service to test deployment flow
+  placeholder:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s

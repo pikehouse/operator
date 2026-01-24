@@ -152,7 +152,9 @@ class LocalDeployment:
                 for container_port, host_bindings in c.network_settings.ports.items():
                     if host_bindings:
                         for binding in host_bindings:
-                            ports.append(f"{binding.host_port}:{container_port}")
+                            # binding is a dict with HostIp and HostPort keys
+                            host_port = binding.get("HostPort") if isinstance(binding, dict) else binding.host_port
+                            ports.append(f"{host_port}:{container_port}")
 
             services.append(
                 ServiceStatus(
