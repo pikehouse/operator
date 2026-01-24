@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 3 of 6 (Local Cluster)
-**Plan:** 1 of 4 in Phase 3
+**Plan:** 2 of 4 in Phase 3
 **Status:** In progress
-**Last activity:** 2026-01-24 - Completed 03-01-PLAN.md
+**Last activity:** 2026-01-24 - Completed 03-02-PLAN.md
 
-**Progress:** [##########__#___] ~65% (Phase 1 + Phase 2 + Plan 03-01 complete)
+**Progress:** [##########__##__] ~70% (Phase 1 + Phase 2 + Plans 03-01, 03-02 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 3 - Local Cluster (03-02 next: Prometheus/Grafana)
+**Current focus:** Phase 3 - Local Cluster (03-03 next: Cluster lifecycle scripts)
 
 ## Progress
 
@@ -23,15 +23,15 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 |-------|--------|-------|
 | 1 - Foundation | ✓ Complete | 4/4 |
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
-| 3 - Local Cluster | In Progress | 1/4 |
+| 3 - Local Cluster | In Progress | 2/4 |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T22:00:20Z
-**Stopped at:** Completed 03-01-PLAN.md
+**Last session:** 2026-01-24T22:08:00Z
+**Stopped at:** Completed 03-02-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -59,10 +59,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Actions raise NotImplementedError | 02-05 | Deferred to Phase 5 |
 | Use multi-arch images instead of -arm64 variants | 03-01 | pingcap/*:v8.5.5 is multi-arch, -arm64 images outdated |
 | Use curl for Docker healthchecks | 03-01 | Better handling of JSON and empty responses than wget |
+| Prometheus waits for tikv0 healthy before starting | 03-02 | Ensures cluster ready before scraping |
+| Grafana datasource provisioned via file mount | 03-02 | No manual setup required |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T22:00:20Z*
+*State updated: 2026-01-24T22:08:00Z*
