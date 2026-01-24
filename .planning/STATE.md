@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 4 of 6 (Monitor Loop)
-**Plan:** 1 of ? in Phase 4
+**Plan:** 2 of ? in Phase 4
 **Status:** In progress
-**Last activity:** 2026-01-24 - Completed 04-01-PLAN.md
+**Last activity:** 2026-01-24 - Completed 04-02-PLAN.md
 
-**Progress:** [#############___] ~85% (Phase 1 + Phase 2 + Phase 3 + Phase 4 Plan 1 complete)
+**Progress:** [##############__] ~87% (Phase 1 + Phase 2 + Phase 3 + Phase 4 Plans 1-2 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 4 - Monitor Loop (ticket database foundation complete)
+**Current focus:** Phase 4 - Monitor Loop (MonitorLoop daemon complete)
 
 ## Progress
 
@@ -24,14 +24,14 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 1 - Foundation | ✓ Complete | 4/4 |
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
 | 3 - Local Cluster | ✓ Complete | 4/4 |
-| 4 - Monitor Loop | In Progress | 1/? |
+| 4 - Monitor Loop | In Progress | 2/? |
 | 5 - AI Diagnosis | Pending | 0/? |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T23:16:00Z
-**Stopped at:** Completed 04-01-PLAN.md
+**Last session:** 2026-01-24T23:15:12Z
+**Stopped at:** Completed 04-02-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -69,10 +69,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Environment variables for endpoints | 03-04 | PD_ENDPOINT and PROMETHEUS_URL configurable per deployment |
 | Use aiosqlite for non-blocking SQLite operations | 04-01 | Per RESEARCH.md - ensures async event loop not blocked by DB |
 | violation_key = invariant_name:store_id for deduplication | 04-01 | Consistent key format for ticket deduplication |
+| asyncio.Event for shutdown coordination | 04-02 | Per RESEARCH.md - not busy polling, allows immediate signal response |
+| TicketDB wraps entire daemon loop | 04-02 | Single connection open for duration, consistent state |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T23:16:00Z*
+*State updated: 2026-01-24T23:15:12Z*
