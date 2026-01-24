@@ -113,7 +113,12 @@ Plans:
 2. Monitor loop runs at configurable intervals (e.g., every 30s) checking all registered invariants
 3. When an invariant fails, a ticket is automatically created with the violation details
 
-**Estimated plans:** 3
+**Plans:** 3 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — Ticket database with SQLite persistence and deduplication
+- [ ] 04-02-PLAN.md — MonitorLoop daemon with signal handling and heartbeat
+- [ ] 04-03-PLAN.md — CLI commands for tickets and monitor daemon
 
 ---
 
@@ -189,3 +194,4 @@ All v1 requirements are mapped to exactly one phase.
 *Roadmap created: 2026-01-24*
 *Phase 2 complete: 2026-01-24*
 *Phase 3 complete: 2026-01-24*
+*Phase 4 planned: 2026-01-24*
