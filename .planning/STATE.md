@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 2 of 6 (TiKV Subject)
-**Plan:** 4 of 5 in Phase 2
-**Status:** In Progress
-**Last activity:** 2026-01-24 - Completed 02-03-PLAN.md
+**Plan:** 5 of 5 in Phase 2
+**Status:** Phase Complete
+**Last activity:** 2026-01-24 - Completed 02-05-PLAN.md
 
-**Progress:** [########________] ~50% (Phase 1 complete + 02-01 through 02-04)
+**Progress:** [##########______] ~60% (Phase 1 + Phase 2 complete)
 
 ## Project Reference
 
@@ -15,14 +15,14 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 2 - TiKV Subject
+**Current focus:** Phase 3 - Local Cluster (next)
 
 ## Progress
 
 | Phase | Status | Plans |
 |-------|--------|-------|
-| 1 - Foundation | ✓ Complete | 4/4 |
-| 2 - TiKV Subject | In Progress | 4/5 |
+| 1 - Foundation | Complete | 4/4 |
+| 2 - TiKV Subject | Complete | 5/5 |
 | 3 - Local Cluster | Pending | 0/? |
 | 4 - Monitor Loop | Pending | 0/? |
 | 5 - AI Diagnosis | Pending | 0/? |
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T21:07:41Z
-**Stopped at:** Completed 02-03-PLAN.md
+**Last session:** 2026-01-24T21:25:00Z
+**Stopped at:** Completed 02-05-PLAN.md (Phase 2 complete)
 **Resume file:** None
 
 ## Key Decisions
@@ -54,10 +54,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | PDClient receives injected httpx.AsyncClient | 02-02 | Per RESEARCH.md Pattern 1 - enables connection pooling |
 | PrometheusClient uses address pattern escaping | 02-03 | Colon -> .* for flexible instance label matching |
 | Latency converted from seconds to milliseconds | 02-03 | StoreMetrics uses ms per established convention |
+| Store down has no grace period | 02-05 | Critical issue, immediate alerting needed |
+| High latency has 60s grace period | 02-05 | Allows transient spikes without alerting |
+| Actions raise NotImplementedError | 02-05 | Deferred to Phase 5 |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T21:07:41Z*
+*State updated: 2026-01-24T21:25:00Z*
