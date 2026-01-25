@@ -166,7 +166,11 @@ Plans:
 2. AI diagnosis correctly identifies "node X is down" and correlates with missing heartbeats
 3. Demo script runs full cycle: healthy cluster -> inject fault -> detect -> diagnose -> explain
 
-**Estimated plans:** 2-3
+**Plans:** 2 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — ChaosDemo orchestrator class with Rich output
+- [ ] 06-02-PLAN.md — CLI demo commands and verification
 
 ---
 
