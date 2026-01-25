@@ -35,7 +35,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Chaos Injection
 
-- [ ] **CHAOS-01**: Node kill — hard failure of a store via Docker stop/kill
+- [x] **CHAOS-01**: Node kill — hard failure of a store via Docker stop/kill
 
 ### AI Diagnosis
 
@@ -96,7 +96,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ENV-04 | Phase 3 | Complete |
 | DEPLOY-01 | Phase 1 | Complete |
 | DEPLOY-02 | Phase 1 | Complete |
-| CHAOS-01 | Phase 6 | Pending |
+| CHAOS-01 | Phase 6 | Complete |
 | DIAG-01 | Phase 5 | Complete |
 | DIAG-02 | Phase 5 | Complete |
 | DIAG-03 | Phase 5 | Complete |
@@ -109,4 +109,5 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-25 after Phase 5 completion*
+*Last updated: 2026-01-25 after Phase 6 completion*
+*All v1 requirements complete: 2026-01-25*

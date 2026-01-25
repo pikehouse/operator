@@ -154,7 +154,9 @@ Plans:
 
 ---
 
-### Phase 6: Chaos Demo
+### Phase 6: Chaos Demo ✓
+
+**Status:** Complete (2026-01-25)
 
 **Goal:** End-to-end demonstration showing AI diagnosis of injected faults.
 
@@ -162,15 +164,15 @@ Plans:
 - CHAOS-01: Node kill — hard failure of a store via Docker stop/kill
 
 **Success Criteria:**
-1. Operator detects store failure within configurable window after node kill
-2. AI diagnosis correctly identifies "node X is down" and correlates with missing heartbeats
-3. Demo script runs full cycle: healthy cluster -> inject fault -> detect -> diagnose -> explain
+1. ✓ Operator detects store failure within configurable window after node kill
+2. ✓ AI diagnosis correctly identifies "node X is down" and correlates with missing heartbeats
+3. ✓ Demo script runs full cycle: healthy cluster -> inject fault -> detect -> diagnose -> explain
 
 **Plans:** 2 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — ChaosDemo orchestrator class with Rich output
-- [ ] 06-02-PLAN.md — CLI demo commands and verification
+- [x] 06-01-PLAN.md — ChaosDemo orchestrator class with Rich output
+- [x] 06-02-PLAN.md — CLI demo commands and verification
 
 ---
 
@@ -209,3 +211,6 @@ All v1 requirements are mapped to exactly one phase.
 *Phase 2 complete: 2026-01-24*
 *Phase 3 complete: 2026-01-24*
 *Phase 4 complete: 2026-01-24*
+*Phase 5 complete: 2026-01-25*
+*Phase 6 complete: 2026-01-25*
+*Milestone v1.0 complete: 2026-01-25*
