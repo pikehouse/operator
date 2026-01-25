@@ -91,10 +91,11 @@ Plans:
   4. Countdown is visually displayed (e.g., "Injecting fault in 3... 2... 1...")
   5. Node kill occurs after countdown completes
   6. Recovery chapter restores node and workload returns to green
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 11-01: TBD
+- [ ] 11-01-PLAN.md — WorkloadTracker with sparkline visualization and YCSB integration
+- [ ] 11-02-PLAN.md — Fault workflow with countdown, injection, and recovery
 
 ## Progress
 
