@@ -31,7 +31,12 @@ import signal
 from rich.console import Console
 from rich.live import Live
 
-from operator_core.tui.layout import create_layout, make_panel
+from operator_core.tui.health import (
+    ClusterHealthPoller,
+    format_cluster_panel,
+    parse_monitor_output_for_detection,
+)
+from operator_core.tui.layout import create_layout, make_cluster_panel, make_panel
 from operator_core.tui.subprocess import SubprocessManager
 
 
@@ -62,6 +67,7 @@ class TUIController:
         self._shutdown = asyncio.Event()
         self._layout = create_layout()
         self._subprocess_mgr: SubprocessManager | None = None
+        self._health_poller: ClusterHealthPoller | None = None
 
     async def run(self) -> None:
         """
@@ -101,6 +107,12 @@ class TUIController:
             buffer_size=50,
         )
 
+        # Create health poller for cluster status
+        self._health_poller = ClusterHealthPoller(
+            pd_endpoint="http://localhost:2379",
+            poll_interval=2.0,
+        )
+
         # 3. Initialize panels with placeholder content
         self._init_panels()
 
@@ -119,6 +131,8 @@ class TUIController:
                     # Reader tasks for subprocess output
                     tg.create_task(self._subprocess_mgr.read_output(monitor_proc))
                     tg.create_task(self._subprocess_mgr.read_output(agent_proc))
+                    # Health poller task
+                    tg.create_task(self._health_poller.run())
                     # Update loop
                     tg.create_task(self._update_loop(live))
             except* Exception:
@@ -163,6 +177,9 @@ class TUIController:
         # Also signal subprocess manager to stop readers
         if self._subprocess_mgr is not None:
             self._subprocess_mgr.shutdown.set()
+        # Stop health poller
+        if self._health_poller is not None:
+            self._health_poller.stop()
 
     def _init_panels(self) -> None:
         """Initialize all panels with placeholder content."""
@@ -184,17 +201,24 @@ class TUIController:
 
     def _refresh_panels(self) -> None:
         """
-        Refresh panel contents from subprocess output buffers.
+        Refresh panel contents from subprocess output and health status.
 
         Reads from monitor and agent subprocess buffers and updates
         their respective TUI panels with the latest output lines.
+        Also updates cluster panel with health status from PD API.
         """
         if self._subprocess_mgr is None:
             return
 
-        # Update monitor panel
+        # Update monitor panel and check for detection events
         monitor_buf = self._subprocess_mgr.get_buffer("monitor")
         if monitor_buf:
+            # Check recent lines for detection events
+            for line in monitor_buf.get_lines(n=5):
+                detection = parse_monitor_output_for_detection(line)
+                if detection is not None and self._health_poller is not None:
+                    self._health_poller.set_detection_active(detection)
+
             self._layout["main"]["monitor"].update(
                 make_panel(monitor_buf.get_text(n=20), "Monitor", "blue")
             )
@@ -205,6 +229,19 @@ class TUIController:
             self._layout["main"]["agent"].update(
                 make_panel(agent_buf.get_text(n=20), "Agent", "green")
             )
+
+        # Update cluster panel with health status
+        if self._health_poller is not None:
+            health = self._health_poller.get_health()
+            if health:
+                content = format_cluster_panel(health)
+                self._layout["cluster"].update(
+                    make_cluster_panel(
+                        content,
+                        has_issues=health.has_issues,
+                        detection_active=self._health_poller.is_detection_active(),
+                    )
+                )
 
     def update_panel(
         self, name: str, content: str, title: str, style: str = "blue"
