@@ -43,11 +43,11 @@ def list_tickets(
         None, "--status", "-s", help="Filter by status (open, acknowledged, diagnosed, resolved)"
     ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """List all tickets."""
 
     async def _list() -> None:
-        db_path = _get_db_path()
         status_filter = TicketStatus(status) if status else None
 
         async with TicketDB(db_path) as db:
@@ -167,13 +167,13 @@ def unhold_ticket(
 def show_ticket(
     ticket_id: int = typer.Argument(..., help="Ticket ID to show"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+    db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """Show ticket details including diagnosis."""
     from rich.markdown import Markdown
     from rich.panel import Panel
 
     async def _show() -> None:
-        db_path = _get_db_path()
         async with TicketDB(db_path) as db:
             ticket = await db.get_ticket(ticket_id)
             if ticket is None:
