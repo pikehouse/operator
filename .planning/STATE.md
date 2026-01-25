@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 8 of 11 (Subprocess Management)
-**Plan:** 1 of 2 in current phase
-**Status:** In progress
-**Last activity:** 2026-01-25 - Completed 08-01-PLAN.md
+**Plan:** 2 of 2 in current phase (COMPLETE)
+**Status:** Phase complete
+**Last activity:** 2026-01-25 - Completed 08-02-PLAN.md
 
-**Progress:** [█████░░░░░░░░░░░░░░░] 25% (v1.1 TUI Demo)
+**Progress:** [██████░░░░░░░░░░░░░░] 30% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -31,7 +31,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | Complete (2/2) |
-| 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | In progress (1/2) |
+| 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Complete (2/2) |
 | 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Not started |
 | 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Not started |
 | 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | Not started |
@@ -46,9 +46,9 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T07:46:28Z
-**Stopped at:** Completed 08-01-PLAN.md (SubprocessManager class)
-**Resume with:** `/gsd:execute-plan 08-02`
+**Last session:** 2026-01-25T08:02:34Z
+**Stopped at:** Completed 08-02-PLAN.md (TUI Subprocess Integration)
+**Resume with:** `/gsd:execute-plan 09-01`
 
 ## Key Decisions (v1.1)
 
@@ -62,6 +62,8 @@ See: .planning/MILESTONES.md
 | screen=False for Rich Live | Demo output stays visible in terminal history |
 | PYTHONUNBUFFERED=1 over PTY | Zero code changes to daemons, simpler than PTY |
 | 0.1s readline timeout | Balances responsiveness with CPU efficiency |
+| 5-second daemon intervals | Demo visibility (frequent updates without flooding) |
+| 20-line panel display | Balances context with readability |
 
 ## Research Flags
 
@@ -74,4 +76,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25T07:46:28Z*
+*State updated: 2026-01-25T08:02:34Z*
