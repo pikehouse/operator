@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 7 of 5 (TUI Foundation)
-**Plan:** 2 of 2 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-01-25 - Completed 07-02-PLAN.md
+**Phase:** 8 of 11 (Subprocess Management)
+**Plan:** 1 of 2 in current phase
+**Status:** In progress
+**Last activity:** 2026-01-25 - Completed 08-01-PLAN.md
 
-**Progress:** [████░░░░░░░░░░░░░░░░] 20% (v1.1 TUI Demo)
+**Progress:** [█████░░░░░░░░░░░░░░░] 25% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -31,7 +31,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | Complete (2/2) |
-| 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Not started |
+| 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | In progress (1/2) |
 | 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Not started |
 | 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Not started |
 | 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | Not started |
@@ -46,9 +46,9 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T05:18:24Z
-**Stopped at:** Completed 07-02-PLAN.md (Phase 7 complete)
-**Resume with:** `/gsd:execute-phase 8`
+**Last session:** 2026-01-25T07:46:28Z
+**Stopped at:** Completed 08-01-PLAN.md (SubprocessManager class)
+**Resume with:** `/gsd:execute-plan 08-02`
 
 ## Key Decisions (v1.1)
 
@@ -60,6 +60,8 @@ See: .planning/MILESTONES.md
 | Key-press chapters over automatic timers | Presenter controls pacing |
 | Signal handlers BEFORE Live context | Prevents Pitfall 2 (rapid Ctrl+C during startup) |
 | screen=False for Rich Live | Demo output stays visible in terminal history |
+| PYTHONUNBUFFERED=1 over PTY | Zero code changes to daemons, simpler than PTY |
+| 0.1s readline timeout | Balances responsiveness with CPU efficiency |
 
 ## Research Flags
 
@@ -72,4 +74,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25T05:18:24Z*
+*State updated: 2026-01-25T07:46:28Z*
