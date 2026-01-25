@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 5 of 6 (AI Diagnosis)
-**Plan:** 4 of 4 in Phase 5
-**Status:** Phase Complete ✓ Verified
-**Last activity:** 2026-01-25 - Phase 5 verified
+**Phase:** 6 of 6 (Chaos Demo)
+**Plan:** 1 of 2 in Phase 6
+**Status:** In progress
+**Last activity:** 2026-01-25 - Completed 06-01-PLAN.md
 
-**Progress:** [##################] ~95% (Phase 1-5 complete)
+**Progress:** [###################.] ~96% (Phase 1-5 complete, Phase 6 plan 1/2)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Ready for Phase 6 - Chaos Demo
+**Current focus:** Phase 6 - Chaos Demo (ChaosDemo orchestrator complete, CLI command next)
 
 ## Progress
 
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 3 - Local Cluster | ✓ Complete | 4/4 |
 | 4 - Monitor Loop | ✓ Complete | 3/3 |
 | 5 - AI Diagnosis | ✓ Complete | 4/4 |
-| 6 - Chaos Demo | Pending | 0/? |
+| 6 - Chaos Demo | In Progress | 1/2 |
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T02:30:00Z
-**Stopped at:** Completed Phase 5 verification
+**Last session:** 2026-01-25T03:00:08Z
+**Stopped at:** Completed 06-01-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -84,10 +84,14 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 60s backoff on rate limit errors | 05-03 | Sleep 60s on RateLimitError before continuing |
 | Direct submodule imports in agent CLI | 05-04 | Avoid circular import issues per STATE.md pattern |
 | --db option on all ticket commands | 05-04 | Enable isolated testing with custom database path |
+| One-shot diagnosis instead of AgentRunner daemon | 06-01 | Per RESEARCH.md Pitfall 5 - avoid signal handler conflicts in demo |
+| Container-to-store mapping via PD API | 06-01 | Match container hostname to store address for correlation |
+| SIGKILL for fault injection | 06-01 | Realistic sudden crash simulation (not graceful stop) |
+| 2-second detection polling interval | 06-01 | Balance responsiveness with database load |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-25T02:30:00Z*
+*State updated: 2026-01-25T03:00:08Z*
