@@ -5,7 +5,7 @@ This module contains:
 - diagnosis.py: Pydantic models for structured diagnosis output
 - context.py: Context gathering for diagnosis (DiagnosisContext, ContextGatherer)
 - prompt.py: System prompts and template construction
-- (future) runner.py: Agent runner daemon that processes tickets
+- runner.py: Agent runner daemon that processes tickets
 
 Per PROJECT.md: "AI demonstrates real diagnostic reasoning about
 distributed systems - not just 'something is wrong' but 'here's what's
@@ -19,6 +19,7 @@ from operator_core.agent.diagnosis import (
     format_diagnosis_markdown,
 )
 from operator_core.agent.prompt import SYSTEM_PROMPT, build_diagnosis_prompt
+from operator_core.agent.runner import AgentRunner
 
 __all__ = [
     # Context gathering
@@ -31,4 +32,6 @@ __all__ = [
     # Prompt building
     "SYSTEM_PROMPT",
     "build_diagnosis_prompt",
+    # Agent runner
+    "AgentRunner",
 ]
