@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 6 of 6 (Chaos Demo)
-**Plan:** 1 of 2 in Phase 6
-**Status:** In progress
-**Last activity:** 2026-01-25 - Completed 06-01-PLAN.md
+**Plan:** 2 of 2 in Phase 6
+**Status:** Complete
+**Last activity:** 2026-01-25 - Completed 06-02-PLAN.md
 
-**Progress:** [###################.] ~96% (Phase 1-5 complete, Phase 6 plan 1/2)
+**Progress:** [####################] 100% (All phases complete)
 
 ## Project Reference
 
@@ -26,12 +26,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 3 - Local Cluster | ✓ Complete | 4/4 |
 | 4 - Monitor Loop | ✓ Complete | 3/3 |
 | 5 - AI Diagnosis | ✓ Complete | 4/4 |
-| 6 - Chaos Demo | In Progress | 1/2 |
+| 6 - Chaos Demo | Complete | 2/2 |
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T03:00:08Z
-**Stopped at:** Completed 06-01-PLAN.md
+**Last session:** 2026-01-25T03:15:00Z
+**Stopped at:** Completed 06-02-PLAN.md (Project complete)
 **Resume file:** None
 
 ## Key Decisions
@@ -88,10 +88,12 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Container-to-store mapping via PD API | 06-01 | Match container hostname to store address for correlation |
 | SIGKILL for fault injection | 06-01 | Realistic sudden crash simulation (not graceful stop) |
 | 2-second detection polling interval | 06-01 | Balance responsiveness with database load |
+| Active invariant checking during detection | 06-02 | Don't passively poll - call check() to trigger detection |
+| One-shot invariant check per poll iteration | 06-02 | Balance responsiveness with system load |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-25T03:00:08Z*
+*State updated: 2026-01-25T03:15:00Z*
