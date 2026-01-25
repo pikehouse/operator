@@ -9,7 +9,7 @@ Requirements for TUI Demo milestone. Each maps to roadmap phases.
 
 ### TUI Layout
 
-- [ ] **TUI-01**: Multi-panel layout with cluster, monitor, agent, workload, and narration panels
+- [x] **TUI-01**: Multi-panel layout with cluster, monitor, agent, workload, and narration panels
 - [ ] **TUI-02**: Color-coded health indicators (green ● for up, red ✗ for down) for all cluster nodes
 - [ ] **TUI-03**: Workload panel with sparkline/histogram showing ops/sec that turns red when degraded
 - [ ] **TUI-04**: Detection highlighting — visual emphasis when monitor detects an issue
@@ -60,7 +60,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-01 | Phase 7 | Pending |
+| TUI-01 | Phase 7 | Complete |
 | TUI-02 | Phase 9 | Pending |
 | TUI-03 | Phase 11 | Pending |
 | TUI-04 | Phase 9 | Pending |
