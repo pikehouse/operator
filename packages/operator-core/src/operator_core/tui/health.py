@@ -93,15 +93,23 @@ def _parse_tikv_state(state: str) -> NodeHealth:
     Map TiKV state_name to NodeHealth.
 
     Args:
-        state: State name from PD API (e.g., "Up", "Down", "Offline", "Tombstone")
+        state: State name from PD API (e.g., "Up", "Down", "Disconnected", "Offline", "Tombstone")
 
     Returns:
         Corresponding NodeHealth enum value
+
+    TiKV store states:
+    - Up: Store is up and serving
+    - Disconnected: Store lost connection (transitional, before confirmed Down)
+    - Down: Store confirmed down (after max-store-down-time, default 30min)
+    - Offline: Store being decommissioned
+    - Tombstone: Store completely removed
     """
     state_lower = state.lower()
     if state_lower == "up":
         return NodeHealth.UP
-    elif state_lower == "down":
+    elif state_lower in ("down", "disconnected"):
+        # Treat Disconnected as Down for display purposes
         return NodeHealth.DOWN
     elif state_lower in ("offline", "tombstone"):
         return NodeHealth.OFFLINE
