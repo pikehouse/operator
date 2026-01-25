@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 8 of 11 (Subprocess Management)
-**Plan:** 2 of 2 in current phase (COMPLETE)
-**Status:** Phase complete
-**Last activity:** 2026-01-25 - Completed 08-02-PLAN.md
+**Phase:** 9 of 11 (Cluster Health Display)
+**Plan:** 1 of 2 in current phase
+**Status:** In progress
+**Last activity:** 2026-01-25 - Completed 09-01-PLAN.md
 
-**Progress:** [████████░░░░░░░░░░░░] 40% (v1.1 TUI Demo)
+**Progress:** [█████████░░░░░░░░░░░] 50% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -32,7 +32,7 @@ See: .planning/MILESTONES.md
 |-------|------|--------------|--------|
 | 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | Complete (2/2) |
 | 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Complete (2/2) |
-| 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Not started |
+| 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | In progress (1/2) |
 | 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Not started |
 | 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | Not started |
 
@@ -46,9 +46,9 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T08:15:00Z
-**Stopped at:** Phase 8 complete (Subprocess Management)
-**Resume with:** `/gsd:plan-phase 9`
+**Last session:** 2026-01-25T08:42:08Z
+**Stopped at:** Completed 09-01-PLAN.md (ClusterHealthPoller)
+**Resume with:** `/gsd:execute-plan 09-02`
 
 ## Key Decisions (v1.1)
 
@@ -64,6 +64,8 @@ See: .planning/MILESTONES.md
 | 0.1s readline timeout | Balances responsiveness with CPU efficiency |
 | 5-second daemon intervals | Demo visibility (frequent updates without flooding) |
 | 20-line panel display | Balances context with readability |
+| Immutable ClusterHealth snapshots | Thread-safe reads without locks |
+| Synthetic node names (tikv-1, pd-1) | Consistency across demo runs |
 
 ## Research Flags
 
@@ -76,4 +78,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25T08:02:34Z*
+*State updated: 2026-01-25T08:42:08Z*
