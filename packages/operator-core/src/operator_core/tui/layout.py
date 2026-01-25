@@ -84,3 +84,45 @@ def make_panel(content: str, title: str, style: str = "blue") -> Panel:
         border_style=style,
         padding=(0, 1),
     )
+
+
+def make_cluster_panel(
+    content: str,
+    has_issues: bool = False,
+    detection_active: bool = False,
+) -> Panel:
+    """
+    Create a styled cluster panel with detection highlighting.
+
+    Per RESEARCH.md Pattern 4: Detection Highlighting via Border Color.
+
+    Args:
+        content: Rich markup content for the panel
+        has_issues: True if any node is not UP
+        detection_active: True if monitor recently detected a violation
+
+    Returns:
+        Panel with appropriate border style:
+        - detection_active: bold red border, "!" in title
+        - has_issues: yellow border
+        - all healthy: cyan border (default)
+    """
+    if detection_active:
+        # Monitor detected an issue - emphasize with red border
+        border_style = "bold red"
+        title = "[bold red]! Cluster Status ![/bold red]"
+    elif has_issues:
+        # Cluster has issues but no active detection
+        border_style = "yellow"
+        title = "[bold yellow]Cluster Status[/bold yellow]"
+    else:
+        # All healthy
+        border_style = "cyan"
+        title = "[bold cyan]Cluster Status[/bold cyan]"
+
+    return Panel(
+        content,
+        title=title,
+        border_style=border_style,
+        padding=(0, 1),
+    )
