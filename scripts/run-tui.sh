@@ -11,13 +11,5 @@ if [ -f .env ]; then
     export $(grep -v '^#' .env | xargs)
 fi
 
-uv run --package operator-core python -c "
-import asyncio
-from operator_core.tui import TUIController
-
-async def main():
-    controller = TUIController()
-    await controller.run()
-
-asyncio.run(main())
-"
+# Use a proper script file to ensure stdin is connected as TTY for keyboard input
+uv run --package operator-core python scripts/tui_main.py
