@@ -63,8 +63,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — ClusterHealthPoller and health data types
-- [ ] 09-02-PLAN.md — TUIController integration with health display verification
+- [x] 09-01-PLAN.md — ClusterHealthPoller and health data types
+- [x] 09-02-PLAN.md — TUIController integration with health display verification
 
 #### Phase 10: Demo Flow Control
 **Goal**: Enable key-press chapter progression with narration explaining each stage
@@ -106,7 +106,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7. TUI Foundation | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 8. Subprocess Management | v1.1 | 2/2 | Complete | 2026-01-25 |
-| 9. Cluster Health Display | v1.1 | 0/2 | Not started | - |
+| 9. Cluster Health Display | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 10. Demo Flow Control | v1.1 | 0/TBD | Not started | - |
 | 11. Fault Workflow Integration | v1.1 | 0/TBD | Not started | - |
 
