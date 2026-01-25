@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 5 of 6 (AI Diagnosis)
-**Plan:** 1 of 4 in Phase 5
+**Plan:** 2 of 4 in Phase 5
 **Status:** In progress
-**Last activity:** 2026-01-25 - Completed 05-01-PLAN.md
+**Last activity:** 2026-01-25 - Completed 05-02-PLAN.md
 
-**Progress:** [#################] ~92% (Phase 1-4 complete, Phase 5 plan 1 complete)
+**Progress:** [##################] ~94% (Phase 1-4 complete, Phase 5 plans 1-2 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Phase 5 - AI Diagnosis (data models complete)
+**Current focus:** Phase 5 - AI Diagnosis (context gathering and prompt building complete)
 
 ## Progress
 
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
 | 3 - Local Cluster | ✓ Complete | 4/4 |
 | 4 - Monitor Loop | ✓ Complete | 3/3 |
-| 5 - AI Diagnosis | In progress | 1/4 |
+| 5 - AI Diagnosis | In progress | 2/4 |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T01:51:54Z
-**Stopped at:** Completed 05-01-PLAN.md
+**Last session:** 2026-01-25T01:55:29Z
+**Stopped at:** Completed 05-02-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -76,10 +76,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | Field descriptions guide Claude structured output | 05-01 | Pydantic Field(description=...) serves dual purpose |
 | Markdown as diagnosis storage format | 05-01 | Human-readable first per CONTEXT.md |
 | Status transitions to 'diagnosed' when AI attaches analysis | 05-01 | Clear state machine for ticket lifecycle |
+| TYPE_CHECKING imports for cross-package references | 05-02 | Avoids circular imports at runtime |
+| Similar tickets limited to 3 most recent diagnosed | 05-02 | Per RESEARCH.md - manages context window size |
+| Log tail stubbed for v1 | 05-02 | Future implementation will fetch from container logs |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-25T01:51:54Z*
+*State updated: 2026-01-25T01:55:29Z*
