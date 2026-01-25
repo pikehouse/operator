@@ -27,11 +27,19 @@ Per RESEARCH.md Pitfall 6: Process Spawn Inside Live Context
 import asyncio
 import functools
 import signal
+from pathlib import Path
 
 from rich.console import Console
 from rich.live import Live
 
-from operator_core.tui.chapters import DEMO_CHAPTERS, DemoState
+from operator_core.tui.chapters import (
+    DEMO_CHAPTERS,
+    Chapter,
+    DemoState,
+    create_fault_chapter,
+    create_recovery_chapter,
+)
+from operator_core.tui.fault import FaultWorkflow
 from operator_core.tui.health import (
     ClusterHealthPoller,
     format_cluster_panel,
@@ -64,12 +72,17 @@ class TUIController:
         await controller.run()  # Runs until Ctrl+C
     """
 
-    def __init__(self, console: Console | None = None) -> None:
+    def __init__(
+        self,
+        console: Console | None = None,
+        compose_file: Path | None = None,
+    ) -> None:
         """
         Initialize TUI controller.
 
         Args:
             console: Rich Console to use (creates default if None)
+            compose_file: Path to docker-compose.yaml for fault injection
         """
         self.console = console if console is not None else Console()
         self._shutdown = asyncio.Event()
@@ -79,6 +92,9 @@ class TUIController:
         self._demo_state: DemoState | None = None
         self._keyboard: KeyboardTask | None = None
         self._workload_tracker: WorkloadTracker | None = None
+        self._fault_workflow: FaultWorkflow | None = None
+        self._fault_task: asyncio.Task[None] | None = None
+        self._compose_file: Path = compose_file or Path("subjects/tikv/docker-compose.yaml")
 
     async def run(self) -> None:
         """
@@ -130,6 +146,32 @@ class TUIController:
 
         # Create workload tracker for throughput visualization
         self._workload_tracker = WorkloadTracker()
+
+        # Create fault workflow for fault injection and recovery
+        self._fault_workflow = FaultWorkflow(
+            compose_file=self._compose_file,
+            on_narration_update=self._update_narration_text,
+            on_workload_update=self.update_workload,
+            shutdown_event=self._shutdown,
+        )
+
+        # Replace fault injection chapter with callback version
+        self._demo_state.chapters[3] = create_fault_chapter(
+            on_enter=self._run_fault_sequence
+        )
+
+        # Add recovery chapter before "Demo Complete" (insert at index 6)
+        # Current DEMO_CHAPTERS has 7 chapters (indices 0-6)
+        # Insert recovery at index 6, pushing "Demo Complete" to 7
+        recovery_chapter = create_recovery_chapter(
+            on_enter=self._run_recovery_sequence
+        )
+        self._demo_state.chapters.insert(6, recovery_chapter)
+
+        # Seed workload tracker with baseline values
+        for _ in range(6):
+            self._workload_tracker.update(10000.0)
+        self._fault_workflow.establish_baseline(10000.0)
 
         # 3. Initialize panels with placeholder content
         self._init_panels()
@@ -229,6 +271,8 @@ class TUIController:
         - SPACE/ENTER/RIGHT: Advance to next chapter
         - Q: Quit demo
 
+        Per 11-02-PLAN.md: Execute on_enter callbacks when entering chapters.
+
         Args:
             key: Key pressed (raw character or escape sequence)
         """
@@ -238,8 +282,23 @@ class TUIController:
         # Check for advance keys
         # Space: " ", Enter: "\r" or "\n", Right arrow: "\x1b[C"
         if key in (" ", "\r", "\n", "\x1b[C"):
-            self._demo_state.advance()
-            self._update_narration()
+            current = self._demo_state.get_current()
+
+            # Don't advance if current chapter blocks it
+            if current.blocks_advance and self._fault_task is not None:
+                return  # Action in progress
+
+            # Advance to next chapter
+            if self._demo_state.advance():
+                self._update_narration()
+
+                # Check if new chapter has on_enter callback
+                new_chapter = self._demo_state.get_current()
+                if new_chapter.on_enter is not None:
+                    # Schedule the callback as a task
+                    self._fault_task = asyncio.create_task(
+                        self._execute_chapter_callback(new_chapter)
+                    )
         # Check for quit keys
         elif key in ("q", "Q"):
             self._shutdown.set()
@@ -357,3 +416,84 @@ class TUIController:
         """
         if self._workload_tracker is not None:
             self._workload_tracker.update(ops_per_sec)
+
+    def _update_narration_text(self, text: str) -> None:
+        """
+        Update narration panel with raw text (for countdown).
+
+        Used by FaultWorkflow to update narration directly during countdown
+        without going through the chapter system.
+
+        Args:
+            text: Rich-formatted text to display in narration panel
+        """
+        self._layout["main"]["narration"].update(
+            make_panel(text, "Chapter", "magenta")
+        )
+
+    async def _execute_chapter_callback(self, chapter: Chapter) -> None:
+        """
+        Execute chapter's on_enter callback.
+
+        Handles async callback execution and auto-advance if configured.
+
+        Args:
+            chapter: Chapter whose callback to execute
+        """
+        if chapter.on_enter is not None:
+            try:
+                await chapter.on_enter()
+            finally:
+                self._fault_task = None
+
+            # Auto-advance if configured
+            if chapter.auto_advance and self._demo_state is not None:
+                self._demo_state.advance()
+                self._update_narration()
+
+    async def _run_fault_sequence(self) -> None:
+        """
+        Run fault injection sequence: countdown -> kill -> degradation.
+
+        Called when entering the fault injection chapter.
+        """
+        if self._fault_workflow is None:
+            return
+
+        # Run countdown
+        completed = await self._fault_workflow.run_countdown(3)
+        if not completed:
+            return  # Interrupted
+
+        # Inject fault
+        container = await self._fault_workflow.inject_fault()
+        if container:
+            self._update_narration_text(
+                f"[bold red]Killed: {container}[/bold red]\n\n"
+                "Watch the monitor for detection..."
+            )
+
+        # Simulate workload degradation
+        await self._fault_workflow.simulate_degradation()
+
+    async def _run_recovery_sequence(self) -> None:
+        """
+        Run recovery sequence: restart node -> restore workload.
+
+        Called when entering the recovery chapter.
+        """
+        if self._fault_workflow is None:
+            return
+
+        self._update_narration_text("[yellow]Restarting killed node...[/yellow]")
+
+        # Recover node
+        success = await self._fault_workflow.recover()
+        if success:
+            self._update_narration_text(
+                "[green]Node restarted![/green]\n\n"
+                "Watching workload recovery..."
+            )
+
+        # Simulate workload recovery
+        await self._fault_workflow.simulate_recovery()
