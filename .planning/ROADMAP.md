@@ -29,10 +29,11 @@ Archived in milestones/v1.0-ROADMAP.md
   2. Layout renders without flicker using Rich Live context
   3. Ctrl+C cleanly exits without corrupted terminal state
   4. Signal handlers restore terminal before exit
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — OutputBuffer and 5-panel layout factory
+- [ ] 07-02-PLAN.md — TUIController with signal handling and verification
 
 #### Phase 8: Subprocess Management
 **Goal**: Run monitor and agent as real subprocesses with live output capture and graceful shutdown
@@ -101,7 +102,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
-| 7. TUI Foundation | v1.1 | 0/TBD | Not started | - |
+| 7. TUI Foundation | v1.1 | 0/2 | Planned | - |
 | 8. Subprocess Management | v1.1 | 0/TBD | Not started | - |
 | 9. Cluster Health Display | v1.1 | 0/TBD | Not started | - |
 | 10. Demo Flow Control | v1.1 | 0/TBD | Not started | - |
