@@ -31,11 +31,15 @@ import signal
 from rich.console import Console
 from rich.live import Live
 
+import readchar
+
+from operator_core.tui.chapters import DEMO_CHAPTERS, DemoState
 from operator_core.tui.health import (
     ClusterHealthPoller,
     format_cluster_panel,
     parse_monitor_output_for_detection,
 )
+from operator_core.tui.keyboard import KeyboardTask
 from operator_core.tui.layout import create_layout, make_cluster_panel, make_panel
 from operator_core.tui.subprocess import SubprocessManager
 
@@ -68,6 +72,8 @@ class TUIController:
         self._layout = create_layout()
         self._subprocess_mgr: SubprocessManager | None = None
         self._health_poller: ClusterHealthPoller | None = None
+        self._demo_state: DemoState | None = None
+        self._keyboard: KeyboardTask | None = None
 
     async def run(self) -> None:
         """
@@ -113,6 +119,10 @@ class TUIController:
             poll_interval=2.0,
         )
 
+        # Initialize demo state and keyboard
+        self._demo_state = DemoState(chapters=list(DEMO_CHAPTERS))
+        self._keyboard = KeyboardTask(on_key=self._handle_key)
+
         # 3. Initialize panels with placeholder content
         self._init_panels()
 
@@ -133,6 +143,8 @@ class TUIController:
                     tg.create_task(self._subprocess_mgr.read_output(agent_proc))
                     # Health poller task
                     tg.create_task(self._health_poller.run())
+                    # Keyboard task for demo flow control
+                    tg.create_task(self._keyboard.run())
                     # Update loop
                     tg.create_task(self._update_loop(live))
             except* Exception:
@@ -180,15 +192,17 @@ class TUIController:
         # Stop health poller
         if self._health_poller is not None:
             self._health_poller.stop()
+        # Stop keyboard reader
+        if self._keyboard is not None:
+            self._keyboard.stop()
 
     def _init_panels(self) -> None:
         """Initialize all panels with placeholder content."""
         self._layout["cluster"].update(
             make_panel("Loading...", "Cluster Status", "cyan")
         )
-        self._layout["main"]["narration"].update(
-            make_panel("Welcome to Operator TUI Demo", "Chapter", "magenta")
-        )
+        # Show first chapter in narration panel
+        self._update_narration()
         self._layout["main"]["monitor"].update(
             make_panel("Waiting for monitor...", "Monitor", "blue")
         )
@@ -197,6 +211,52 @@ class TUIController:
         )
         self._layout["main"]["workload"].update(
             make_panel("Waiting for workload...", "Workload", "yellow")
+        )
+
+    def _handle_key(self, key: str) -> None:
+        """
+        Handle keypress for demo flow control.
+
+        Per RESEARCH.md Pattern 3: Key-to-Action Dispatch
+        - SPACE/ENTER/RIGHT: Advance to next chapter
+        - Q: Quit demo
+
+        Args:
+            key: Key pressed (from readchar)
+        """
+        if self._demo_state is None:
+            return
+
+        # Check for advance keys
+        if key in (readchar.key.SPACE, readchar.key.ENTER, readchar.key.RIGHT, " "):
+            self._demo_state.advance()
+            self._update_narration()
+        # Check for quit keys
+        elif key in ("q", "Q"):
+            self._shutdown.set()
+            # Also signal all subsystems
+            if self._subprocess_mgr is not None:
+                self._subprocess_mgr.shutdown.set()
+            if self._health_poller is not None:
+                self._health_poller.stop()
+            if self._keyboard is not None:
+                self._keyboard.stop()
+
+    def _update_narration(self) -> None:
+        """
+        Update narration panel with current chapter content.
+
+        Per RESEARCH.md Pattern 4: Narration Panel Update
+        - Shows chapter title, narration text, and key hints
+        """
+        if self._demo_state is None:
+            return
+
+        chapter = self._demo_state.get_current()
+        # Build content with title, narration, and key hint
+        content = f"[bold cyan]{chapter.title}[/bold cyan]\n\n{chapter.narration}\n\n{chapter.key_hint}"
+        self._layout["main"]["narration"].update(
+            make_panel(content, "Chapter", "magenta")
         )
 
     def _refresh_panels(self) -> None:
