@@ -86,6 +86,30 @@ def make_panel(content: str, title: str, style: str = "blue") -> Panel:
     )
 
 
+def make_workload_panel(content: str, is_degraded: bool = False) -> Panel:
+    """
+    Create workload panel with degradation-aware border color.
+
+    Per RESEARCH.md Pattern 5: Workload panel styling based on throughput status.
+
+    Args:
+        content: Rich markup content from WorkloadTracker.format_panel()
+        is_degraded: True if throughput is degraded (changes border to red)
+
+    Returns:
+        Panel with appropriate border styling:
+        - is_degraded: red border
+        - normal: yellow border (default workload color)
+    """
+    border_style = "red" if is_degraded else "yellow"
+    return Panel(
+        content,
+        title="[bold]Workload[/bold]",
+        border_style=border_style,
+        padding=(0, 1),
+    )
+
+
 def make_cluster_panel(
     content: str,
     has_issues: bool = False,
