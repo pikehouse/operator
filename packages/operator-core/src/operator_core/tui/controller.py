@@ -38,8 +38,14 @@ from operator_core.tui.health import (
     parse_monitor_output_for_detection,
 )
 from operator_core.tui.keyboard import KeyboardTask
-from operator_core.tui.layout import create_layout, make_cluster_panel, make_panel
+from operator_core.tui.layout import (
+    create_layout,
+    make_cluster_panel,
+    make_panel,
+    make_workload_panel,
+)
 from operator_core.tui.subprocess import SubprocessManager
+from operator_core.tui.workload import WorkloadTracker
 
 
 class TUIController:
@@ -72,6 +78,7 @@ class TUIController:
         self._health_poller: ClusterHealthPoller | None = None
         self._demo_state: DemoState | None = None
         self._keyboard: KeyboardTask | None = None
+        self._workload_tracker: WorkloadTracker | None = None
 
     async def run(self) -> None:
         """
@@ -120,6 +127,9 @@ class TUIController:
         # Initialize demo state and keyboard
         self._demo_state = DemoState(chapters=list(DEMO_CHAPTERS))
         self._keyboard = KeyboardTask(on_key=self._handle_key)
+
+        # Create workload tracker for throughput visualization
+        self._workload_tracker = WorkloadTracker()
 
         # 3. Initialize panels with placeholder content
         self._init_panels()
@@ -304,6 +314,13 @@ class TUIController:
                     )
                 )
 
+        # Update workload panel with throughput visualization
+        if self._workload_tracker is not None:
+            content = self._workload_tracker.format_panel()
+            self._layout["main"]["workload"].update(
+                make_workload_panel(content, self._workload_tracker.is_degraded())
+            )
+
     def update_panel(
         self, name: str, content: str, title: str, style: str = "blue"
     ) -> None:
@@ -327,3 +344,16 @@ class TUIController:
             self._layout["cluster"].update(panel)
         else:
             self._layout["main"][name].update(panel)
+
+    def update_workload(self, ops_per_sec: float) -> None:
+        """
+        Update workload tracker with new throughput value.
+
+        Called by fault workflow to inject workload data.
+        The workload panel will be updated in the next refresh cycle.
+
+        Args:
+            ops_per_sec: Current throughput value in operations per second
+        """
+        if self._workload_tracker is not None:
+            self._workload_tracker.update(ops_per_sec)
