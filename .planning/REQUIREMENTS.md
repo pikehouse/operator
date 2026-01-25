@@ -16,9 +16,9 @@ Requirements for TUI Demo milestone. Each maps to roadmap phases.
 
 ### Subprocess Management
 
-- [ ] **SUB-01**: Run monitor and agent as real subprocesses (not one-shot calls)
-- [ ] **SUB-02**: Live stdout capture — stream subprocess output to panels in real-time
-- [ ] **SUB-03**: Graceful shutdown — clean exit without orphan processes or broken terminal
+- [x] **SUB-01**: Run monitor and agent as real subprocesses (not one-shot calls)
+- [x] **SUB-02**: Live stdout capture — stream subprocess output to panels in real-time
+- [x] **SUB-03**: Graceful shutdown — clean exit without orphan processes or broken terminal
 
 ### Demo Flow
 
@@ -64,9 +64,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TUI-02 | Phase 9 | Pending |
 | TUI-03 | Phase 11 | Pending |
 | TUI-04 | Phase 9 | Pending |
-| SUB-01 | Phase 8 | Pending |
-| SUB-02 | Phase 8 | Pending |
-| SUB-03 | Phase 8 | Pending |
+| SUB-01 | Phase 8 | Complete |
+| SUB-02 | Phase 8 | Complete |
+| SUB-03 | Phase 8 | Complete |
 | DEMO-01 | Phase 10 | Pending |
 | DEMO-02 | Phase 10 | Pending |
 | DEMO-03 | Phase 11 | Pending |

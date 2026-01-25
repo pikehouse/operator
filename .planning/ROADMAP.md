@@ -48,8 +48,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — SubprocessManager class for spawn, capture, and terminate
-- [ ] 08-02-PLAN.md — TUIController integration with live output verification
+- [x] 08-01-PLAN.md — SubprocessManager class for spawn, capture, and terminate
+- [x] 08-02-PLAN.md — TUIController integration with live output verification
 
 #### Phase 9: Cluster Health Display
 **Goal**: Show live cluster status with color-coded health indicators and detection highlighting
@@ -104,7 +104,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7. TUI Foundation | v1.1 | 2/2 | Complete | 2026-01-25 |
-| 8. Subprocess Management | v1.1 | 0/2 | Not started | - |
+| 8. Subprocess Management | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 9. Cluster Health Display | v1.1 | 0/TBD | Not started | - |
 | 10. Demo Flow Control | v1.1 | 0/TBD | Not started | - |
 | 11. Fault Workflow Integration | v1.1 | 0/TBD | Not started | - |
