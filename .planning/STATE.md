@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 4 of 6 (Monitor Loop)
-**Plan:** 3 of 3 in Phase 4
-**Status:** Phase Complete ✓ Verified
-**Last activity:** 2026-01-24 - Phase 4 verified
+**Phase:** 5 of 6 (AI Diagnosis)
+**Plan:** 1 of 4 in Phase 5
+**Status:** In progress
+**Last activity:** 2026-01-25 - Completed 05-01-PLAN.md
 
-**Progress:** [################] ~90% (Phase 1 + Phase 2 + Phase 3 + Phase 4 complete)
+**Progress:** [#################] ~92% (Phase 1-4 complete, Phase 5 plan 1 complete)
 
 ## Project Reference
 
@@ -15,7 +15,7 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
-**Current focus:** Ready for Phase 5 - AI Diagnosis
+**Current focus:** Phase 5 - AI Diagnosis (data models complete)
 
 ## Progress
 
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | 2 - TiKV Subject | ✓ Complete | 5/5 |
 | 3 - Local Cluster | ✓ Complete | 4/4 |
 | 4 - Monitor Loop | ✓ Complete | 3/3 |
-| 5 - AI Diagnosis | Pending | 0/? |
+| 5 - AI Diagnosis | In progress | 1/4 |
 | 6 - Chaos Demo | Pending | 0/? |
 
 ## Session Continuity
 
-**Last session:** 2026-01-24T23:20:38Z
-**Stopped at:** Completed 04-03-PLAN.md (Phase 4 complete)
+**Last session:** 2026-01-25T01:51:54Z
+**Stopped at:** Completed 05-01-PLAN.md
 **Resume file:** None
 
 ## Key Decisions
@@ -73,10 +73,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 | TicketDB wraps entire daemon loop | 04-02 | Single connection open for duration, consistent state |
 | Lazy import for MonitorLoop in monitor/__init__.py | 04-03 | Breaks circular import chain with db.tickets |
 | Direct submodule imports in CLI | 04-03 | Avoid __init__.py triggers that cause circular imports |
+| Field descriptions guide Claude structured output | 05-01 | Pydantic Field(description=...) serves dual purpose |
+| Markdown as diagnosis storage format | 05-01 | Human-readable first per CONTEXT.md |
+| Status transitions to 'diagnosed' when AI attaches analysis | 05-01 | Clear state machine for ticket lifecycle |
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-24T23:20:38Z*
+*State updated: 2026-01-25T01:51:54Z*
