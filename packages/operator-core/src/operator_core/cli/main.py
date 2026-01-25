@@ -2,6 +2,7 @@
 
 import typer
 
+from operator_core.cli.agent import agent_app
 from operator_core.cli.deploy import deploy_app
 from operator_core.cli.monitor import monitor_app
 from operator_core.cli.tickets import tickets_app
@@ -13,6 +14,7 @@ app = typer.Typer(
 )
 
 # Add command groups
+app.add_typer(agent_app, name="agent")
 app.add_typer(deploy_app, name="deploy")
 app.add_typer(tickets_app, name="tickets")
 app.add_typer(monitor_app, name="monitor")
