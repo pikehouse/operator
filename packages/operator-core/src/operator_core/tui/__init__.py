@@ -8,18 +8,36 @@ This module provides the building blocks for the TUI demo:
 - TUIController: Main controller with signal handling
 - ManagedProcess: Wrapper for subprocess with buffer
 - SubprocessManager: Lifecycle management for daemon subprocesses
+- ClusterHealthPoller: Async poller for cluster health status
+- NodeHealth, NodeStatus, ClusterHealth: Health data types
+- format_cluster_panel: Rich markup formatting for health display
+- parse_monitor_output_for_detection: Monitor output parser for detection events
 """
 
 from operator_core.tui.buffer import OutputBuffer
 from operator_core.tui.controller import TUIController
+from operator_core.tui.health import (
+    ClusterHealth,
+    ClusterHealthPoller,
+    NodeHealth,
+    NodeStatus,
+    format_cluster_panel,
+    parse_monitor_output_for_detection,
+)
 from operator_core.tui.layout import create_layout, make_panel
 from operator_core.tui.subprocess import ManagedProcess, SubprocessManager
 
 __all__ = [
+    "ClusterHealth",
+    "ClusterHealthPoller",
     "ManagedProcess",
+    "NodeHealth",
+    "NodeStatus",
     "OutputBuffer",
     "SubprocessManager",
     "TUIController",
     "create_layout",
+    "format_cluster_panel",
     "make_panel",
+    "parse_monitor_output_for_detection",
 ]
