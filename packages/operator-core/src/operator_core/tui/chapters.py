@@ -17,23 +17,40 @@ The demo flow matches the ChaosDemo stages:
 5. Stage 4: Detection
 6. Stage 5: AI Diagnosis
 7. Demo Complete
+
+Per 11-02-PLAN.md:
+- Chapter supports on_enter callback for automated actions
+- auto_advance flag for auto-progression after callback completes
+- blocks_advance flag to prevent manual advance during action
 """
 
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 
 @dataclass(frozen=True)
 class Chapter:
     """
-    Immutable chapter definition.
+    Immutable chapter definition with optional action callback.
 
     Each chapter represents a stage in the demo with narration
     explaining what is happening and what to watch for.
+
+    Attributes:
+        title: Chapter title displayed in panel
+        narration: Explanatory text for the chapter
+        key_hint: Keyboard hints shown at bottom
+        on_enter: Optional async callback run when entering chapter
+        auto_advance: If True, auto-advance after on_enter completes
+        blocks_advance: If True, don't allow manual advance (action in progress)
     """
 
     title: str
     narration: str
     key_hint: str = "[dim]SPACE/ENTER: next | Q: quit[/dim]"
+    on_enter: Callable[[], Awaitable[None]] | None = None
+    auto_advance: bool = False
+    blocks_advance: bool = False
 
 
 @dataclass
@@ -147,3 +164,47 @@ DEMO_CHAPTERS = [
         ),
     ),
 ]
+
+
+def create_fault_chapter(on_enter: Callable[[], Awaitable[None]]) -> Chapter:
+    """
+    Create fault injection chapter with countdown callback.
+
+    Args:
+        on_enter: Async callback to run countdown and fault injection
+
+    Returns:
+        Chapter configured for fault injection with callback
+    """
+    return Chapter(
+        title="Stage 3: Fault Injection",
+        narration=(
+            "Countdown started...\n\n"
+            "Watch the CLUSTER panel - one node will turn DOWN.\n"
+            "The monitor will detect this invariant violation."
+        ),
+        on_enter=on_enter,
+        blocks_advance=True,  # Don't allow advance during countdown
+    )
+
+
+def create_recovery_chapter(on_enter: Callable[[], Awaitable[None]]) -> Chapter:
+    """
+    Create recovery chapter with restart callback.
+
+    Args:
+        on_enter: Async callback to run node recovery
+
+    Returns:
+        Chapter configured for recovery with callback
+    """
+    return Chapter(
+        title="Stage 6: Recovery",
+        narration=(
+            "Restarting the killed node...\n\n"
+            "Watch the CLUSTER panel return to all green.\n"
+            "Workload should recover to normal levels."
+        ),
+        on_enter=on_enter,
+        auto_advance=True,  # Auto-advance after recovery
+    )
