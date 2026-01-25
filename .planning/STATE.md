@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** Milestone complete
-**Plan:** N/A
-**Status:** v1.0 shipped, planning next milestone
-**Last activity:** 2026-01-25 — v1.0 milestone archived
+**Phase:** Not started (researching)
+**Plan:** —
+**Status:** Defining requirements for v1.1
+**Last activity:** 2026-01-25 — Milestone v1.1 started
 
-**Progress:** [####################] 100% (v1.0 complete)
+**Progress:** [░░░░░░░░░░░░░░░░░░░░] 0% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -54,4 +54,4 @@ Full decision log archived in milestones/v1.0-ROADMAP.md.
 *None*
 
 ---
-*State updated: 2026-01-25T03:30:00Z*
+*State updated: 2026-01-25T04:00:00Z*

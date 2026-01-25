@@ -37,7 +37,21 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ### Active
 
-(None — planning next milestone)
+- [ ] TUI-based demo with live multi-panel dashboard
+- [ ] Real monitor and agent daemons running (not one-shot calls)
+- [ ] Cluster status panel showing node health
+- [ ] Workload panel with ops/sec histogram
+- [ ] Key-press driven demo chapters (inject fault, recover)
+
+## Current Milestone: v1.1 TUI Demo
+
+**Goal:** Upgrade the demo to a Rich-based live dashboard showing the operator actually running.
+
+**Target features:**
+- Multi-panel TUI (cluster status, monitor, agent, workload, narration)
+- Real daemons running as subprocesses with live output capture
+- Workload histogram that turns red when degraded
+- Key-press chapter progression (healthy → fault → diagnosis → recovery → exit)
 
 ### Out of Scope
 
@@ -95,4 +109,4 @@ The leap here is **single service → distributed system**. A rate limiter has o
 | Active invariant checking in demo | Don't passively poll, actively check | Good — Detection within 2-4 seconds |
 
 ---
-*Last updated: 2026-01-25 after v1.0 milestone*
+*Last updated: 2026-01-25 after starting v1.1 milestone*
