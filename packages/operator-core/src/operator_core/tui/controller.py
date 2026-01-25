@@ -31,8 +31,6 @@ import signal
 from rich.console import Console
 from rich.live import Live
 
-import readchar
-
 from operator_core.tui.chapters import DEMO_CHAPTERS, DemoState
 from operator_core.tui.health import (
     ClusterHealthPoller,
@@ -222,13 +220,14 @@ class TUIController:
         - Q: Quit demo
 
         Args:
-            key: Key pressed (from readchar)
+            key: Key pressed (raw character or escape sequence)
         """
         if self._demo_state is None:
             return
 
         # Check for advance keys
-        if key in (readchar.key.SPACE, readchar.key.ENTER, readchar.key.RIGHT, " "):
+        # Space: " ", Enter: "\r" or "\n", Right arrow: "\x1b[C"
+        if key in (" ", "\r", "\n", "\x1b[C"):
             self._demo_state.advance()
             self._update_narration()
         # Check for quit keys

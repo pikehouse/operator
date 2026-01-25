@@ -25,16 +25,14 @@ import termios
 import tty
 from typing import Callable
 
-import readchar
-
 
 def _readkey_with_timeout(timeout: float) -> str | None:
     """
     Read a keypress with timeout.
 
     Sets terminal to cbreak mode, uses select() to check if input
-    is available, then reads with readchar. This ensures proper
-    single-keypress detection while always returning within timeout.
+    is available, then reads directly from stdin. This avoids
+    conflicts with readchar's own terminal mode handling.
 
     Args:
         timeout: Maximum seconds to wait for input
@@ -49,7 +47,15 @@ def _readkey_with_timeout(timeout: float) -> str | None:
         tty.setcbreak(fd)
         # Check if stdin has data available
         if select.select([sys.stdin], [], [], timeout)[0]:
-            return readchar.readkey()
+            # Read directly - avoid readchar's terminal mode changes
+            char = sys.stdin.read(1)
+            # Handle escape sequences (arrow keys, etc.)
+            if char == "\x1b":  # Escape
+                if select.select([sys.stdin], [], [], 0.05)[0]:
+                    char += sys.stdin.read(1)
+                    if char == "\x1b[" and select.select([sys.stdin], [], [], 0.05)[0]:
+                        char += sys.stdin.read(1)
+            return char
         return None
     finally:
         # Always restore terminal settings
