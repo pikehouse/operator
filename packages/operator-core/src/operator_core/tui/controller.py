@@ -248,13 +248,15 @@ class TUIController:
 
         Per RESEARCH.md Pattern 4: Narration Panel Update
         - Shows chapter title, narration text, and key hints
+        - Includes progress indicator [X/Y] for visual feedback
         """
         if self._demo_state is None:
             return
 
         chapter = self._demo_state.get_current()
-        # Build content with title, narration, and key hint
-        content = f"[bold cyan]{chapter.title}[/bold cyan]\n\n{chapter.narration}\n\n{chapter.key_hint}"
+        progress = self._demo_state.get_progress()
+        # Build content with progress, title, narration, and key hint
+        content = f"[bold cyan]{chapter.title}[/bold cyan] {progress}\n\n{chapter.narration}\n\n{chapter.key_hint}"
         self._layout["main"]["narration"].update(
             make_panel(content, "Chapter", "magenta")
         )

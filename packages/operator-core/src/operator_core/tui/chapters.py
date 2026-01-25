@@ -78,6 +78,15 @@ class DemoState:
         """
         return self.current >= len(self.chapters) - 1
 
+    def get_progress(self) -> str:
+        """
+        Get progress string like "[3/7]".
+
+        Returns:
+            Progress indicator showing current position
+        """
+        return f"[{self.current + 1}/{len(self.chapters)}]"
+
 
 # Demo chapters matching the ChaosDemo stages
 DEMO_CHAPTERS = [
