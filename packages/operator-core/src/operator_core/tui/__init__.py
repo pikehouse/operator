@@ -12,6 +12,7 @@ This module provides the building blocks for the TUI demo:
 - NodeHealth, NodeStatus, ClusterHealth: Health data types
 - format_cluster_panel: Rich markup formatting for health display
 - parse_monitor_output_for_detection: Monitor output parser for detection events
+- WorkloadTracker: Workload throughput tracking with sparkline visualization
 """
 
 from operator_core.tui.buffer import OutputBuffer
@@ -26,6 +27,7 @@ from operator_core.tui.health import (
 )
 from operator_core.tui.layout import create_layout, make_panel
 from operator_core.tui.subprocess import ManagedProcess, SubprocessManager
+from operator_core.tui.workload import WorkloadTracker
 
 __all__ = [
     "ClusterHealth",
@@ -36,6 +38,7 @@ __all__ = [
     "OutputBuffer",
     "SubprocessManager",
     "TUIController",
+    "WorkloadTracker",
     "create_layout",
     "format_cluster_panel",
     "make_panel",
