@@ -161,3 +161,59 @@ def unhold_ticket(
             print(f"Ticket {ticket_id} can now auto-resolve")
 
     asyncio.run(_unhold())
+
+
+@tickets_app.command("show")
+def show_ticket(
+    ticket_id: int = typer.Argument(..., help="Ticket ID to show"),
+    json_output: bool = typer.Option(False, "--json", "-j", help="Output as JSON"),
+) -> None:
+    """Show ticket details including diagnosis."""
+    from rich.markdown import Markdown
+    from rich.panel import Panel
+
+    async def _show() -> None:
+        db_path = _get_db_path()
+        async with TicketDB(db_path) as db:
+            ticket = await db.get_ticket(ticket_id)
+            if ticket is None:
+                print(f"Ticket {ticket_id} not found")
+                raise typer.Exit(1)
+
+        if json_output:
+            print(json.dumps(ticket.to_dict(), indent=2, default=str))
+            return
+
+        # Rich formatted output
+        console = Console()
+
+        # Ticket metadata panel
+        metadata = f"""[bold]ID:[/bold] {ticket.id}
+[bold]Status:[/bold] {ticket.status.value}
+[bold]Invariant:[/bold] {ticket.invariant_name}
+[bold]Store:[/bold] {ticket.store_id or 'N/A'}
+[bold]Severity:[/bold] {ticket.severity}
+[bold]First seen:[/bold] {ticket.first_seen_at.strftime('%Y-%m-%d %H:%M:%S')}
+[bold]Last seen:[/bold] {ticket.last_seen_at.strftime('%Y-%m-%d %H:%M:%S')}
+[bold]Occurrences:[/bold] {ticket.occurrence_count}
+[bold]Held:[/bold] {'Yes' if ticket.held else 'No'}"""
+
+        console.print(Panel(metadata, title=f"Ticket #{ticket.id}", border_style="cyan"))
+
+        # Message
+        console.print()
+        console.print("[bold]Message:[/bold]")
+        console.print(f"  {ticket.message}")
+
+        # Diagnosis section
+        console.print()
+        if ticket.diagnosis:
+            console.print(Panel(
+                Markdown(ticket.diagnosis),
+                title="AI Diagnosis",
+                border_style="green",
+            ))
+        else:
+            console.print("[yellow]No diagnosis yet[/yellow]")
+
+    asyncio.run(_show())
