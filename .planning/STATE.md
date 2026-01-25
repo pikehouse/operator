@@ -3,11 +3,11 @@
 ## Current Position
 
 **Phase:** 7 of 5 (TUI Foundation)
-**Plan:** 1 of 2 in current phase
-**Status:** In progress
-**Last activity:** 2026-01-25 - Completed 07-01-PLAN.md
+**Plan:** 2 of 2 in current phase
+**Status:** Phase complete
+**Last activity:** 2026-01-25 - Completed 07-02-PLAN.md
 
-**Progress:** [██░░░░░░░░░░░░░░░░░░] 10% (v1.1 TUI Demo)
+**Progress:** [████░░░░░░░░░░░░░░░░] 20% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -30,7 +30,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | In progress (1/2) |
+| 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | Complete (2/2) |
 | 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Not started |
 | 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Not started |
 | 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Not started |
@@ -46,9 +46,9 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-25T04:27:53Z
-**Stopped at:** Completed 07-01-PLAN.md
-**Resume with:** `/gsd:execute-phase 7`
+**Last session:** 2026-01-25T05:18:24Z
+**Stopped at:** Completed 07-02-PLAN.md (Phase 7 complete)
+**Resume with:** `/gsd:execute-phase 8`
 
 ## Key Decisions (v1.1)
 
@@ -58,6 +58,8 @@ See: .planning/MILESTONES.md
 | Rich Live (no Textual) | Already in use, no rewrite needed, Textual adds complexity |
 | 5 panels (cluster, monitor, agent, workload, narration) | Research-validated layout, avoids cognitive overload |
 | Key-press chapters over automatic timers | Presenter controls pacing |
+| Signal handlers BEFORE Live context | Prevents Pitfall 2 (rapid Ctrl+C during startup) |
+| screen=False for Rich Live | Demo output stays visible in terminal history |
 
 ## Research Flags
 
@@ -70,4 +72,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25T04:27:53Z*
+*State updated: 2026-01-25T05:18:24Z*
