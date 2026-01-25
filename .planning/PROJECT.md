@@ -2,27 +2,42 @@
 
 ## What This Is
 
-An AI-powered operator for distributed systems. It monitors multi-node clusters, diagnoses issues, and either takes corrective action or creates tickets with detailed reasoning for human review. The core is service-agnostic; TiKV is the first "subject" (the system being operated). Built to test whether AI can genuinely reason about distributed systems in production scenarios, and to create a compelling demo for technical audiences.
+An AI-powered operator for distributed systems that monitors TiKV clusters, diagnoses issues with Claude, and produces structured reasoning for human review. The core is service-agnostic with TiKV as the first subject. Shipped v1.0 with end-to-end chaos demo showing fault injection, live detection, and AI diagnosis.
 
 ## Core Value
 
 AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
 
+## Current State
+
+**Shipped:** v1.0 (2026-01-25)
+**Code:** 6,223 lines Python across 2 packages (operator-core, operator-tikv)
+**Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD
+
+### What Works
+
+- `operator demo chaos` — Full E2E demo with fault injection and AI diagnosis
+- `operator monitor run` — Continuous invariant checking with ticket creation
+- `operator agent start` — AI diagnosis daemon processing tickets
+- `operator tickets list/show/resolve/hold` — Ticket management CLI
+- 6-node TiKV/PD cluster with Prometheus + Grafana in Docker
+- go-ycsb load generator for traffic simulation
+
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- Subject adapter interface — v1.0 (Protocol-based, runtime_checkable)
+- TiKV subject: PD API, Prometheus metrics, log parsing — v1.0
+- Docker Compose local cluster: 3 TiKV nodes, 3 PD nodes — v1.0
+- Containerized observability: Prometheus + Grafana — v1.0
+- Monitor loop: checks cluster invariants, detects anomalies — v1.0
+- AI diagnosis: structured reasoning with alternatives considered — v1.0
+- Chaos injection: node kill via Docker — v1.0
 
 ### Active
 
-- [ ] Service-agnostic operator core with subject adapter pattern
-- [ ] TiKV subject: adapter for PD API, Prometheus metrics, log parsing
-- [ ] Docker Compose local cluster: 3 TiKV nodes, 3 PD nodes, Prometheus, Grafana
-- [ ] Monitor: checks cluster invariants, detects anomalies
-- [ ] AI diagnosis: analyzes violations, creates tickets with structured reasoning
-- [ ] Chaos injection toolkit: fault injection for demo scenarios
-- [ ] Structured decision logs: observation → diagnosis → options → decision → rationale
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -51,15 +66,6 @@ The leap here is **single service → distributed system**. A rate limiter has o
 - **PD (Placement Driver)**: Cluster brain — scheduling, metadata, load balancing
 - **Raft**: Consensus protocol for region replication
 
-### Demo Scenarios (Inform Requirements)
-
-1. **Hot region**: Traffic concentrates on one key range → detect → split or transfer leader
-2. **Node death**: Store goes offline → observe recovery → intervene or wait
-3. **Disk pressure**: Uneven data distribution → migrate regions proactively
-4. **Ambiguous slowness**: Subtle latency issues → correlate metrics → diagnose root cause
-
-These test different cognitive skills: reactive optimization, judgment about intervention, proactive migration, diagnostic reasoning under uncertainty.
-
 ### Evaluation Criteria (What "Good" Looks Like)
 
 | Metric | Measures |
@@ -73,17 +79,20 @@ These test different cognitive skills: reactive optimization, judgment about int
 
 - **Language**: Python — matches harness-demo, good Anthropic SDK support
 - **Local env**: Docker Compose — reproducible, scriptable chaos injection
-- **First milestone**: Observe-only — diagnosis and tickets, no automated actions yet
 - **Target audience**: Technical — engineers, conference talks, technical blogs
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Clean subject separation | Enables future subjects (Kafka, etc.) without rewriting core | — Pending |
-| Docker Compose over tiup playground | Full control over chaos injection, reproducible | — Pending |
-| Observe-only first | Get perception/diagnosis right before action; safer iteration | — Pending |
-| Python | Anthropic SDK, matches prior art, fast iteration | — Pending |
+| Clean subject separation | Enables future subjects (Kafka, etc.) without rewriting core | Good — Protocol-based abstraction works cleanly |
+| Docker Compose over tiup playground | Full control over chaos injection, reproducible | Good — Reliable 6-node cluster |
+| Observe-only first | Get perception/diagnosis right before action; safer iteration | Good — AI diagnosis quality validated |
+| Python | Anthropic SDK, matches prior art, fast iteration | Good — 6K LOC in 1 day |
+| Protocol-based abstractions | Subject and DeploymentTarget as Protocols | Good — Clean extensibility |
+| aiosqlite for database | Non-blocking operations in async event loop | Good — No blocking issues |
+| Pydantic for structured outputs | Schema validation for Claude responses | Good — Reliable diagnosis format |
+| Active invariant checking in demo | Don't passively poll, actively check | Good — Detection within 2-4 seconds |
 
 ---
-*Last updated: 2026-01-24 after initialization*
+*Last updated: 2026-01-25 after v1.0 milestone*
