@@ -263,8 +263,8 @@ class ChaosDemo:
         """
         Wait for violation detection with live countdown.
 
-        Polls for ticket creation at 2-second intervals, showing
-        elapsed time via Rich Live display.
+        Actively runs invariant checks at 2-second intervals (not just passive polling).
+        Per RESEARCH.md: "Run monitor check directly (call _check_cycle) without full loop."
 
         Args:
             killed_container: Name of the killed container
@@ -272,6 +272,16 @@ class ChaosDemo:
         Returns:
             True if detection occurred, False on timeout
         """
+        # Import here to avoid circular imports
+        from datetime import datetime
+
+        from operator_tikv.invariants import InvariantChecker
+        from operator_tikv.pd_client import PDClient
+        from operator_tikv.prom_client import PrometheusClient
+        from operator_tikv.subject import TiKVSubject
+
+        from operator_core.monitor.types import make_violation_key
+
         # Get store ID for the killed container
         store_id = await self._get_store_id_for_container(killed_container)
         if store_id is None:
@@ -287,6 +297,9 @@ class ChaosDemo:
 
         start = asyncio.get_event_loop().time()
 
+        # Create checker for active invariant checking
+        checker = InvariantChecker()
+
         with Live(Text(""), console=self.console, refresh_per_second=1) as live:
             while True:
                 elapsed = asyncio.get_event_loop().time() - start
@@ -294,7 +307,42 @@ class ChaosDemo:
                     Text(f"Waiting for detection... {elapsed:.0f}s", style="cyan")
                 )
 
-                # Check for ticket creation
+                # Actively run invariant checks (not just passive polling)
+                async with httpx.AsyncClient(base_url="http://localhost:2379") as pd_http:
+                    async with httpx.AsyncClient(
+                        base_url="http://localhost:9090"
+                    ) as prom_http:
+                        subject = TiKVSubject(
+                            pd=PDClient(http=pd_http),
+                            prom=PrometheusClient(http=prom_http),
+                        )
+
+                        # Check store health invariants
+                        try:
+                            stores = await subject.get_stores()
+                            violations = checker.check_stores_up(stores)
+
+                            # Create tickets for violations
+                            if violations:
+                                async with TicketDB(self.db_path) as db:
+                                    batch_key = f"demo-{datetime.now().isoformat()}"
+                                    for v in violations:
+                                        await db.create_or_update_ticket(
+                                            v, batch_key=batch_key
+                                        )
+
+                                    # Also auto-resolve cleared violations
+                                    current_keys = {
+                                        make_violation_key(v) for v in violations
+                                    }
+                                    await db.auto_resolve_cleared(current_keys)
+                        except Exception as e:
+                            # Log but don't crash on check failure
+                            self.console.print(
+                                f"[dim]Check failed: {e}[/dim]", highlight=False
+                            )
+
+                # Now check if ticket exists (after we may have created it)
                 async with TicketDB(self.db_path) as db:
                     tickets = await db.list_tickets(status=TicketStatus.OPEN)
                     has_ticket = any(
