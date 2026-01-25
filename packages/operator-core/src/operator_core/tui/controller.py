@@ -92,12 +92,12 @@ class TUIController:
         self._subprocess_mgr = SubprocessManager()
         monitor_proc = await self._subprocess_mgr.spawn(
             "monitor",
-            ["-m", "operator_core.cli", "monitor", "run", "-i", "5"],
+            ["-m", "operator_core.cli.main", "monitor", "run", "-i", "5"],
             buffer_size=50,
         )
         agent_proc = await self._subprocess_mgr.spawn(
             "agent",
-            ["-m", "operator_core.cli", "agent", "start", "-i", "5"],
+            ["-m", "operator_core.cli.main", "agent", "start", "-i", "5"],
             buffer_size=50,
         )
 
