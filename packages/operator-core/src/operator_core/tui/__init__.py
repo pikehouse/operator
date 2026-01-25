@@ -8,7 +8,10 @@ This module provides the building blocks for the TUI demo:
 """
 
 from operator_core.tui.buffer import OutputBuffer
+from operator_core.tui.layout import create_layout, make_panel
 
 __all__ = [
     "OutputBuffer",
+    "create_layout",
+    "make_panel",
 ]
