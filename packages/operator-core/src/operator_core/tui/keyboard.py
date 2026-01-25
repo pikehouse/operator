@@ -6,7 +6,7 @@ with the TUIController's asyncio TaskGroup.
 
 Per RESEARCH.md Pattern 1: Async Keyboard Reader with Executor
 - Uses loop.run_in_executor() to wrap blocking readchar.readkey()
-- Uses select() to check for input before blocking read
+- Sets cbreak mode for proper single-keypress detection
 - Handles asyncio.CancelledError for TaskGroup cancellation
 
 Per RESEARCH.md Pitfall 1: Blocking the Event Loop
@@ -21,6 +21,8 @@ Per RESEARCH.md Pitfall 2: Race Condition on Shutdown
 import asyncio
 import select
 import sys
+import termios
+import tty
 from typing import Callable
 
 import readchar
@@ -30,9 +32,9 @@ def _readkey_with_timeout(timeout: float) -> str | None:
     """
     Read a keypress with timeout.
 
-    Uses select() to check if input is available before calling
-    readchar.readkey(). This ensures the function always returns
-    within the timeout, even if no key is pressed.
+    Sets terminal to cbreak mode, uses select() to check if input
+    is available, then reads with readchar. This ensures proper
+    single-keypress detection while always returning within timeout.
 
     Args:
         timeout: Maximum seconds to wait for input
@@ -40,10 +42,18 @@ def _readkey_with_timeout(timeout: float) -> str | None:
     Returns:
         Key pressed, or None if timeout
     """
-    # Check if stdin has data available
-    if select.select([sys.stdin], [], [], timeout)[0]:
-        return readchar.readkey()
-    return None
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        # Set cbreak mode so select() can see individual keypresses
+        tty.setcbreak(fd)
+        # Check if stdin has data available
+        if select.select([sys.stdin], [], [], timeout)[0]:
+            return readchar.readkey()
+        return None
+    finally:
+        # Always restore terminal settings
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 class KeyboardTask:
