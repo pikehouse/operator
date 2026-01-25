@@ -369,10 +369,10 @@ class ChaosDemo:
                         betas=["structured-outputs-2025-11-13"],
                         system=SYSTEM_PROMPT,
                         messages=[{"role": "user", "content": prompt}],
-                        output_schema=DiagnosisOutput,
+                        output_format=DiagnosisOutput,
                     )
 
-                    diagnosis_md = format_diagnosis_markdown(response.output_parsed)
+                    diagnosis_md = format_diagnosis_markdown(response.parsed_output)
 
                     # Update ticket with diagnosis
                     await db.update_diagnosis(ticket.id, diagnosis_md)
