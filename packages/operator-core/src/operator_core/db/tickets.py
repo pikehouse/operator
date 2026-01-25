@@ -332,3 +332,29 @@ class TicketDB:
 
         await self._conn.commit()
         return resolved_count
+
+    async def update_diagnosis(
+        self,
+        ticket_id: int,
+        diagnosis: str,
+    ) -> None:
+        """
+        Update ticket with AI diagnosis and transition status to diagnosed.
+
+        Per CONTEXT.md: Diagnosis is stored as markdown (human-readable first).
+        Status transitions from 'open' or 'acknowledged' to 'diagnosed'.
+
+        Args:
+            ticket_id: The ticket ID to update
+            diagnosis: Markdown-formatted diagnosis text
+        """
+        await self._conn.execute(
+            """
+            UPDATE tickets SET
+                diagnosis = ?,
+                status = 'diagnosed'
+            WHERE id = ?
+            """,
+            (diagnosis, ticket_id),
+        )
+        await self._conn.commit()
