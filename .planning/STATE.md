@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 9 of 11 (Cluster Health Display)
-**Plan:** 2 of 2 in current phase
+**Phase:** 10 of 11 (Demo Flow Control)
+**Plan:** 1 of 1 in current phase
 **Status:** Phase complete
-**Last activity:** 2026-01-25 - Completed 09-02-PLAN.md
+**Last activity:** 2026-01-25 - Completed 10-01-PLAN.md
 
-**Progress:** [██████████████░░░░░░] 60% (v1.1 TUI Demo)
+**Progress:** [████████████████░░░░] 80% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -33,7 +33,7 @@ See: .planning/MILESTONES.md
 | 7. TUI Foundation | Multi-panel layout with terminal management | TUI-01 | Complete (2/2) |
 | 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Complete (2/2) |
 | 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Complete (2/2) |
-| 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Not started |
+| 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Complete (1/1) |
 | 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | Not started |
 
 ## Archives
@@ -47,8 +47,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-25
-**Stopped at:** Completed 09-02-PLAN.md (Phase 9 complete)
-**Resume with:** `/gsd:plan-phase 10` (Demo Flow Control)
+**Stopped at:** Completed 10-01-PLAN.md (Phase 10 complete)
+**Resume with:** `/gsd:plan-phase 11` (Fault Workflow Integration)
 
 ## Key Decisions (v1.1)
 
@@ -66,6 +66,9 @@ See: .planning/MILESTONES.md
 | 20-line panel display | Balances context with readability |
 | Immutable ClusterHealth snapshots | Thread-safe reads without locks |
 | Synthetic node names (tikv-1, pd-1) | Consistency across demo runs |
+| Direct stdin reading over readchar | readchar's terminal mode changes conflict with Rich Live |
+| select() with 0.3s timeout | Responsive shutdown without CPU-intensive polling |
+| Progress indicator [X/7] | Visual feedback for presenter chapter position |
 
 ## Research Flags
 
@@ -78,4 +81,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25 (Phase 9 complete)*
+*State updated: 2026-01-25 (Phase 10 complete)*

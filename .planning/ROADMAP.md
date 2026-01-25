@@ -78,7 +78,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 10-01-PLAN.md — KeyboardTask and chapter narration integration
+- [x] 10-01-PLAN.md — KeyboardTask and chapter narration integration
 
 #### Phase 11: Fault Workflow Integration
 **Goal**: Complete end-to-end demo with fault injection, workload degradation visualization, and recovery
@@ -107,7 +107,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 7. TUI Foundation | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 8. Subprocess Management | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 9. Cluster Health Display | v1.1 | 2/2 | Complete | 2026-01-25 |
-| 10. Demo Flow Control | v1.1 | 0/1 | Planned | - |
+| 10. Demo Flow Control | v1.1 | 1/1 | Complete | 2026-01-25 |
 | 11. Fault Workflow Integration | v1.1 | 0/TBD | Not started | - |
 
 ---
