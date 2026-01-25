@@ -448,7 +448,7 @@ class ChaosDemo:
 
     async def _cleanup(self) -> None:
         """
-        Restart killed container and restore cluster health.
+        Restart killed container, stop YCSB, and restore cluster health.
 
         Uses try/finally pattern in run() to ensure this always executes.
         """
@@ -463,7 +463,12 @@ class ChaosDemo:
             )
             self._killed_container = None
         else:
-            self.console.print("[dim]No cleanup needed[/dim]")
+            self.console.print("[dim]No container cleanup needed[/dim]")
+
+        # Stop YCSB load generator
+        self.console.print("Stopping YCSB load generator...")
+        self._docker.compose.stop(services=["ycsb"])
+        self.console.print("[green]YCSB stopped[/green]")
 
         self.console.print("\n[bold green]Demo complete![/bold green]")
 
