@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** - Phases 1-6 (shipped 2026-01-25)
-- 🚧 **v1.1 TUI Demo** - Phases 7-11 (in progress)
+- ✅ **v1.1 TUI Demo** - Phases 7-11 (shipped 2026-01-25)
 
 ## Phases
 
@@ -94,8 +94,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — WorkloadTracker with sparkline visualization and YCSB integration
-- [ ] 11-02-PLAN.md — Fault workflow with countdown, injection, and recovery
+- [x] 11-01-PLAN.md — WorkloadTracker with sparkline visualization and YCSB integration
+- [x] 11-02-PLAN.md — Fault workflow with countdown, injection, and recovery
 
 ## Progress
 
@@ -109,7 +109,7 @@ Phases execute in numeric order: 7 → 8 → 9 → 10 → 11
 | 8. Subprocess Management | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 9. Cluster Health Display | v1.1 | 2/2 | Complete | 2026-01-25 |
 | 10. Demo Flow Control | v1.1 | 1/1 | Complete | 2026-01-25 |
-| 11. Fault Workflow Integration | v1.1 | 0/TBD | Not started | - |
+| 11. Fault Workflow Integration | v1.1 | 2/2 | Complete | 2026-01-25 |
 
 ---
 *Roadmap created: 2026-01-25*

@@ -11,7 +11,7 @@ Requirements for TUI Demo milestone. Each maps to roadmap phases.
 
 - [x] **TUI-01**: Multi-panel layout with cluster, monitor, agent, workload, and narration panels
 - [x] **TUI-02**: Color-coded health indicators (green ● for up, red ✗ for down) for all cluster nodes
-- [ ] **TUI-03**: Workload panel with sparkline/histogram showing ops/sec that turns red when degraded
+- [x] **TUI-03**: Workload panel with sparkline/histogram showing ops/sec that turns red when degraded
 - [x] **TUI-04**: Detection highlighting — visual emphasis when monitor detects an issue
 
 ### Subprocess Management
@@ -24,8 +24,8 @@ Requirements for TUI Demo milestone. Each maps to roadmap phases.
 
 - [x] **DEMO-01**: Key-press chapter progression — press key to advance demo stages
 - [x] **DEMO-02**: Narration panel with story text explaining what's happening at each stage
-- [ ] **DEMO-03**: Fault injection and recovery — kill node, watch diagnosis, restore to healthy
-- [ ] **DEMO-04**: Countdown before fault injection — visual countdown before killing node
+- [x] **DEMO-03**: Fault injection and recovery — kill node, watch diagnosis, restore to healthy
+- [x] **DEMO-04**: Countdown before fault injection — visual countdown before killing node
 
 ## Future Requirements
 
@@ -62,15 +62,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | TUI-01 | Phase 7 | Complete |
 | TUI-02 | Phase 9 | Complete |
-| TUI-03 | Phase 11 | Pending |
+| TUI-03 | Phase 11 | Complete |
 | TUI-04 | Phase 9 | Complete |
 | SUB-01 | Phase 8 | Complete |
 | SUB-02 | Phase 8 | Complete |
 | SUB-03 | Phase 8 | Complete |
 | DEMO-01 | Phase 10 | Complete |
 | DEMO-02 | Phase 10 | Complete |
-| DEMO-03 | Phase 11 | Pending |
-| DEMO-04 | Phase 11 | Pending |
+| DEMO-03 | Phase 11 | Complete |
+| DEMO-04 | Phase 11 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 11 total
@@ -79,4 +79,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 (Phase 10 complete)*
+*Last updated: 2026-01-25 (Phase 11 complete - all v1.1 requirements fulfilled)*
