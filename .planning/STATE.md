@@ -2,12 +2,12 @@
 
 ## Current Position
 
-**Phase:** 10 of 11 (Demo Flow Control)
-**Plan:** 1 of 1 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-01-25 - Completed 10-01-PLAN.md
+**Phase:** 11 of 11 (Fault Workflow Integration)
+**Plan:** 1 of 3 in current phase
+**Status:** In progress
+**Last activity:** 2026-01-25 - Completed 11-01-PLAN.md
 
-**Progress:** [████████████████░░░░] 80% (v1.1 TUI Demo)
+**Progress:** [█████████████████░░░] 85% (v1.1 TUI Demo)
 
 ## Project Reference
 
@@ -34,7 +34,7 @@ See: .planning/MILESTONES.md
 | 8. Subprocess Management | Real daemons with live output capture | SUB-01, SUB-02, SUB-03 | Complete (2/2) |
 | 9. Cluster Health Display | Health indicators and detection highlighting | TUI-02, TUI-04 | Complete (2/2) |
 | 10. Demo Flow Control | Key-press chapters and narration | DEMO-01, DEMO-02 | Complete (1/1) |
-| 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | Not started |
+| 11. Fault Workflow Integration | Workload viz, countdown, fault injection | TUI-03, DEMO-03, DEMO-04 | In progress (1/3) |
 
 ## Archives
 
@@ -47,8 +47,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-25
-**Stopped at:** Completed 10-01-PLAN.md (Phase 10 complete)
-**Resume with:** `/gsd:plan-phase 11` (Fault Workflow Integration)
+**Stopped at:** Completed 11-01-PLAN.md (WorkloadTracker and sparkline visualization)
+**Resume with:** `/gsd:execute-plan 11-02` (Countdown and fault injection)
 
 ## Key Decisions (v1.1)
 
@@ -69,6 +69,9 @@ See: .planning/MILESTONES.md
 | Direct stdin reading over readchar | readchar's terminal mode changes conflict with Rich Live |
 | select() with 0.3s timeout | Responsive shutdown without CPU-intensive polling |
 | Progress indicator [X/7] | Visual feedback for presenter chapter position |
+| sparklines library for workload viz | Handles scaling, edge cases; pure Python, MIT license |
+| 5 samples for baseline warm-up | Sufficient to establish stable baseline without long delay |
+| 50% threshold for degradation | Conservative default; tunable via constructor parameter |
 
 ## Research Flags
 
@@ -81,4 +84,4 @@ From research/SUMMARY.md:
 *None*
 
 ---
-*State updated: 2026-01-25 (Phase 10 complete)*
+*State updated: 2026-01-25 (Phase 11 Plan 1 complete)*
