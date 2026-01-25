@@ -12,7 +12,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CORE-01**: Subject adapter interface — clean separation between core and subject implementations
 - [x] **CORE-02**: Ticket database — SQLite-backed ticket tracking (created, diagnosed, resolved)
 - [x] **CORE-03**: Monitor loop — periodic invariant checking with configurable interval
-- [ ] **CORE-04**: Agent runner — process tickets, invoke Claude for diagnosis
+- [x] **CORE-04**: Agent runner — process tickets, invoke Claude for diagnosis
 
 ### TiKV Subject
 
@@ -39,10 +39,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### AI Diagnosis
 
-- [ ] **DIAG-01**: Structured tickets — diagnosis with observation, root cause, context
-- [ ] **DIAG-02**: Metric correlation — correlate across multiple metrics to identify root cause
-- [ ] **DIAG-03**: Options-considered logging — log alternatives considered and why not chosen
-- [ ] **DIAG-04**: Suggested actions — recommend what to do (observe-only mode)
+- [x] **DIAG-01**: Structured tickets — diagnosis with observation, root cause, context
+- [x] **DIAG-02**: Metric correlation — correlate across multiple metrics to identify root cause
+- [x] **DIAG-03**: Options-considered logging — log alternatives considered and why not chosen
+- [x] **DIAG-04**: Suggested actions — recommend what to do (observe-only mode)
 
 ## v2 Requirements
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-01 | Phase 1 | Complete |
 | CORE-02 | Phase 4 | Complete |
 | CORE-03 | Phase 4 | Complete |
-| CORE-04 | Phase 5 | Pending |
+| CORE-04 | Phase 5 | Complete |
 | TIKV-01 | Phase 2 | Complete |
 | TIKV-02 | Phase 2 | Complete |
 | TIKV-03 | Phase 2 | Complete |
@@ -97,10 +97,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DEPLOY-01 | Phase 1 | Complete |
 | DEPLOY-02 | Phase 1 | Complete |
 | CHAOS-01 | Phase 6 | Pending |
-| DIAG-01 | Phase 5 | Pending |
-| DIAG-02 | Phase 5 | Pending |
-| DIAG-03 | Phase 5 | Pending |
-| DIAG-04 | Phase 5 | Pending |
+| DIAG-01 | Phase 5 | Complete |
+| DIAG-02 | Phase 5 | Complete |
+| DIAG-03 | Phase 5 | Complete |
+| DIAG-04 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 19 total
@@ -109,4 +109,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-24*
-*Last updated: 2026-01-24 after Phase 4 completion*
+*Last updated: 2026-01-25 after Phase 5 completion*

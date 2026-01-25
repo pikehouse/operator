@@ -124,7 +124,9 @@ Plans:
 
 ---
 
-### Phase 5: AI Diagnosis
+### Phase 5: AI Diagnosis ✓
+
+**Status:** Complete (2026-01-25)
 
 **Goal:** Claude analyzes tickets and produces structured reasoning about distributed system issues.
 
@@ -136,13 +138,19 @@ Plans:
 - DIAG-04: Suggested actions — recommend what to do (observe-only mode)
 
 **Success Criteria:**
-1. Agent picks up undiagnosed tickets and invokes Claude with relevant context
-2. Diagnosis output includes observation summary, identified root cause, and supporting evidence
-3. AI correlates multiple metrics (e.g., latency + Raft lag + disk I/O) to pinpoint issues
-4. Diagnosis logs show alternatives considered (e.g., "could be disk I/O, but metrics don't support")
-5. Each diagnosis includes recommended action with rationale (even though v1 is observe-only)
+1. ✓ Agent picks up undiagnosed tickets and invokes Claude with relevant context
+2. ✓ Diagnosis output includes observation summary, identified root cause, and supporting evidence
+3. ✓ AI correlates multiple metrics (e.g., latency + Raft lag + disk I/O) to pinpoint issues
+4. ✓ Diagnosis logs show alternatives considered (e.g., "could be disk I/O, but metrics don't support")
+5. ✓ Each diagnosis includes recommended action with rationale (even though v1 is observe-only)
 
-**Estimated plans:** 4-5
+**Plans:** 4 plans
+
+Plans:
+- [x] 05-01-PLAN.md — Anthropic SDK setup, DiagnosisOutput model, TicketDB update
+- [x] 05-02-PLAN.md — Context gatherer and prompt builder
+- [x] 05-03-PLAN.md — AgentRunner daemon with Claude API integration
+- [x] 05-04-PLAN.md — CLI agent commands and verification
 
 ---
 
