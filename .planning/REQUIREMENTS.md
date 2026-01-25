@@ -60,23 +60,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUI-01 | — | Pending |
-| TUI-02 | — | Pending |
-| TUI-03 | — | Pending |
-| TUI-04 | — | Pending |
-| SUB-01 | — | Pending |
-| SUB-02 | — | Pending |
-| SUB-03 | — | Pending |
-| DEMO-01 | — | Pending |
-| DEMO-02 | — | Pending |
-| DEMO-03 | — | Pending |
-| DEMO-04 | — | Pending |
+| TUI-01 | Phase 7 | Pending |
+| TUI-02 | Phase 9 | Pending |
+| TUI-03 | Phase 11 | Pending |
+| TUI-04 | Phase 9 | Pending |
+| SUB-01 | Phase 8 | Pending |
+| SUB-02 | Phase 8 | Pending |
+| SUB-03 | Phase 8 | Pending |
+| DEMO-01 | Phase 10 | Pending |
+| DEMO-02 | Phase 10 | Pending |
+| DEMO-03 | Phase 11 | Pending |
+| DEMO-04 | Phase 11 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 after initial definition*
+*Last updated: 2026-01-25 after roadmap creation*
