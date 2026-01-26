@@ -20,6 +20,7 @@ Per CONTEXT.md decisions:
 
 from dataclasses import dataclass
 
+from operator_core.actions.registry import ActionDefinition, ParamDef
 from operator_core.config import Action, Observation, SLO, SubjectConfig
 from operator_core.types import ClusterMetrics, Region, Store, StoreMetrics
 
@@ -162,6 +163,74 @@ class TiKVSubject:
             SubjectConfig with TiKV-specific actions, observations, and SLOs.
         """
         return TIKV_CONFIG
+
+    def get_action_definitions(self) -> list[ActionDefinition]:
+        """
+        Return definitions of all actions this subject supports.
+
+        Used by ActionRegistry to discover available actions at runtime.
+        Provides parameter schemas, risk levels, and descriptions for
+        each action.
+
+        Returns:
+            List of ActionDefinition objects for all implemented actions.
+        """
+        return [
+            ActionDefinition(
+                name="transfer_leader",
+                description="Transfer region leadership to another store",
+                parameters={
+                    "region_id": ParamDef(
+                        type="int",
+                        description="ID of the region to transfer",
+                        required=True,
+                    ),
+                    "to_store_id": ParamDef(
+                        type="str",
+                        description="Target store ID for leadership",
+                        required=True,
+                    ),
+                },
+                risk_level="medium",
+                requires_approval=False,
+            ),
+            ActionDefinition(
+                name="transfer_peer",
+                description="Move region replica from one store to another",
+                parameters={
+                    "region_id": ParamDef(
+                        type="int",
+                        description="ID of the region to move",
+                        required=True,
+                    ),
+                    "from_store_id": ParamDef(
+                        type="str",
+                        description="Source store ID holding the replica",
+                        required=True,
+                    ),
+                    "to_store_id": ParamDef(
+                        type="str",
+                        description="Target store ID for the replica",
+                        required=True,
+                    ),
+                },
+                risk_level="high",
+                requires_approval=False,
+            ),
+            ActionDefinition(
+                name="drain_store",
+                description="Evict all leaders from a store (continuous until removed)",
+                parameters={
+                    "store_id": ParamDef(
+                        type="str",
+                        description="Store ID to drain leaders from",
+                        required=True,
+                    ),
+                },
+                risk_level="high",
+                requires_approval=False,
+            ),
+        ]
 
     # -------------------------------------------------------------------------
     # Observations - Read-only queries about system state
