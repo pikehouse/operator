@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 12 - Action Foundation
-**Plan:** 3 of 4 in current phase
-**Status:** In progress
-**Last activity:** 2026-01-26 - Completed 12-03-PLAN.md
+**Phase:** 12 - Action Foundation (COMPLETE)
+**Plan:** 4 of 4 in current phase
+**Status:** Phase complete
+**Last activity:** 2026-01-26 - Completed 12-04-PLAN.md
 
-**Progress:** [███████████████░░░░░] 75% (3/4 plans in Phase 12)
+**Progress:** [████████████████████] 100% (4/4 plans in Phase 12)
 
 ## Project Reference
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 12 | Action Foundation | 7 | In progress |
+| 12 | Action Foundation | 7 | COMPLETE |
 | 13 | TiKV Subject Actions | 4 | Pending |
 | 14 | Approval Workflow | 3 | Pending |
 | 15 | Workflow Actions | 3 | Pending |
@@ -73,17 +73,19 @@ See: .planning/MILESTONES.md
 - ValidationError collects ALL errors before raising for complete user feedback
 - Default to OBSERVE mode (safe by default, explicit opt-in for execution)
 - Kill switch cancels pending AND switches to OBSERVE mode
-- Lazy imports in safety.py to break circular dependency with db.actions
+- Lazy imports in safety.py and executor.py to break circular dependency with db.actions
+- Optional executor parameter in AgentRunner preserves v1 observe-only behavior
+- ActionRecommendation separate from existing recommended_action text field
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 12-03-PLAN.md
-**Resume with:** `/gsd:execute-phase 12` to continue Phase 12
+**Stopped at:** Completed 12-04-PLAN.md (Phase 12 complete)
+**Resume with:** `/gsd:execute-phase 13` to start Phase 13 (TiKV Subject Actions)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (12-03-PLAN.md complete)*
+*State updated: 2026-01-26 (Phase 12 complete)*
