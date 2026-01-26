@@ -102,4 +102,27 @@ AFTER UPDATE ON action_proposals
 BEGIN
     UPDATE action_proposals SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Audit log for action lifecycle events (ACT-07)
+CREATE TABLE IF NOT EXISTS action_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id INTEGER,                    -- NULL for system events (kill switch)
+    event_type TEXT NOT NULL,               -- proposed, validated, executing, completed, failed, cancelled, kill_switch, mode_change
+    event_data TEXT,                        -- JSON blob with event-specific details
+    actor TEXT NOT NULL,                    -- "agent", "user", "system"
+    timestamp TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Index for finding events by proposal
+CREATE INDEX IF NOT EXISTS idx_audit_proposal
+ON action_audit_log(proposal_id);
+
+-- Index for finding events by type
+CREATE INDEX IF NOT EXISTS idx_audit_type
+ON action_audit_log(event_type);
+
+-- Index for time-range queries
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp
+ON action_audit_log(timestamp);
 """
