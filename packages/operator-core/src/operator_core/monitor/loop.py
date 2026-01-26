@@ -23,8 +23,11 @@ from pathlib import Path
 
 from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import make_violation_key
-from operator_tikv.invariants import InvariantChecker, InvariantViolation
-from operator_tikv.subject import TiKVSubject
+from operator_protocols import (
+    InvariantCheckerProtocol,
+    InvariantViolation,
+    SubjectProtocol,
+)
 
 
 class MonitorLoop:
@@ -37,9 +40,12 @@ class MonitorLoop:
 
     Uses asyncio.Event for shutdown coordination per RESEARCH.md.
 
+    This class is subject-agnostic - it works with any SubjectProtocol
+    and InvariantCheckerProtocol implementation.
+
     Example:
-        subject = TiKVSubject(pd=pd_client, prom=prom_client)
-        checker = InvariantChecker()
+        subject = create_tikv_subject(pd_client, prom_client)
+        checker = TiKVInvariantChecker()
         loop = MonitorLoop(
             subject=subject,
             checker=checker,
@@ -51,8 +57,8 @@ class MonitorLoop:
 
     def __init__(
         self,
-        subject: TiKVSubject,
-        checker: InvariantChecker,
+        subject: SubjectProtocol,
+        checker: InvariantCheckerProtocol,
         db_path: Path,
         interval_seconds: float = 30.0,
     ) -> None:
@@ -60,8 +66,8 @@ class MonitorLoop:
         Initialize monitor loop.
 
         Args:
-            subject: TiKVSubject for observations
-            checker: InvariantChecker for invariant checks
+            subject: Any SubjectProtocol implementation for observations
+            checker: Any InvariantCheckerProtocol for invariant checks
             db_path: Path to SQLite database file
             interval_seconds: Seconds between check cycles (default 30)
         """
@@ -121,37 +127,29 @@ class MonitorLoop:
         """
         Run one check cycle across all invariants.
 
-        1. Get current stores from subject
-        2. Check store health invariants
-        3. For each up store, check metrics invariants
-        4. Create/update tickets for violations
-        5. Auto-resolve tickets for cleared violations
+        Uses the generic observe/check pattern:
+        1. Call subject.observe() to get current system state
+        2. Call checker.check(observation) to detect violations
+        3. Create/update tickets for violations
+        4. Auto-resolve tickets for cleared violations
+
+        This is subject-agnostic - works with any SubjectProtocol/InvariantCheckerProtocol.
         """
         self._last_check = datetime.now()
-        violations: list[InvariantViolation] = []
 
-        # Get stores
-        stores = await self.subject.get_stores()
+        try:
+            # Generic observation pattern - subject handles all data gathering
+            observation = await self.subject.observe()
 
-        # Check store health (no grace period per CONTEXT.md)
-        violations.extend(self.checker.check_stores_up(stores))
-
-        # Check metrics for each up store
-        for store in stores:
-            if store.state == "Up":
-                try:
-                    metrics = await self.subject.get_store_metrics(store.id)
-
-                    if v := self.checker.check_latency(metrics):
-                        violations.append(v)
-                    if v := self.checker.check_disk_space(metrics):
-                        violations.append(v)
-                except Exception as e:
-                    # Log but don't crash on metrics fetch failure
-                    print(f"Failed to get metrics for store {store.id}: {e}")
+            # Generic check pattern - checker handles all invariant checking
+            violations = self.checker.check(observation)
+        except Exception as e:
+            # Log but don't crash on observation/check failure
+            print(f"Check cycle failed: {e}")
+            violations = []
 
         # Track stats
-        self._invariant_count = 3  # stores_up, latency, disk_space
+        self._invariant_count = len(violations) if violations else 0
         self._violation_count = len(violations)
 
         # Create/update tickets for violations

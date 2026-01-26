@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from operator_tikv.invariants import InvariantViolation
+from operator_protocols import InvariantViolation
 
 
 class TicketStatus(str, Enum):
