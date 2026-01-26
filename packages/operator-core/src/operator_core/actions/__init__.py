@@ -18,6 +18,7 @@ This module provides the data structures for action management:
 - ObserveOnlyError: Exception when execution blocked
 - ActionExecutor: Orchestrator for proposal and execution flow
 - ApprovalRequiredError: Exception when approval is required but not granted
+- RetryConfig: Configuration for exponential backoff retry behavior
 - get_general_tools: General tools available beyond subject actions
 - execute_tool: Execute a general tool by name
 - TOOL_EXECUTORS: Map of tool names to executor functions
@@ -39,6 +40,7 @@ Exports:
     ObserveOnlyError: Observe mode exception
     ActionExecutor: Action proposal and execution orchestrator
     ApprovalRequiredError: Exception for unapproved execution attempts
+    RetryConfig: Dataclass for retry configuration with exponential backoff
     get_general_tools: Function returning general tool definitions
     execute_tool: Function to execute a general tool
     TOOL_EXECUTORS: Dict mapping tool names to executor functions
@@ -54,6 +56,7 @@ from operator_core.actions.registry import (
     ActionRegistry,
     ParamDef,
 )
+from operator_core.actions.retry import RetryConfig
 from operator_core.actions.safety import (
     ObserveOnlyError,
     SafetyController,
@@ -88,6 +91,7 @@ __all__ = [
     "AuditEvent",
     "ObserveOnlyError",
     "ParamDef",
+    "RetryConfig",
     "SafetyController",
     "SafetyMode",
     "TOOL_EXECUTORS",

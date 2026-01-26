@@ -13,6 +13,7 @@ dependencies = [
     "anthropic>=0.40.0",
     "readchar>=4.2.0",
     "sparklines>=0.4.2",
+    "tenacity>=8.2.0",
 ]
 
 [project.scripts]

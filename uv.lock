@@ -305,7 +305,9 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "python-on-whales" },
+    { name = "readchar" },
     { name = "rich" },
+    { name = "sparklines" },
     { name = "typer" },
 ]
 
@@ -316,7 +318,9 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "python-on-whales", specifier = ">=0.70.0" },
+    { name = "readchar", specifier = ">=4.2.0" },
     { name = "rich", specifier = ">=14.0.0" },
+    { name = "sparklines", specifier = ">=0.4.2" },
     { name = "typer", specifier = ">=0.21.0" },
 ]
 
@@ -517,6 +521,15 @@ wheels = [
 ]
 
 [[package]]
+name = "readchar"
+version = "4.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/f8/8657b8cbb4ebeabfbdf991ac40eca8a1d1bd012011bd44ad1ed10f5cb494/readchar-4.2.1.tar.gz", hash = "sha256:91ce3faf07688de14d800592951e5575e9c7a3213738ed01d394dcc949b79adb", size = 9685, upload-time = "2024-11-04T18:28:07.757Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/10/e4b1e0e5b6b6745c8098c275b69bc9d73e9542d5c7da4f137542b499ed44/readchar-4.2.1-py3-none-any.whl", hash = "sha256:a769305cd3994bb5fa2764aa4073452dc105a4ec39068ffe6efd3c20c60acc77", size = 9350, upload-time = "2024-11-04T18:28:02.859Z" },
+]
+
+[[package]]
 name = "rich"
 version = "14.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -545,6 +558,27 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
+]
+
+[[package]]
+name = "sparklines"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "termcolor" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1d/28/ef17c14c68e85b1f987d9ad64aa24f62592154f100206a097ffc545e4510/sparklines-0.7.0.tar.gz", hash = "sha256:efd2ff5126dac53ea4212c1e225f286beaf1907b35204465b65010db2eec4b2a", size = 155729, upload-time = "2025-06-26T15:34:40.275Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/cf/eccac3ac4687ee710b87df8a0e224f5230d346f315aae6656040eb688814/sparklines-0.7.0-py3-none-any.whl", hash = "sha256:6683f3b908c48412f09eb361a714f841e41e7d90ca82ec12e6453e483d560d2c", size = 9863, upload-time = "2025-06-26T15:34:38.765Z" },
+]
+
+[[package]]
+name = "termcolor"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/79/cf31d7a93a8fdc6aa0fbb665be84426a8c5a557d9240b6239e9e11e35fc5/termcolor-3.3.0.tar.gz", hash = "sha256:348871ca648ec6a9a983a13ab626c0acce02f515b9e1983332b17af7979521c5", size = 14434, upload-time = "2025-12-29T12:55:21.882Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl", hash = "sha256:cf642efadaf0a8ebbbf4bc7a31cec2f9b5f21a9f726f4ccbb08192c9c26f43a5", size = 7734, upload-time = "2025-12-29T12:55:20.718Z" },
 ]
 
 [[package]]
