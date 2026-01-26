@@ -16,6 +16,7 @@ This module provides the data structures for action management:
 - SafetyController: Kill switch and observe-only mode
 - SafetyMode: Enum for safety modes (OBSERVE, EXECUTE)
 - ObserveOnlyError: Exception when execution blocked
+- ActionExecutor: Orchestrator for proposal and execution flow
 
 Exports:
     ActionStatus: Enum of action lifecycle states
@@ -32,12 +33,14 @@ Exports:
     SafetyController: Kill switch and mode management
     SafetyMode: Safety mode enum
     ObserveOnlyError: Observe mode exception
+    ActionExecutor: Action proposal and execution orchestrator
 """
 
 from operator_core.actions.audit import (
     ActionAuditor,
     AuditEvent,
 )
+from operator_core.actions.executor import ActionExecutor
 from operator_core.actions.registry import (
     ActionDefinition,
     ActionRegistry,
@@ -62,6 +65,7 @@ from operator_core.actions.validation import (
 __all__ = [
     "ActionAuditor",
     "ActionDefinition",
+    "ActionExecutor",
     "ActionProposal",
     "ActionRecord",
     "ActionRegistry",
