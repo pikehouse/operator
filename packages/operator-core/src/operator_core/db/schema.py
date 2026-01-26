@@ -4,6 +4,7 @@ SQLite schema for ticket and action persistence.
 This module defines the database schema for:
 - Ticket management (monitoring tickets for invariant violations)
 - Action management (proposed and executed agent actions)
+- Workflow management (groups of related actions)
 
 The schema supports:
 - Ticket lifecycle management (status transitions)
@@ -12,6 +13,7 @@ The schema supports:
 - Auto-resolve protection via held flag
 - Action proposal lifecycle (proposed -> validated -> executing -> completed)
 - Action execution records with audit trail
+- Workflow chaining (WRK-01), scheduled actions (WRK-02), retry tracking (WRK-03)
 """
 
 SCHEMA_SQL = """
@@ -130,4 +132,35 @@ ON action_audit_log(event_type);
 -- Index for time-range queries
 CREATE INDEX IF NOT EXISTS idx_audit_timestamp
 ON action_audit_log(timestamp);
+
+-- Workflows table for grouping related actions (WRK-01)
+CREATE TABLE IF NOT EXISTS workflows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    ticket_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ticket_id) REFERENCES tickets(id)
+);
+
+-- Index for finding workflow actions
+CREATE INDEX IF NOT EXISTS idx_action_proposals_workflow
+ON action_proposals(workflow_id) WHERE workflow_id IS NOT NULL;
+
+-- Index for finding scheduled actions (WRK-02)
+CREATE INDEX IF NOT EXISTS idx_action_proposals_scheduled
+ON action_proposals(scheduled_at) WHERE scheduled_at IS NOT NULL;
+
+-- Index for finding retry-eligible actions (WRK-03)
+CREATE INDEX IF NOT EXISTS idx_action_proposals_retry
+ON action_proposals(next_retry_at) WHERE next_retry_at IS NOT NULL;
+
+-- Trigger to update updated_at on workflows modification
+CREATE TRIGGER IF NOT EXISTS workflows_updated_at
+AFTER UPDATE ON workflows
+BEGIN
+    UPDATE workflows SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
 """
