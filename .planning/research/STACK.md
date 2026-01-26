@@ -1,404 +1,509 @@
-# Stack Research: TUI Demo
+# Stack Research: Agent Action Execution
 
-**Focus:** Multi-panel TUI with live subprocess output and sparkline visualizations
-**Researched:** 2026-01-24
-**Overall Confidence:** HIGH (verified with PyPI and official documentation)
+**Focus:** Action execution framework for TiKV operator (leader transfer, region scheduling, dry-run mode, approval workflow)
+**Researched:** 2026-01-25
+**Overall Confidence:** HIGH (verified with official PD documentation, GitHub sources, PyPI)
 
 ---
 
-## Current Stack (Existing)
+## Current Stack (Existing - DO NOT CHANGE)
 
-These are already in use and should NOT be changed:
+These are already in use and validated:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
 | Python | 3.11+ | Runtime |
-| Rich | >=14.0.0 | CLI output, panels, console |
+| httpx | >=0.27.0 | Async HTTP client (PD API, Prometheus) |
+| Pydantic | >=2.0.0 | Data validation, structured outputs |
+| aiosqlite | >=0.20.0 | Async SQLite for tickets |
+| anthropic | >=0.40.0 | Claude API integration |
 | Typer | >=0.21.0 | CLI framework |
-| asyncio | stdlib | Async operations |
-| aiosqlite | >=0.20.0 | Ticket database |
-| httpx | >=0.27.0 | HTTP client |
-| anthropic | >=0.40.0 | AI integration |
-| python-on-whales | >=0.70.0 | Docker/compose |
+| Rich | >=14.0.0 | TUI, panels, live display |
+| python-on-whales | >=0.70.0 | Docker/Compose orchestration |
 
-**Current Rich Usage** (from `chaos.py`):
-- `Console` for output
-- `Live` for countdown display
-- `Panel` for diagnosis display
-- `Markdown` for formatted text
-- `Text` for styled strings
+**Existing Patterns Already Suitable for Actions:**
+- `PDClient` with injected `httpx.AsyncClient` - extend for POST endpoints
+- `Subject` Protocol with action method signatures - implement the stubs
+- `DiagnosisOutput` Pydantic model - pattern for action request/result models
+- `TicketDB` async context manager - pattern for action audit logging
 
 ---
 
-## Additions for v1.1
+## Additions for v2.0 (Action Execution)
 
-### Core: No New Framework Required
+### Core Finding: NO NEW DEPENDENCIES REQUIRED
 
-**Recommendation: Stay with Rich, do NOT add Textual**
+The existing stack already provides everything needed for action execution:
 
-The existing `rich.live.Live` + `rich.layout.Layout` combination provides everything needed for a multi-panel TUI dashboard. Adding Textual would:
-- Require rewriting existing `ChaosDemo` code
-- Add significant dependency weight (~2x memory overhead)
-- Introduce unnecessary complexity for a demo that doesn't need interactive widgets
+| Capability | Provided By | Notes |
+|------------|-------------|-------|
+| HTTP POST to PD API | httpx (existing) | Already used for GET, just add POST methods |
+| Action validation | Pydantic (existing) | Already used for DiagnosisOutput |
+| Audit logging | aiosqlite (existing) | Extend tickets schema for action log |
+| Dry-run mode | Python stdlib | No library needed - simple flag pattern |
+| Approval workflow | asyncio.Event (stdlib) | Human-in-the-loop with async pause/resume |
 
-Rich 14.x (current: 14.3.1 as of 2026-01-24) already includes:
-- `Layout` class for multi-panel screen division
-- `Live` for real-time updates at configurable refresh rates
-- `Panel` for bordered content areas
-- Full asyncio compatibility
-
-**Integration pattern:**
-```python
-from rich.console import Console
-from rich.layout import Layout
-from rich.live import Live
-from rich.panel import Panel
-
-layout = Layout()
-layout.split_row(
-    Layout(name="left", ratio=1),
-    Layout(name="right", ratio=2),
-)
-layout["right"].split_column(
-    Layout(name="monitor"),
-    Layout(name="agent"),
-)
-
-with Live(layout, refresh_per_second=4) as live:
-    # Update panels asynchronously
-    layout["left"].update(Panel("Cluster Status"))
-```
-
-### Keyboard Input: readchar
-
-- **readchar** (4.2.1) - Single-character keyboard capture
-  - Why: Minimal dependency for press-any-key progression
-  - Integration: Works alongside `Live` context, non-blocking pattern required
-  - PyPI: https://pypi.org/project/readchar/
-
-**Why readchar over alternatives:**
-- `pynput` is overkill (designed for system-wide keyboard hooks)
-- `getch` is outdated and unmaintained
-- `readchar` is focused on terminal input, cross-platform, actively maintained
-
-**Non-blocking pattern with Rich Live:**
-```python
-import asyncio
-import sys
-import select
-from readchar import readkey, key
-
-async def check_keypress():
-    """Check for keypress without blocking."""
-    if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-        return readkey()
-    return None
-```
-
-### Sparklines/Histograms: sparklines
-
-- **sparklines** (0.7.0) - Unicode sparkline visualization
-  - Why: Lightweight, no dependencies, outputs strings that render in Rich panels
-  - Integration: Returns string that can be wrapped in `Text` or `Panel`
-  - PyPI: https://pypi.org/project/sparklines/
-
-**Usage pattern:**
-```python
-from sparklines import sparklines
-
-# ops/sec data for last 20 seconds
-ops_history = [450, 520, 480, 510, 530, 490, 500, 515, ...]
-chart = sparklines(ops_history)[0]  # Returns: "▃▇▅▆▇▄▅▆"
-panel = Panel(chart, title="ops/sec")
-```
-
-**Why sparklines over alternatives:**
-- `asciichartpy` (1.5.25) is stale (last update 2020), designed for line charts not histograms
-- `plotext` is full-featured but heavy, overkill for simple metrics
-- `termgraph` requires more setup, designed for standalone output not embedding
-- `sparklines` is focused, lightweight, actively maintained (June 2025)
-
-### Subprocess Output Capture: asyncio.subprocess (stdlib)
-
-No additional dependency needed. Use `asyncio.create_subprocess_exec` with `PIPE`.
-
-**Pattern for live output capture:**
-```python
-async def stream_subprocess(cmd: list[str], output_callback):
-    """Stream subprocess stdout line-by-line."""
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    async for line in proc.stdout:
-        await output_callback(line.decode().rstrip())
-
-    await proc.wait()
-```
-
-**Why no additional library:**
-- `asyncio.subprocess` is stdlib, already using asyncio
-- Avoids adding dependencies for built-in functionality
-- Full async support with `async for` pattern
-- Handles both stdout and stderr
+**Why no drypy/dryable library:**
+- These libraries add global state management complexity
+- Our actions are method calls on Subject, not decorated functions
+- A simple `dry_run: bool` parameter is cleaner and more explicit
+- Keeps action behavior visible in the call site
 
 ---
 
-## Summary: Additions
+## PD API Endpoints for Actions
 
-| Library | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| readchar | ^4.2.1 | Key-press input | Minimal, focused, cross-platform |
-| sparklines | ^0.7.0 | ops/sec visualization | Lightweight, no deps, string output |
+**Source:** [tikv/pd router.go](https://github.com/tikv/pd/blob/master/server/api/router.go), [PD Control Guide](https://docs.pingcap.com/tidb/stable/pd-control/)
 
-**Installation:**
-```bash
-uv add readchar sparklines
+### Operator Endpoints (for immediate actions)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/pd/api/v1/operators` | POST | Create operator (transfer-leader, add-peer, etc.) |
+| `/pd/api/v1/operators` | GET | List active operators |
+| `/pd/api/v1/operators/{region_id}` | GET | Get operator for specific region |
+| `/pd/api/v1/operators/{region_id}` | DELETE | Cancel operator for region |
+
+**POST `/pd/api/v1/operators` body format:**
+```json
+{
+  "name": "transfer-leader",
+  "region_id": 1,
+  "to_store_id": 2
+}
 ```
 
-**Total new dependencies:** 2 (both are zero-dependency packages)
+Other operator names:
+- `add-peer` - requires `region_id`, `to_store_id`
+- `remove-peer` - requires `region_id`, `from_store_id`
+- `split-region` - requires `region_id`
+
+### Scheduler Endpoints (for ongoing policies)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/pd/api/v1/schedulers` | POST | Add scheduler (evict-leader, balance-region) |
+| `/pd/api/v1/schedulers` | GET | List active schedulers |
+| `/pd/api/v1/schedulers/{name}` | DELETE | Remove scheduler |
+| `/pd/api/v1/schedulers/{name}` | POST | Pause/resume scheduler |
+
+**POST `/pd/api/v1/schedulers` body format (evict-leader):**
+```json
+{
+  "name": "evict-leader-scheduler",
+  "store_id": 1
+}
+```
+
+### Config Endpoints (for tuning)
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/pd/api/v1/config` | GET | Get current config |
+| `/pd/api/v1/config` | POST | Update config values |
+| `/pd/api/v1/config/schedule` | GET/POST | Schedule-specific config |
+
+**POST `/pd/api/v1/config` body format:**
+```json
+{
+  "leader-schedule-limit": 4,
+  "replica-schedule-limit": 8
+}
+```
+
+### Store State Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/pd/api/v1/store/{store_id}/state` | POST | Change store state (for drain) |
+
+**POST body (query param):** `?state=Offline` or `?state=Tombstone`
 
 ---
 
-## Rejected Alternatives
+## Implementation Patterns
 
-| Option | Why Not |
-|--------|---------|
-| **Textual** | Full TUI framework is overkill for a demo dashboard. Adds memory overhead (~2x), requires code rewrite, introduces event loop complexity. Rich's `Live` + `Layout` is sufficient. |
-| **pynput** | System-wide keyboard hooks are unnecessary. `readchar` is simpler for terminal-only input. |
-| **curses** | Low-level, not compatible with Rich rendering. Would require abandoning existing Rich usage. |
-| **plotext** | Full charting library is overkill for simple sparklines. Heavy dependency. |
-| **asciichartpy** | Stale (last update 2020), designed for line charts not compact histograms. |
-| **blessed/blessings** | Another terminal library would conflict with Rich. Unnecessary abstraction layer. |
-| **termgraph** | Designed for CLI output, not embedding in Rich panels. Requires more setup. |
-| **aconsole** | Tkinter-based, wrong paradigm for terminal TUI. |
+### Pattern 1: Action Models (Pydantic)
 
----
-
-## Key Patterns
-
-### Pattern 1: Multi-Panel Layout with Live Updates
+Extend existing Pydantic pattern from `diagnosis.py`:
 
 ```python
-from rich.console import Console
-from rich.layout import Layout
-from rich.live import Live
-from rich.panel import Panel
-from rich.text import Text
+from pydantic import BaseModel, Field
+from enum import Enum
+from typing import Literal
 
-def create_layout() -> Layout:
-    """Create the multi-panel TUI layout."""
-    layout = Layout()
+class ActionType(str, Enum):
+    TRANSFER_LEADER = "transfer-leader"
+    SPLIT_REGION = "split-region"
+    ADD_PEER = "add-peer"
+    REMOVE_PEER = "remove-peer"
+    EVICT_LEADER = "evict-leader-scheduler"
+    SET_CONFIG = "set-config"
 
-    # Top-level: left status column, right content column
-    layout.split_row(
-        Layout(name="status", size=30),
-        Layout(name="content"),
-    )
+class ActionRequest(BaseModel):
+    """Request to execute an action on the cluster."""
+    action_type: ActionType
+    region_id: int | None = None
+    store_id: str | None = None
+    to_store_id: str | None = None
+    config_key: str | None = None
+    config_value: int | float | None = None
 
-    # Right column: monitor, agent, metrics stacked
-    layout["content"].split_column(
-        Layout(name="monitor", ratio=2),
-        Layout(name="agent", ratio=2),
-        Layout(name="metrics", size=5),
-    )
+    rationale: str = Field(description="Why this action is recommended")
+    ticket_id: int | None = Field(default=None, description="Associated ticket")
 
-    # Left column: cluster status, narration
-    layout["status"].split_column(
-        Layout(name="cluster", size=10),
-        Layout(name="narration"),
-    )
+class ActionResult(BaseModel):
+    """Result of an action execution."""
+    success: bool
+    action_type: ActionType
+    dry_run: bool
+    message: str
+    pd_response: dict | None = None
+    error: str | None = None
+    executed_at: str | None = None
 
-    return layout
+class ActionApproval(BaseModel):
+    """Human approval decision."""
+    approved: bool
+    approver: str | None = None
+    reason: str | None = None
+    modified_request: ActionRequest | None = None  # Allow edits
 ```
 
-### Pattern 2: Async Subprocess to Panel
+### Pattern 2: Dry-Run Mode (No Library Needed)
+
+Simple parameter-based approach:
 
 ```python
-from collections import deque
-import asyncio
+class PDClient:
+    async def create_operator(
+        self,
+        name: str,
+        region_id: int,
+        to_store_id: str | None = None,
+        dry_run: bool = False,
+    ) -> ActionResult:
+        """Create a PD operator (transfer-leader, split-region, etc.)."""
+        body = {"name": name, "region_id": region_id}
+        if to_store_id:
+            body["to_store_id"] = int(to_store_id)
 
-class OutputBuffer:
-    """Ring buffer for subprocess output lines."""
-    def __init__(self, max_lines: int = 20):
-        self.lines: deque[str] = deque(maxlen=max_lines)
-
-    def append(self, line: str):
-        self.lines.append(line)
-
-    def render(self) -> str:
-        return "\n".join(self.lines)
-
-async def run_subprocess_with_panel(
-    cmd: list[str],
-    buffer: OutputBuffer,
-    layout: Layout,
-    panel_name: str,
-):
-    """Run subprocess and stream output to a layout panel."""
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-
-    async for line in proc.stdout:
-        buffer.append(line.decode().rstrip())
-        layout[panel_name].update(
-            Panel(buffer.render(), title=panel_name.title())
-        )
-
-    await proc.wait()
-```
-
-### Pattern 3: Non-Blocking Keypress with asyncio
-
-```python
-import asyncio
-import sys
-import select
-from typing import Optional
-
-async def poll_keypress() -> Optional[str]:
-    """Non-blocking check for keypress (Unix only)."""
-    # Use select to check if stdin has data
-    if select.select([sys.stdin], [], [], 0.0)[0]:
-        return sys.stdin.read(1)
-    return None
-
-async def run_with_key_handling(layout: Layout, live: Live):
-    """Main loop with key handling."""
-    while True:
-        key = await poll_keypress()
-        if key == "q":
-            break
-        elif key == " " or key == "\n":
-            # Advance narration
-            advance_narration()
-
-        # Let other tasks run
-        await asyncio.sleep(0.1)
-```
-
-### Pattern 4: Sparkline Metrics Panel
-
-```python
-from collections import deque
-from sparklines import sparklines
-from rich.panel import Panel
-from rich.text import Text
-
-class MetricsTracker:
-    """Track and visualize ops/sec metrics."""
-    def __init__(self, window: int = 30):
-        self.history: deque[float] = deque(maxlen=window)
-
-    def record(self, ops_per_sec: float):
-        self.history.append(ops_per_sec)
-
-    def render_panel(self) -> Panel:
-        if not self.history:
-            return Panel("No data", title="Metrics")
-
-        chart = sparklines(list(self.history))[0]
-        current = self.history[-1]
-        avg = sum(self.history) / len(self.history)
-
-        content = Text()
-        content.append(f"ops/sec: {current:.0f} (avg: {avg:.0f})\n")
-        content.append(chart)
-
-        return Panel(content, title="Workload")
-```
-
-### Pattern 5: Coordinating Multiple Async Tasks with Live
-
-```python
-async def run_demo_dashboard():
-    """Main entry point for TUI demo."""
-    console = Console()
-    layout = create_layout()
-
-    # Buffers for subprocess output
-    monitor_buffer = OutputBuffer()
-    agent_buffer = OutputBuffer()
-    metrics = MetricsTracker()
-
-    async def update_loop():
-        """Refresh layout panels at regular intervals."""
-        while True:
-            layout["monitor"].update(
-                Panel(monitor_buffer.render(), title="Monitor")
+        if dry_run:
+            return ActionResult(
+                success=True,
+                action_type=ActionType(name),
+                dry_run=True,
+                message=f"[DRY RUN] Would POST to /pd/api/v1/operators: {body}",
+                pd_response=None,
             )
-            layout["agent"].update(
-                Panel(agent_buffer.render(), title="Agent")
-            )
-            layout["metrics"].update(metrics.render_panel())
-            await asyncio.sleep(0.25)
 
-    with Live(layout, console=console, refresh_per_second=4) as live:
-        # Run all tasks concurrently
-        await asyncio.gather(
-            run_subprocess_with_panel(
-                ["operator", "monitor", "run"],
-                monitor_buffer, layout, "monitor"
-            ),
-            run_subprocess_with_panel(
-                ["operator", "agent", "run"],
-                agent_buffer, layout, "agent"
-            ),
-            update_loop(),
-            run_with_key_handling(layout, live),
+        response = await self.http.post("/pd/api/v1/operators", json=body)
+        response.raise_for_status()
+
+        return ActionResult(
+            success=True,
+            action_type=ActionType(name),
+            dry_run=False,
+            message=f"Created operator: {name}",
+            pd_response=response.json(),
+            executed_at=datetime.now().isoformat(),
         )
 ```
 
----
+### Pattern 3: Human-in-the-Loop Approval (asyncio.Event)
 
-## Integration Notes
-
-### With Existing Code
-
-1. **Console reuse**: The existing `ChaosDemo` uses `Console()`. The new TUI should share or replace this console.
-
-2. **Live context nesting**: Rich supports nested `Live` contexts but this adds complexity. Better to have one `Live` context for the entire dashboard.
-
-3. **Typer compatibility**: The demo command should remain a Typer command. The TUI runs within the command, not replacing Typer.
-
-### Platform Considerations
-
-- **readchar**: Works on macOS, Linux, Windows
-- **sparklines**: Pure Python, works everywhere
-- **select.select for stdin**: Unix only. For Windows, use `msvcrt.kbhit()`:
+Based on [FlowHunt patterns](https://www.flowhunt.io/blog/human-in-the-loop-middleware-python-safe-ai-agents/):
 
 ```python
-import sys
+import asyncio
+from dataclasses import dataclass, field
+from typing import Callable, Awaitable
 
-if sys.platform == "win32":
-    import msvcrt
-    def has_keypress() -> bool:
-        return msvcrt.kbhit()
-    def get_keypress() -> str:
-        return msvcrt.getch().decode()
-else:
-    import select
-    def has_keypress() -> bool:
-        return bool(select.select([sys.stdin], [], [], 0.0)[0])
-    def get_keypress() -> str:
-        return sys.stdin.read(1)
+@dataclass
+class PendingApproval:
+    """Tracks a pending action awaiting human approval."""
+    request: ActionRequest
+    event: asyncio.Event = field(default_factory=asyncio.Event)
+    result: ActionApproval | None = None
+
+class ApprovalManager:
+    """Manages human-in-the-loop approval workflow."""
+
+    def __init__(self, timeout_seconds: float = 300.0):
+        self.timeout = timeout_seconds
+        self.pending: dict[str, PendingApproval] = {}
+        self._on_approval_requested: Callable[[ActionRequest], Awaitable[None]] | None = None
+
+    def on_approval_requested(self, callback: Callable[[ActionRequest], Awaitable[None]]):
+        """Register callback for when approval is requested (e.g., update TUI)."""
+        self._on_approval_requested = callback
+
+    async def request_approval(self, request: ActionRequest) -> ActionApproval:
+        """Request human approval, blocking until decision or timeout."""
+        approval_id = f"{request.action_type.value}-{request.region_id}-{id(request)}"
+        pending = PendingApproval(request=request)
+        self.pending[approval_id] = pending
+
+        # Notify UI that approval is needed
+        if self._on_approval_requested:
+            await self._on_approval_requested(request)
+
+        try:
+            await asyncio.wait_for(pending.event.wait(), timeout=self.timeout)
+            return pending.result or ActionApproval(approved=False, reason="No decision recorded")
+        except asyncio.TimeoutError:
+            return ActionApproval(approved=False, reason=f"Approval timed out after {self.timeout}s")
+        finally:
+            del self.pending[approval_id]
+
+    def approve(self, approval_id: str, approver: str, modified: ActionRequest | None = None):
+        """Human approves the action."""
+        if approval_id in self.pending:
+            pending = self.pending[approval_id]
+            pending.result = ActionApproval(
+                approved=True,
+                approver=approver,
+                modified_request=modified,
+            )
+            pending.event.set()
+
+    def reject(self, approval_id: str, reason: str):
+        """Human rejects the action."""
+        if approval_id in self.pending:
+            pending = self.pending[approval_id]
+            pending.result = ActionApproval(approved=False, reason=reason)
+            pending.event.set()
 ```
+
+### Pattern 4: Action Executor (Orchestrates Everything)
+
+```python
+class ActionExecutor:
+    """Executes actions with dry-run, approval, and audit support."""
+
+    def __init__(
+        self,
+        subject: TiKVSubject,
+        approval_manager: ApprovalManager,
+        db: TicketDB,
+        dry_run: bool = False,
+        require_approval: bool = True,
+    ):
+        self.subject = subject
+        self.approval = approval_manager
+        self.db = db
+        self.dry_run = dry_run
+        self.require_approval = require_approval
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        """Execute an action with full workflow."""
+
+        # 1. Dry-run short-circuit
+        if self.dry_run:
+            result = await self._execute_dry_run(request)
+            await self._audit_log(request, result)
+            return result
+
+        # 2. Request approval if required
+        if self.require_approval:
+            approval = await self.approval.request_approval(request)
+            if not approval.approved:
+                result = ActionResult(
+                    success=False,
+                    action_type=request.action_type,
+                    dry_run=False,
+                    message=f"Action rejected: {approval.reason}",
+                )
+                await self._audit_log(request, result, approval)
+                return result
+
+            # Use modified request if provided
+            if approval.modified_request:
+                request = approval.modified_request
+
+        # 3. Execute the action
+        result = await self._execute_real(request)
+
+        # 4. Audit log
+        await self._audit_log(request, result)
+
+        return result
+
+    async def _execute_real(self, request: ActionRequest) -> ActionResult:
+        """Execute action against real PD API."""
+        match request.action_type:
+            case ActionType.TRANSFER_LEADER:
+                await self.subject.transfer_leader(request.region_id, request.to_store_id)
+                return ActionResult(success=True, ...)
+            case ActionType.SPLIT_REGION:
+                await self.subject.split_region(request.region_id)
+                return ActionResult(success=True, ...)
+            # ... other cases
+```
+
+### Pattern 5: Audit Logging (Extend Existing Schema)
+
+```sql
+-- Add to existing schema.py
+CREATE TABLE IF NOT EXISTS action_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_json TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    approval_json TEXT,
+    ticket_id INTEGER REFERENCES tickets(id),
+    dry_run INTEGER NOT NULL DEFAULT 0,
+    executed_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_log_ticket ON action_log(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_action_log_executed ON action_log(executed_at);
+```
+
+---
+
+## What NOT to Add
+
+| Library | Why Not |
+|---------|---------|
+| **drypy / dryable** | Global state pattern doesn't fit our method-based actions. Simple `dry_run: bool` parameter is cleaner. |
+| **LangChain / LangGraph** | Overkill for single-action approval. Our workflow is simpler than multi-agent orchestration. Already have Claude API directly. |
+| **Temporal / Prefect** | Workflow engines for complex pipelines. Our actions are single operations, not sagas. |
+| **django-approval-workflow** | Django-specific. We're not using Django. |
+| **SpiffWorkflow** | BPMN workflow engine is overkill. Our approval is binary (approve/reject). |
+| **requests** | httpx already handles sync and async. No need for second HTTP library. |
+| **aiohttp** | httpx is already in use and working well. Switching provides no benefit. |
+
+---
+
+## Integration Points
+
+### With Existing PDClient
+
+Extend `pd_client.py` with POST methods:
+
+```python
+# Add to existing PDClient class
+async def create_operator(self, name: str, region_id: int, **kwargs) -> dict:
+    """POST /pd/api/v1/operators"""
+    body = {"name": name, "region_id": region_id, **kwargs}
+    response = await self.http.post("/pd/api/v1/operators", json=body)
+    response.raise_for_status()
+    return response.json()
+
+async def add_scheduler(self, name: str, store_id: int | None = None) -> dict:
+    """POST /pd/api/v1/schedulers"""
+    body = {"name": name}
+    if store_id:
+        body["store_id"] = store_id
+    response = await self.http.post("/pd/api/v1/schedulers", json=body)
+    response.raise_for_status()
+    return response.json()
+
+async def update_config(self, config: dict) -> dict:
+    """POST /pd/api/v1/config"""
+    response = await self.http.post("/pd/api/v1/config", json=config)
+    response.raise_for_status()
+    return response.json()
+```
+
+### With Existing TiKVSubject
+
+Implement the stubbed action methods:
+
+```python
+# Replace NotImplementedError with actual implementation
+async def transfer_leader(self, region_id: int, to_store_id: str) -> None:
+    await self.pd.create_operator(
+        name="transfer-leader",
+        region_id=region_id,
+        to_store_id=int(to_store_id),
+    )
+
+async def split_region(self, region_id: int) -> None:
+    await self.pd.create_operator(
+        name="split-region",
+        region_id=region_id,
+    )
+
+async def drain_store(self, store_id: str) -> None:
+    # Use evict-leader-scheduler for safe drain
+    await self.pd.add_scheduler(
+        name="evict-leader-scheduler",
+        store_id=int(store_id),
+    )
+```
+
+### With TUI (Approval Workflow)
+
+```python
+# In tui/controller.py - add approval panel
+class ApprovalPanel:
+    def __init__(self, approval_manager: ApprovalManager):
+        self.manager = approval_manager
+        self.manager.on_approval_requested(self._on_request)
+
+    async def _on_request(self, request: ActionRequest):
+        """Called when agent proposes an action."""
+        # Update TUI to show pending approval
+        self.current_request = request
+        self.show_approval_prompt()
+
+    def handle_keypress(self, key: str):
+        if key == "y":  # Approve
+            self.manager.approve(self._current_id(), approver="human")
+        elif key == "n":  # Reject
+            self.manager.reject(self._current_id(), reason="Human rejected")
+```
+
+---
+
+## Installation
+
+**No new packages to install.** Existing dependencies cover all requirements:
+
+```toml
+# Already in pyproject.toml - no changes needed
+dependencies = [
+    "typer>=0.21.0",
+    "rich>=14.0.0",
+    "python-on-whales>=0.70.0",
+    "httpx>=0.27.0",      # Already supports POST
+    "pydantic>=2.0.0",    # Already used for models
+    "aiosqlite>=0.20.0",  # Already used for audit
+    "anthropic>=0.40.0",
+]
+```
+
+---
+
+## Version Verification
+
+| Package | Current Version | Required | Status |
+|---------|-----------------|----------|--------|
+| httpx | 0.28.1 (Jan 2026) | >=0.27.0 | OK - POST support exists |
+| Pydantic | 2.12.5 (Jan 2026) | >=2.0.0 | OK - BaseModel, Field work |
+| aiosqlite | 0.20.0 | >=0.20.0 | OK - async context managers |
 
 ---
 
 ## Sources
 
-- [Rich PyPI](https://pypi.org/project/rich/) - Version 14.3.1, verified 2026-01-24
-- [Rich Live Display Docs](https://rich.readthedocs.io/en/latest/live.html) - Official documentation
-- [Rich Layout Docs](https://rich.readthedocs.io/en/latest/layout.html) - Official documentation
-- [readchar PyPI](https://pypi.org/project/readchar/) - Version 4.2.1
-- [sparklines PyPI](https://pypi.org/project/sparklines/) - Version 0.7.0
-- [Textual PyPI](https://pypi.org/project/textual/) - Version 7.3.0 (rejected alternative)
-- [Python asyncio-subprocess Docs](https://docs.python.org/3/library/asyncio-subprocess.html) - Official documentation
-- [Rich Terminal Dashboards Blog](https://www.willmcgugan.com/blog/tech/post/building-rich-terminal-dashboards/) - Will McGugan
-- [Rich + asyncio Discussion](https://github.com/Textualize/rich/discussions/1401) - GitHub
+### PD API Documentation
+- [PD Control User Guide](https://docs.pingcap.com/tidb/stable/pd-control/) - pd-ctl commands (HIGH confidence)
+- [tikv/pd router.go](https://github.com/tikv/pd/blob/master/server/api/router.go) - HTTP endpoints (HIGH confidence)
+- [PD HTTP Client Package](https://pkg.go.dev/github.com/tikv/pd/client/http) - Go client reference (HIGH confidence)
+- [Scheduling Introduction Wiki](https://github.com/tikv/pd/wiki/Scheduling-Introduction) - Operator concepts (HIGH confidence)
+
+### Human-in-the-Loop Patterns
+- [FlowHunt: Human in the Loop Middleware](https://www.flowhunt.io/blog/human-in-the-loop-middleware-python-safe-ai-agents/) - asyncio.Event pattern (MEDIUM confidence)
+- [LangChain HITL](https://docs.langchain.com/oss/python/langchain/human-in-the-loop) - Interrupt pattern reference (MEDIUM confidence)
+
+### Dry-Run Libraries (Evaluated, Rejected)
+- [drypy](https://github.com/dzanotelli/drypy) - Decorator pattern, not suitable for methods
+- [dryable](https://github.com/haarcuba/dryable) - Global state pattern, too implicit
+
+### Version Verification
+- [httpx PyPI](https://pypi.org/project/httpx/) - Version 0.28.1
+- [Pydantic PyPI](https://pypi.org/project/pydantic/) - Version 2.12.5
+- [httpx Releases](https://github.com/encode/httpx/releases) - Changelog verification

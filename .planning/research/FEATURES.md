@@ -1,244 +1,311 @@
-# Features Research: TUI Demo
+# Feature Landscape: Agent Action Execution
 
-**Domain:** Live TUI dashboard for distributed system monitoring demo
-**Researched:** 2026-01-24
-**Confidence:** MEDIUM (based on established TUI patterns, verified against popular tools)
+**Domain:** AI-powered distributed systems operator with action execution
+**Researched:** 2026-01-25
+**Confidence:** HIGH (verified against PD API docs, Kubernetes operator patterns, AIOps best practices)
+
+## Context
+
+This research addresses the v2.0 milestone: enabling the AI agent to execute actions on TiKV clusters, not just observe and recommend. The existing v1.0 system already has:
+
+- Subject adapter interface with action method signatures (transfer_leader, split_region, etc.)
+- PD API client for cluster observation
+- AI diagnosis producing structured recommendations
+- Monitor loop detecting invariant violations
+
+The gap: actions are defined in the Subject Protocol but not implemented or executed.
+
+---
 
 ## Table Stakes
 
-Features users expect from any TUI dashboard showing multiple running processes. Missing any of these makes the demo feel incomplete or unprofessional.
+Features users expect from any autonomous operator with action execution. Missing any of these makes the system unsafe or unusable in production.
 
-### Layout and Structure
+### Action Framework
 
-- **Multi-panel layout with clear boundaries** - Separate visual regions for different data streams
-  - Complexity: Low
-  - Why essential: Users expect dashboards to show multiple data streams simultaneously. A single scrolling output is not a "dashboard" - it's just a log. Panels create the mental model of "I can monitor multiple things at once."
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **Action type registry** | Operators need a defined vocabulary of actions. Without it, the AI can't specify what to do in a structured way. Every Kubernetes operator defines CRDs; we need action types. | Low | Existing `Subject` Protocol |
+| **Action validation before execution** | Prevent invalid actions (e.g., transfer leader to non-existent store). This is basic safety - don't execute garbage. | Low | PD API client for validation |
+| **Action result tracking** | Know if an action succeeded, failed, or is pending. Without this, the operator is blind to its own effects. | Low | Ticket database |
+| **Action timeout handling** | PD operations can hang. Without timeouts, the operator blocks forever. | Low | asyncio timeout patterns |
+| **Idempotency awareness** | Re-executing "transfer leader to store 2" when leader is already on store 2 should be a no-op. Prevents unnecessary churn. | Medium | State checking before action |
 
-- **Real-time updates without flicker** - Smooth 1-2 second refresh with diff-based rendering
-  - Complexity: Low (Rich Live handles this)
-  - Why essential: Flickering or jerky updates look broken. btop and k9s set the bar: data should flow smoothly. Rich Live already supports this.
+### PD API Actions
 
-- **Color-coded status indicators** - Green/yellow/red for healthy/warning/critical states
-  - Complexity: Low
-  - Why essential: Eye-tracking research shows color is processed faster than text. A green box that turns red immediately communicates "something changed" without reading. Standard in htop, btop, k9s, every monitoring tool.
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **Leader transfer execution** | The most common rebalancing action. `operator add transfer-leader <region_id> <store_id>` via PD API. | Low | PDClient, existing Subject interface |
+| **Region peer scheduling** | Move replicas between stores. `operator add transfer-peer <region_id> <from> <to>`. Required for node evacuation. | Medium | PDClient |
+| **Store drain initiation** | Mark store offline to evacuate regions. Essential for maintenance. | Low | PDClient |
+| **Scheduler limit adjustment** | Control rebalancing speed. Useful during incidents to prevent cascading changes. | Low | PDClient config API |
 
-- **Clear panel titles/headers** - Each panel must identify what it shows
-  - Complexity: Low
-  - Why essential: Users scan the F-pattern (top-left to right, then down). Panel titles orient them instantly. Without them, users waste time figuring out what they're looking at.
+### Dry-Run Mode
 
-- **Responsive to terminal resize** - Layout adapts when terminal dimensions change
-  - Complexity: Medium (Rich Layout handles most of this)
-  - Why essential: Conference presenters resize terminals constantly. A demo that breaks on resize looks amateur.
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **Dry-run flag for all actions** | Show what would happen without doing it. Every serious infrastructure tool has this (Terraform, Pulumi, kubectl). | Low | Action type system |
+| **Dry-run output with expected changes** | Not just "would transfer leader" but "would transfer region 123 leader from store 1 to store 2, affecting 0.3% of traffic". | Medium | Metrics integration |
+| **Dry-run as default mode** | New operators should default to safe behavior. Explicit opt-in to execution. | Low | Config/CLI flag |
 
-### Process Visibility
+### Approval Workflow
 
-- **Running daemon status indicators** - Show that monitor and agent are actually running
-  - Complexity: Low
-  - Why essential: The whole point of the TUI demo is "look, real daemons running." If users can't tell they're running, the demo fails its core purpose.
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **Human approval gate** | High-risk actions require human confirmation before execution. This is the "critical safety lock" on autonomy per AIOps best practices. | Medium | CLI interaction, state machine |
+| **Approval timeout with auto-decline** | Pending approvals can't wait forever. If no response in N minutes, treat as declined. | Low | Timer logic |
+| **Approval context display** | Show the human what they're approving: action, reasoning, expected impact, risk level. | Low | Rich formatting |
+| **Approval audit trail** | Who approved what, when. Required for compliance and post-incident review. | Low | Ticket database, logging |
 
-- **Activity indicators (heartbeat/spinner)** - Visual proof of liveness
-  - Complexity: Low
-  - Why essential: Static displays look frozen. A subtle pulse or spinner says "this is live, not a screenshot." k9s does this excellently with its refresh indicator.
+### Safety Mechanisms
 
-- **Timestamp of last update** - When was this data refreshed?
-  - Complexity: Low
-  - Why essential: Removes ambiguity about freshness. Users need to know they're seeing current state, not cached data.
+| Feature | Why Expected | Complexity | Dependencies |
+|---------|--------------|------------|--------------|
+| **Action rate limiting** | Don't execute 100 leader transfers per second. Cluster stability requires pacing. | Low | Rate limiter |
+| **Blast radius limits** | "Don't affect more than X% of regions in one action batch." Prevents cascading failures. | Medium | Impact estimation |
+| **Kill switch** | Immediate halt of all pending actions. Every autonomous system needs an emergency stop. | Low | Global flag |
+| **Rollback for reversible actions** | If transfer-leader fails partway, undo what was done. | High | Compensating transactions |
 
-### System Health Display
-
-- **Cluster status summary** - Overall health at a glance
-  - Complexity: Low-Medium
-  - Why essential: The primary question for any monitoring dashboard is "is everything okay?" This must be answerable in under 1 second. Aggregate status cards are a standard dashboard pattern.
-
-- **Node count with health breakdown** - "3/3 nodes healthy" or "2/3 nodes healthy"
-  - Complexity: Low
-  - Why essential: For distributed systems, node count is the fundamental metric. It's what the demo is about - killing a node and watching the system respond.
-
-### Keyboard Interaction
-
-- **Key-press instructions visible** - Show available keyboard shortcuts
-  - Complexity: Low
-  - Why essential: TUIs are keyboard-driven. Users shouldn't have to guess what keys do what. A small footer with shortcuts is standard (btop, k9s, htop all do this).
-
-- **Chapter/stage progression via keypress** - Demo narrator controls the pace
-  - Complexity: Low-Medium
-  - Why essential: Conference demos need controlled pacing. The presenter decides when to inject the fault, not an automatic timer. This enables dramatic timing.
-
+---
 
 ## Differentiators
 
-Features that make this demo stand out from a typical monitoring dashboard. These aren't expected, but create the "wow" moment for technical audiences.
+Features that set this operator apart from basic automation. These create competitive advantage and demonstrate AI sophistication.
 
-### Live Process Output Capture
+### Intelligent Action Planning
 
-- **Real daemon output in dedicated panels** - Show actual monitor/agent logs as they happen
-  - Complexity: Medium-High
-  - Why impressive: Most demos run processes in the background with no visibility. Showing the actual output proves "this is really running" and lets the audience see the detection/diagnosis happen in real-time.
+| Feature | Value Proposition | Complexity | Dependencies |
+|---------|-------------------|------------|--------------|
+| **Action dependency ordering** | "Split region first, then transfer leader" - AI understands action prerequisites. Most operators execute blind sequences. | Medium | Action graph analysis |
+| **Multi-step action plans** | AI proposes a sequence: "1. Reduce schedule limit, 2. Drain store 3, 3. Restore schedule limit." More sophisticated than single actions. | Medium | Plan representation |
+| **Impact prediction** | "This action will reduce latency by ~15% based on similar past situations." Moves beyond "what" to "why this will help." | High | Historical analysis, ML |
+| **Action alternatives comparison** | "Option A: Transfer leaders (fast, low risk). Option B: Split hot regions (slower, addresses root cause). Recommending A because incident is ongoing." | Medium | Multi-option diagnosis |
 
-### Workload Visualization
+### Confidence-Based Autonomy
 
-- **Ops/sec histogram or sparkline** - Visual representation of traffic
-  - Complexity: Medium
-  - Why impressive: Turns abstract "load" into something visible. When the histogram drops or turns red after fault injection, the audience immediately understands the impact. More visceral than numbers.
+| Feature | Value Proposition | Complexity | Dependencies |
+|---------|-------------------|------------|--------------|
+| **Graduated autonomy levels** | Level 1: Human approves every action. Level 2: Auto-approve low-risk. Level 3: Full autopilot. Aligns with Kubernetes Operator Capability Levels. | Medium | Risk classification |
+| **Risk-based approval routing** | Low-risk: auto-approve. Medium-risk: notify and proceed unless vetoed. High-risk: require explicit approval. | Medium | Risk scoring |
+| **Confidence threshold for action** | "I'm 95% confident this is the right action" vs "I'm 60% confident, please review." AI self-assesses. | Low | Structured diagnosis output |
+| **Learning from approval decisions** | If humans consistently reject certain actions, adjust future recommendations. | High | Feedback loop, ML |
 
-- **Degradation color shift** - Workload panel color changes when performance degrades
-  - Complexity: Low (once you have the data)
-  - Why impressive: Visual correlation between "fault injected" and "workload suffered" is the narrative arc of the demo. Color shift makes this unmissable.
+### Operational Intelligence
 
-### Demo Narration
+| Feature | Value Proposition | Complexity | Dependencies |
+|---------|-------------------|------------|--------------|
+| **Action timing optimization** | "Wait 30 seconds - a leader transfer is already in progress. Executing now would interfere." | Medium | Cluster state awareness |
+| **Maintenance window awareness** | "It's 3am Sunday - approved time for aggressive rebalancing." vs "Peak traffic hours - conservative mode." | Low | Config, time awareness |
+| **Cascading effect detection** | "This action might trigger automatic PD scheduling. Account for that." | High | PD behavior modeling |
+| **Post-action verification** | After executing, verify the expected outcome occurred. If not, diagnose why. | Medium | State comparison |
 
-- **Chapter/stage panel with context** - "Chapter 2: Injecting Fault" with brief explanation
-  - Complexity: Low
-  - Why impressive: Guides the audience through the narrative. They know what they're supposed to be watching for. Reduces cognitive load and increases engagement.
+### Integration Patterns
 
-- **Countdown timers for key moments** - "Detecting fault... 3s"
-  - Complexity: Low
-  - Why impressive: Builds tension. The audience is actively watching for detection. When it happens, there's satisfaction. This is presentation technique, not just engineering.
+| Feature | Value Proposition | Complexity | Dependencies |
+|---------|-------------------|------------|--------------|
+| **Slack/PagerDuty approval integration** | Approve actions from where on-call engineers already work. Better UX than switching to CLI. | Medium | Webhook integration |
+| **GitOps action proposals** | Propose actions as PRs to a config repo. Merge = approve. Full audit trail via git. | High | Git integration |
+| **Runbook attachment** | "This action follows runbook RB-123: TiKV Node Drain Procedure." Links AI actions to documented procedures. | Low | Runbook registry |
 
-### AI Diagnosis Display
-
-- **Structured diagnosis panel** - Show AI reasoning in formatted panel
-  - Complexity: Low (already exists in current demo)
-  - Why impressive: The core value prop - AI explaining what's happening with alternatives considered. Keeping this prominent in the TUI is essential.
-
-- **Diagnosis appearing "live"** - Panel populates as AI responds
-  - Complexity: Medium (streaming structured output)
-  - Why impressive: Watching the diagnosis write itself is more engaging than seeing it appear all at once. It emphasizes that this is happening in real-time.
-
-### Recovery Narrative
-
-- **Before/after cluster state** - Show health transition: degraded -> healthy
-  - Complexity: Low-Medium
-  - Why impressive: Completes the story. The demo shouldn't just show failure detection - it should show the path to recovery. This demonstrates the full operator value.
-
-### Technical Polish
-
-- **Sub-second detection highlighting** - Flash or emphasize the moment detection occurs
-  - Complexity: Low
-  - Why impressive: The detection moment is the climax of the demo. A brief highlight (border flash, bold text) draws attention and creates a memorable moment.
-
-- **Timeline/event log** - Chronological list of what happened
-  - Complexity: Medium
-  - Why impressive: For post-demo discussion: "At 12:34:05 we injected the fault, at 12:34:07 the monitor detected it, at 12:34:15 the diagnosis completed." Concrete timing demonstrates system responsiveness.
-
+---
 
 ## Anti-Features
 
-Things to deliberately NOT build. These either add complexity without value, or actively hurt the demo experience.
+Things to deliberately NOT build. These either add complexity without value, violate safety principles, or contradict the design philosophy.
 
-### Avoid: Scrolling log panels
-- **Why not:** Scrolling logs are what the CLI already does. A TUI dashboard should synthesize information, not dump raw logs. If you need logs, use a separate terminal.
+### Avoid: Fully Autonomous Mode Without Guardrails
 
-### Avoid: Mouse-driven navigation
-- **Why not:** Conference demos happen with the presenter at a keyboard. Mouse interaction requires looking at the cursor, breaking eye contact with the audience. Keyboard-only is faster and more professional.
+- **Why not:** The research consistently emphasizes human-in-the-loop as "the critical safety lock." Autonomous systems that can make unlimited changes to production without any human oversight are recipes for cascading failures.
+- **What instead:** Graduated autonomy with clear boundaries. Even "Level 5 Autopilot" operators have emergency overrides and audit trails.
 
-### Avoid: Configuration UI in the demo
-- **Why not:** The demo should "just work." Any configuration UI adds points of failure and distracts from the core narrative. Pre-configure everything.
+### Avoid: Complex Undo/Rollback for All Actions
 
-### Avoid: Multiple themes or customization
-- **Why not:** One polished theme is better than five half-baked ones. Customization is engineering effort that doesn't improve the demo impact.
+- **Why not:** Not all actions are reversible. Leader transfer can be undone, but region split cannot (easily). Promising rollback creates false confidence. The SAGA pattern shows that some transactions are "pivot points" after which compensation is impossible.
+- **What instead:** Clearly classify actions as reversible/irreversible. For reversible actions, implement targeted rollback. For irreversible, require higher approval thresholds.
 
-### Avoid: Persistent state between runs
-- **Why not:** Each demo run should be fresh. Persistent state creates debugging nightmares when something "remembers" a previous failed run.
+### Avoid: Real-Time Action Streaming to TUI
 
-### Avoid: Too many panels (>6)
-- **Why not:** Cognitive overload. If the audience can't process everything in 5 seconds, you have too much. btop succeeds with 4-5 focused areas. More isn't better.
+- **Why not:** Showing every PD operator add command scrolling by creates noise, not insight. The TUI should show outcomes, not implementation details.
+- **What instead:** Show action summaries ("Transferred 3 leaders") and state changes (store health improvement). Log details for post-incident review.
 
-### Avoid: Animations for animation's sake
-- **Why not:** Subtle activity indicators are good. Gratuitous animations distract from the content. The demo content (AI diagnosis) should be the star, not the UI chrome.
+### Avoid: Custom Action DSL
 
-### Avoid: Real-time metrics graphs with long history
-- **Why not:** A 60-minute graph is useless in a 2-minute demo. Show only the relevant time window. If you need historical data, that's a different tool.
+- **Why not:** Creating a new language for expressing actions adds learning curve without benefit. The existing PD API commands are well-documented. Custom DSLs create maintenance burden.
+- **What instead:** Use structured Python/JSON action types that map directly to PD API operations. Transparent, not clever.
 
+### Avoid: Action Batching Across Multiple Clusters
 
-## Demo Flow Considerations
+- **Why not:** Cross-cluster operations introduce distributed transaction complexity. Each cluster has its own state, and coordinating actions across them is a different (much harder) problem.
+- **What instead:** Single-cluster scope per operator instance. Multi-cluster coordination is a higher-level concern for future work.
 
-What makes a fault-injection demo compelling for technical audiences, based on chaos engineering presentation best practices.
+### Avoid: ML-Based Action Selection Without Explanation
 
-### Narrative Structure
+- **Why not:** "The model said do this" is not acceptable justification for production changes. The core value prop is AI that explains its reasoning.
+- **What instead:** All AI-selected actions must include reasoning chain. If the AI can't explain why, it shouldn't recommend.
 
-**Beginning (30-60 seconds):**
-- Show the healthy state explicitly
-- Establish baseline (all nodes up, workload flowing)
-- This is the "before" that makes the "after" meaningful
+### Avoid: Blocking Approval UI
 
-**Middle (60-90 seconds):**
-- Inject fault with visible action (not silent background)
-- Build tension with detection countdown
-- Show the impact (workload degradation)
-- Climax: detection happens, AI begins diagnosis
+- **Why not:** If the operator blocks waiting for approval, the system becomes unresponsive. Meanwhile, new issues might arise.
+- **What instead:** Asynchronous approval flow. Pending approvals are queued, the operator continues monitoring, and approved actions execute when safe.
 
-**End (60-90 seconds):**
-- Display AI diagnosis prominently
-- Walk through the reasoning (alternatives considered)
-- Show recovery or recommendation
-- Return to healthy state (closure)
+### Avoid: Automatic PD Scheduler Override
 
-### Key Moments to Emphasize
+- **Why not:** PD has its own schedulers (balance-region, balance-leader, hot-region). Overriding them without understanding creates conflicts. The operator should complement PD scheduling, not fight it.
+- **What instead:** Understand when manual intervention is needed vs. when PD will handle it. Actions for situations PD doesn't address (e.g., AI-detected anomalies requiring specific responses).
 
-1. **The Kill** - The moment of fault injection should be unmistakable. A visual cue (color change, banner) makes it clear "now the system is under stress."
+---
 
-2. **The Detection** - The moment the system notices should be highlighted. This is where the demo proves its value - fast, automatic detection.
+## Feature Dependencies
 
-3. **The Diagnosis** - The AI reasoning is the unique value. Give it screen real estate and let the audience read it.
+Understanding which features depend on which existing capabilities.
 
-### Pacing Considerations
+```
+Existing v1.0 Features:
+  Subject Protocol (actions defined) ─────┐
+  PDClient (observation) ─────────────────┤
+  Ticket Database ────────────────────────┤
+  AI Diagnosis (structured output) ───────┤
+  Monitor Loop ───────────────────────────┘
+                                          │
+                                          v
+                          ┌───────────────────────────┐
+                          │   Action Type Registry    │
+                          │   (New in v2.0)           │
+                          └───────────────────────────┘
+                                          │
+              ┌───────────────────────────┼───────────────────────────┐
+              │                           │                           │
+              v                           v                           v
+    ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+    │  PD API Actions │       │   Dry-Run Mode  │       │ Approval System │
+    │  (implements)   │       │   (wraps)       │       │ (gates)         │
+    └─────────────────┘       └─────────────────┘       └─────────────────┘
+              │                           │                           │
+              └───────────────────────────┼───────────────────────────┘
+                                          │
+                                          v
+                          ┌───────────────────────────┐
+                          │   Action Executor         │
+                          │   (orchestrates all)      │
+                          └───────────────────────────┘
+                                          │
+                                          v
+                          ┌───────────────────────────┐
+                          │   Safety Layer            │
+                          │   (rate limits, blast     │
+                          │    radius, kill switch)   │
+                          └───────────────────────────┘
+```
 
-- **Interactive pauses are good** - "Press Enter to inject fault" lets the presenter narrate, builds anticipation, and ensures the audience is ready.
+### Build Order Implications
 
-- **Automatic progression is bad** - Timers that advance without presenter control are risky. What if the presenter needs to explain something? What if there's a question?
+1. **Action Type Registry** - Foundation, enables all else
+2. **PD API Action Implementation** - Requires registry, uses existing PDClient
+3. **Dry-Run Mode** - Wraps action execution, relatively independent
+4. **Approval System** - Can be built in parallel with actions
+5. **Action Executor** - Integrates all above
+6. **Safety Layer** - Final integration, wraps executor
 
-- **Detection should feel fast** - 2-4 second detection time is impressive. >10 seconds feels slow. If detection is slow, acknowledge it ("In production you'd configure more aggressive polling").
+---
 
-### Technical Audience Expectations
+## TiKV/PD-Specific Considerations
 
-Technical audiences (conference talks, engineering demos) expect:
+### PD Operator Commands
 
-- **Honesty** - Don't hide errors or pretend things work when they don't. If something fails, acknowledge it.
-- **Real systems** - They can tell the difference between a real cluster and mocked data. The docker-compose 6-node setup is credible.
-- **Substantive AI output** - Not "something is wrong" but "here's what's happening, here's why, here's what to do." This is the existing demo's strength.
-- **No sales pitches** - Technical audiences tune out marketing speak. Let the demo speak for itself.
+Based on [PD Control documentation](https://docs.pingcap.com/tidb/stable/pd-control/), the key operators:
 
-### Recovery from Failure
+| Command | What It Does | Timing |
+|---------|--------------|--------|
+| `operator add transfer-leader <region_id> <store_id>` | Move leader to specified store | Milliseconds (no snapshot) |
+| `operator add transfer-peer <region_id> <from_store> <to_store>` | Move replica between stores | Tens of seconds (involves snapshot) |
+| `operator add add-peer <region_id> <store_id>` | Add replica to store | Tens of seconds |
+| `operator add remove-peer <region_id> <store_id>` | Remove replica from store | Milliseconds |
+| `operator add split-region <region_id>` | Split region in half | Varies |
 
-Demos fail sometimes. Plan for it:
+### Scheduling Limits
 
-- **Graceful degradation** - If AI times out, show the context that would have been provided
-- **Restart capability** - A single keypress should be able to restart the demo cleanly
-- **Fallback narrative** - "As you can see, the detection worked; let me show you a pre-recorded diagnosis..."
+| Config | Purpose | Default |
+|--------|---------|---------|
+| `leader-schedule-limit` | Max leader transfers per cycle | 4 |
+| `region-schedule-limit` | Max region moves per cycle | 2048 |
+| `replica-schedule-limit` | Max replica changes per cycle | 64 |
 
+These limits affect how fast the operator can execute actions. Understanding them is important for action timing.
+
+### Hot Region Handling
+
+The `balance-hot-region-scheduler` runs automatically. Before manually intervening on hot regions:
+1. Check if PD is already addressing it
+2. Check `hot-region-cache-hits-threshold` (how long before PD acts)
+3. Manual intervention for immediate response, let PD handle gradual rebalancing
+
+---
 
 ## MVP Recommendation
 
-For the v1.1 TUI demo, prioritize:
+For v2.0 action execution milestone:
 
 ### Must Have (Table Stakes)
-1. Multi-panel layout (cluster status, monitor output, agent output, narration)
-2. Color-coded node health indicators
-3. Key-press chapter progression
-4. Real daemon output capture
+
+1. **Action type registry** with transfer-leader, transfer-peer, drain-store
+2. **PD API action implementation** for the three core actions
+3. **Dry-run mode** as the default
+4. **Human approval gate** for all actions initially
+5. **Action result tracking** in ticket database
+6. **Kill switch** to halt all actions
+7. **Basic rate limiting** (1 action per N seconds)
 
 ### Should Have (High-Impact Differentiators)
-5. Workload panel with degradation color
-6. Detection moment highlighting
-7. Chapter/narration panel
+
+8. **Confidence-based approval routing** (high confidence = notify, low = require approval)
+9. **Action validation** before execution
+10. **Post-action verification** to confirm expected outcome
 
 ### Can Defer
-- Timeline/event log
-- Streaming diagnosis display
-- Sparkline/histogram (simple bar may suffice)
 
-The existing `operator demo chaos` already has the AI diagnosis quality. The TUI upgrade is about visibility into the running system and presentation polish, not new functionality.
+- Multi-step action plans (v2.1)
+- Slack/PagerDuty integration (v2.1)
+- Impact prediction with historical data (v2.2)
+- Graduated autonomy levels beyond binary (v2.2)
+- GitOps action proposals (v3.0)
 
+### Out of Scope for v2.0
+
+- Automatic PD scheduler integration
+- Cross-cluster operations
+- ML-based action selection
+- Complex rollback/compensation
+
+---
 
 ## Sources
 
-- [Building Rich Terminal Dashboards](https://www.willmcgugan.com/blog/tech/post/building-rich-terminal-dashboards/) - Rich layout patterns
-- [Textual TUI Documentation](https://textual.textualize.io/) - Widget gallery and patterns
-- [k9s - Kubernetes CLI and TUI](https://k9scli.io/) - Real-time cluster monitoring UX
-- [btop - The htop Alternative](https://linuxblog.io/btop-the-htop-alternative/) - System monitoring dashboard patterns
-- [Dashboard Design UX Patterns](https://www.pencilandpaper.io/articles/ux-pattern-analysis-data-dashboards) - F-pattern and card layout principles
-- [How to Present Chaos Testing Effectively](https://www.resumly.ai/blog/how-to-present-chaos-testing-and-learnings-effectively) - Presentation narrative
-- [How to Present to a Technical Audience](https://wlanprofessionals.com/how-to-present-to-a-technical-audience/) - Technical audience expectations
-- [Live Demos Guide](https://www.arcade.software/post/live-demos-guide) - Demo preparation and execution
-- [Microsoft Fault Injection Testing Playbook](https://microsoft.github.io/code-with-engineering-playbook/automated-testing/fault-injection-testing/) - Chaos engineering observability patterns
+### TiKV/PD Documentation
+
+- [PD Scheduling Introduction](https://github.com/tikv/pd/wiki/Scheduling-Introduction) - How PD scheduling works
+- [PD Control User Guide](https://docs.pingcap.com/tidb/stable/pd-control/) - pd-ctl command reference
+- [Best Practices for PD Scheduling](https://docs.pingcap.com/tidb/stable/pd-scheduling-best-practices/) - Scheduling configuration
+- [Balance Scheduling](https://github.com/tikv/pd/wiki/Balance-Scheduling) - Leader and region balancing
+
+### Kubernetes Operator Patterns
+
+- [Operator Capability Levels](https://sdk.operatorframework.io/docs/overview/operator-capabilities/) - Level 1-5 maturity model
+- [Kubernetes Operators in 2025](https://outerbyte.com/kubernetes-operators-2025-guide/) - Current best practices
+- [Portworx Action Approvals](https://docs.portworx.com/portworx-enterprise/operations/operate-kubernetes/autopilot/how-to-use/approvals/walkthrough) - Approval workflow pattern
+
+### AIOps and Human-in-the-Loop
+
+- [Human-in-the-Loop for AI Agents](https://www.permit.io/blog/human-in-the-loop-for-ai-agents-best-practices-frameworks-use-cases-and-demo) - HITL best practices
+- [Agentic AIOps Human-in-the-Loop Workflows](https://dzone.com/articles/agentic-aiops-human-in-the-loop-workflows) - AIOps-specific HITL
+- [Human-in-the-Loop in AI Workflows](https://zapier.com/blog/human-in-the-loop/) - Approval patterns
+
+### Dry-Run and Safety Patterns
+
+- [Pulumi Kubernetes Operator Preview Mode](https://www.pulumi.com/blog/pulumi-kubernetes-operator-2-3/) - Dry-run implementation
+- [MongoDB Atlas Operator Dry Run](https://www.mongodb.com/docs/atlas/operator/current/ak8so-dry-run/) - Event-based dry-run
+- [Chaos Toolkit Execution Flow](https://chaostoolkit.org/reference/tutorials/run-flow/) - Rollback strategies
+
+### Rollback and Recovery
+
+- [SAGA Design Pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga) - Compensating transactions
+- [Runbook Automation Best Practices](https://engini.io/blog/runbook-automation/) - Audit trails

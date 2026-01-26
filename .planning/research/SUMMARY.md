@@ -1,308 +1,233 @@
-# Research Summary: TUI Demo (v1.1)
+# Project Research Summary
 
-**Project:** Operator TUI Demo Enhancement
-**Domain:** Multi-panel terminal dashboard with live subprocess monitoring
-**Researched:** 2026-01-24
+**Project:** Operator v2.0 - Agent Action Execution
+**Domain:** AI-powered distributed database operator (observe-only to action-capable)
+**Researched:** 2026-01-25
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This project enhances the existing `operator demo chaos` command with a multi-panel TUI dashboard that displays real daemon output, cluster health, and AI diagnosis in real-time. The research shows this is achievable using the existing Rich library (already in use) without adding heavy dependencies like Textual. The recommended approach is to run monitor and agent as subprocesses (not direct imports) to capture their output streams, avoiding complex refactoring of event loop management and signal handling.
+The v2.0 milestone adds action execution to the existing observe-only TiKV operator. Research shows this transition is remarkably clean: the existing stack (httpx, Pydantic, aiosqlite) already provides everything needed. No new dependencies required. The Subject Protocol already defines action method signatures (transfer_leader, split_region, etc.) - they just need implementation. The core challenge is not technical capability but safety: preventing AI hallucinations from executing destructive commands, managing approval workflows that don't block incident response, and limiting blast radius.
 
-The core technical challenge is coordinating three async tasks (subprocess output capture, keyboard input, and display updates) within Rich's Live display context. Research confirms this pattern is well-supported by Rich + asyncio, with multiple successful examples in the ecosystem (btop-style dashboards, k9s-inspired CLIs). The key is using `asyncio.TaskGroup` (Python 3.11+) for task lifecycle management and subprocess pipes with `PYTHONUNBUFFERED=1` to avoid buffering delays.
+The recommended architecture is additive, not a refactor. Action execution layers on top of existing diagnosis flow: after Claude produces a diagnosis with a recommended action, the system creates an ActionProposal that awaits human approval. Once approved, the ActionExecutor calls PD API endpoints via extended PDClient methods. This preserves the working observe-only functionality while adding controlled action capability. The design uses structured action types (preventing hallucinations), risk-tiered approval (preventing bottlenecks), and comprehensive audit trails (enabling rollback guidance).
 
-Critical risks center on subprocess output buffering (prevented with environment variables), terminal state corruption on crashes (mitigated with context managers and signal handlers), and zombie processes (solved with graceful shutdown sequences). The research identified 12 pitfalls, 6 critical, with concrete prevention strategies for each. The architecture is straightforward: spawn daemons as subprocesses, stream their stdout to ring buffers, render buffers into Rich panels, and refresh at 4-10 fps.
+Critical risks center on unbounded blast radius and state management complexity. Without pre-flight checks and action queuing, a single action could cascade cluster-wide. Without proper state machine design, actions get stuck in "executing" forever after crashes. The mitigation strategy prioritizes safety gates at the foundation layer before implementing any actual execution. Dry-run mode enables production validation without risk. The research confidence is high because PD API endpoints are well-documented in official sources, and the action execution patterns are verified against multiple production operator implementations.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack is already sufficient. No new frameworks are needed. The research explicitly recommends **NOT** adding Textual, which would require rewriting existing code and add 2x memory overhead for features (interactive widgets) that a demo dashboard doesn't need.
+The existing stack requires no additions for v2.0. Python 3.11+, httpx (async HTTP), Pydantic (validation), and aiosqlite (audit storage) already handle action execution needs. httpx supports POST methods for PD API operators and config changes. Pydantic models extend naturally to ActionProposal and ActionResult. The tickets database extends to store action proposals and execution records.
 
-**Core technologies (already in use):**
-- **Rich 14.x** - Multi-panel layout via `Layout`, live updates via `Live`, panel rendering - already used extensively in existing code
-- **asyncio** - Subprocess management, concurrent task coordination - stdlib, already in use
-- **Typer** - CLI framework - already in use, demo remains a Typer command
+**Core technologies:**
+- httpx >=0.27.0: Async HTTP client for PD API — already in use for GET endpoints, extend for POST
+- Pydantic >=2.0.0: Data validation for action models — already used for DiagnosisOutput, pattern applies to actions
+- aiosqlite >=0.20.0: Async SQLite for action audit — existing TicketDB extends to action_proposals and action_records tables
 
-**Minimal additions (2 packages, both zero-dependency):**
-- **readchar 4.2.1** - Non-blocking keyboard input for chapter progression - minimal, cross-platform, 15KB
-- **sparklines 0.7.0** - Ops/sec visualization as unicode bar charts - pure Python, outputs strings that render in Rich panels
-
-**Subprocess output capture:** Use `asyncio.subprocess` (stdlib), no additional library needed. The pattern is `create_subprocess_exec` with `stdout=PIPE` and async line reading.
+**What NOT to add:**
+- drypy/dryable: Global state pattern doesn't fit method-based actions. Simple `dry_run: bool` parameter is cleaner.
+- LangChain/LangGraph: Overkill for single-action approval. Existing Claude API integration suffices.
+- Temporal/Prefect: Workflow engines for complex pipelines. Actions are single operations, not sagas.
 
 ### Expected Features
 
-The research clearly separates table stakes (expected from any monitoring dashboard) from differentiators (what makes this demo impressive).
+Action execution requires table stakes features to be production-safe, plus differentiators that leverage AI capabilities. The MVP should prioritize safety over sophistication.
 
 **Must have (table stakes):**
-- Multi-panel layout with clear boundaries - separate visual regions for different data streams
-- Real-time updates without flicker - 1-2 second refresh with diff-based rendering (Rich Live handles this)
-- Color-coded status indicators - green/yellow/red for healthy/warning/critical states
-- Clear panel titles/headers - orient users instantly to what they're seeing
-- Running daemon status indicators - show that monitor and agent are actually running
-- Activity indicators (heartbeat/spinner) - visual proof of liveness
-- Key-press instructions visible - show available keyboard shortcuts in footer
-- Chapter/stage progression via keypress - presenter controls demo pacing, not automatic timers
+- Action type registry: Structured vocabulary preventing hallucinated commands
+- PD API actions: transfer-leader, split-region, drain-store via POST endpoints
+- Dry-run mode: Validate without executing, must be default mode
+- Human approval gate: All actions require explicit approval initially
+- Action audit trail: Who approved what, when, with outcome
+- Kill switch: Immediate halt of all pending actions
+- Blast radius limits: Pre-flight checks ensuring actions are safe
 
-**Should have (high-impact differentiators):**
-- Real daemon output in dedicated panels - shows actual monitor/agent logs as they happen, proves "this is really running"
-- Ops/sec histogram or sparkline - visual representation of traffic degradation when fault occurs
-- Degradation color shift - workload panel color changes when performance degrades
-- Chapter/stage panel with context - "Chapter 2: Injecting Fault" with brief explanation
-- Countdown timers for key moments - "Detecting fault... 3s" builds tension
-- Sub-second detection highlighting - flash or emphasize the moment detection occurs
+**Should have (competitive):**
+- Confidence-based approval routing: High-confidence actions notify-and-proceed, low-confidence require blocking approval
+- Action validation: Check preconditions (region exists, store is Up, target is peer) before execution
+- Post-action verification: Confirm expected outcome occurred
+- Multi-step action plans: AI proposes sequences like "reduce schedule limit, drain store, restore limit"
 
-**Defer to v2+ (complexity not justified for demo):**
-- Timeline/event log - chronological list of what happened
-- Streaming diagnosis display - panel populates as AI responds (vs. appearing all at once)
-- Advanced sparkline/histogram - simple bar chart may suffice
-
-**Explicitly avoid (anti-features):**
-- Scrolling log panels - dashboards should synthesize, not dump raw logs
-- Mouse-driven navigation - conference demos need keyboard-only for presenter flow
-- Configuration UI in demo - demo should "just work" without configuration
-- Multiple themes or customization - one polished theme is better
-- Persistent state between runs - each demo run should be fresh
+**Defer (v2+):**
+- Slack/PagerDuty approval integration: v2.1
+- Impact prediction with historical data: v2.2
+- Graduated autonomy levels beyond binary: v2.2
+- GitOps action proposals: v3.0
 
 ### Architecture Approach
 
-The architecture is based on subprocess isolation rather than direct import. The existing MonitorLoop and AgentRunner daemons should NOT be modified - they work correctly as standalone processes. The TUI wraps them as subprocesses and captures their output.
+Action execution extends the existing architecture additively. The current flow (detect -> ticket -> diagnose) remains unchanged. After diagnosis produces a recommendation, a new flow branch creates ActionProposal (status: proposed) and awaits approval. Once approved, ActionExecutor orchestrates execution: capture state before, call Subject action method, capture state after, record audit trail. The Subject methods delegate to extended PDClient POST endpoints.
 
 **Major components:**
-1. **TUI Controller** - Owns Rich Live + Layout, coordinates all async tasks via TaskGroup
-2. **Subprocess Manager** - Spawns monitor/agent via `asyncio.create_subprocess_exec`, handles graceful shutdown (SIGTERM with timeout, then SIGKILL)
-3. **Output Readers** - Async tasks that stream subprocess stdout line-by-line into ring buffers (deque with maxlen)
-4. **Panel Renderers** - Convert buffer contents into Rich Panel objects, apply color coding based on state
-5. **Keyboard Listener** - Non-blocking stdin polling (select.select on Unix, msvcrt.kbhit on Windows), advances chapter state machine
-6. **Cluster Poller** - Direct import of existing PDClient/PrometheusClient to get health metrics
+1. ActionProposal/ActionRecord types: Data structures for proposed and executed actions with full lifecycle tracking
+2. TicketDB extensions: CRUD methods for action proposals, action records, approval tracking
+3. ActionExecutor: Orchestrates dry-run validation, state capture, execution, and audit
+4. PDClient POST methods: create_operator, set_schedule_config, set_store_state
+5. TiKVSubject implementations: Replace NotImplementedError stubs with PD API calls
 
-**Why subprocesses over direct import:**
-- Signal isolation - each subprocess handles its own SIGINT/SIGTERM, TUI can send targeted signals
-- Output capture - subprocess stdout is a stream we can read line-by-line
-- Clean lifecycle - start, stop, restart without complex state management
-- Realistic demo - shows what "running the operator" actually looks like
-- No event loop conflicts - each subprocess has its own `asyncio.run()`
-
-**Data flow:**
-1. TUI spawns monitor/agent subprocesses with `stdout=PIPE`
-2. Each subprocess gets an async reader task that calls `await proc.stdout.readline()`
-3. Reader callbacks append lines to OutputBuffer (ring buffer)
-4. Rich Live refreshes at 4-10 fps, rendering buffers into panels
-5. Keyboard listener task polls stdin every 50ms, advances chapter on keypress
-6. Chapter transitions trigger Docker operations (kill container) and update narration panel
+**Key design decisions:**
+- Structured action outputs only: Claude selects from predefined action types, never generates arbitrary commands
+- Single state store: All action lifecycle state in database, not split across memory and storage
+- Additive architecture: New capability layered on, existing observe-only flow unchanged
+- Dry-run as validation: Not just logging "would do X" but checking preconditions and target state
 
 ### Critical Pitfalls
 
-The research identified 6 critical pitfalls that will block the demo if not addressed in architecture phase:
+1. **Unbounded blast radius**: Action intended for one node cascades cluster-wide due to Raft interactions. Prevention: Pre-flight checks verify cluster state before execution, action queue prevents concurrent operations, explicit blast radius limits per action type. Address in Phase 1 (foundation).
 
-1. **Subprocess output buffering causes delayed/missing output** - When stdout is piped, Python switches from line buffering to full buffering. Output appears all at once at the end or not at all. **Prevention:** Set `PYTHONUNBUFFERED=1` in subprocess environment. Test with verbose output early. Consider PTY for non-Python subprocesses.
+2. **AI hallucination leading to destructive commands**: Claude generates plausible but incorrect store/region IDs. 2-5% hallucination rate unacceptable for production database operations. Prevention: Structured action outputs only (no free-form commands), parameter validation against live cluster state, action templates Claude fills in. Address in Phase 1 (architecture).
 
-2. **Rich Live display + concurrent output = corruption** - Rich's Live and Console printing have separate locks. Logging from tasks while Live is running causes lost output or visual artifacts. **Prevention:** ALWAYS use `live.console.print()`, never raw `print()`. Enable `redirect_stdout=True` on Live. Funnel all output through the Live's console.
+3. **Approval workflow blocking incident response**: Human-in-the-loop becomes bottleneck when approver unavailable. 39% of companies report bypassed guardrails during urgency. Prevention: Risk-tiered actions (low-risk auto-approve, high-risk require explicit approval), time-bounded escalation, async approval option with reversal capability. Address in Phase 2 (approval system).
 
-3. **readline() blocks forever on long-running subprocess** - `await proc.stdout.readline()` blocks indefinitely if subprocess never closes stdout (daemons don't EOF). **Prevention:** Use `asyncio.wait_for(proc.stdout.readline(), timeout=0.1)` with short timeout. Track subprocess lifecycle separately from output reading. Continue loop on timeout.
+4. **No rollback path for executed actions**: Action executes but causes unexpected problems with no undo mechanism. Prevention: Categorize action reversibility (reversible/partial/irreversible), automatic state snapshots before irreversible actions, action audit log with pre/post state, compensation actions defined. Address in Phase 1 (action type design).
 
-4. **SIGINT leaves terminal in broken state** - If user presses Ctrl+C while in alternate screen or raw mode, terminal may be unusable (no echo, stuck display). **Prevention:** ALWAYS use context managers (`with Live():`). Register signal handlers BEFORE entering alternate screen. In signal handler: stop Live, restore terminal, THEN exit.
-
-5. **Zombie/orphan subprocesses after parent crash** - If TUI crashes, spawned monitor/agent keep running. Next demo run fails with "address already in use." **Prevention:** Create subprocesses with `start_new_session=True`. On exit, send SIGTERM, wait with timeout, then SIGKILL. Use `proc.wait()` to reap zombies.
-
-6. **asyncio.gather() exception doesn't cancel siblings** - By default, if one task raises, other tasks keep running. Causes resource leaks. **Prevention:** Use `asyncio.TaskGroup` (Python 3.11+) instead of `gather()` - automatically cancels siblings on exception. For subprocess management, always cancel related tasks when subprocess dies.
+5. **State machine complexity explosion**: Action lifecycle (proposed -> approved -> executing -> completed/failed) interacts with ticket state, diagnosis state, cluster state creating edge cases. Prevention: Single state store in database, explicit state machine with defined transitions, idempotent actions, crash recovery protocol. Address in Phase 1 (lifecycle design).
 
 ## Implications for Roadmap
 
-Based on dependencies and testability, the recommended build order is 7 phases:
+Based on research, action execution breaks into four natural phases prioritizing safety before capability.
 
-### Phase 1: TUI Scaffolding and Layout
-**Rationale:** Foundation that everything else builds on. Can test with static content before subprocess complexity. Must establish terminal management and task coordination patterns early to avoid rework.
-
-**Delivers:**
-- OutputBuffer class (ring buffer with maxlen)
-- Layout structure (5 panels: cluster status, narration, monitor output, agent output, workload)
-- Panel factory functions for each panel type
-- Rich Live context with proper signal handling
-
-**Addresses pitfalls:**
-- Terminal state corruption (context managers + signal handlers)
-- Task exception handling (TaskGroup architecture choice)
-
-**Research flag:** Standard patterns, well-documented in Rich docs. Skip phase-level research.
-
-### Phase 2: Subprocess Management
-**Rationale:** Core infrastructure for running monitor/agent. Independent of keyboard/UI complexity. Can test with simple echo commands before integrating real daemons.
+### Phase 1: Foundation - Types, Schema, Safety Gates
+**Rationale:** Safety infrastructure must exist before ANY action executes. This phase establishes data structures, database schema, and pre-flight checks that prevent unbounded blast radius and hallucination risks.
 
 **Delivers:**
-- Subprocess spawning functions with proper environment (PYTHONUNBUFFERED=1)
-- Graceful shutdown sequence (SIGTERM -> wait -> SIGKILL)
-- Async output reader with timeout pattern
-- Process lifecycle tracking
+- ActionProposal, ActionRecord, ActionStatus types
+- Database schema (action_proposals, action_records tables)
+- Action type registry with structured outputs
+- Blast radius limits and pre-flight validation framework
+- State machine design with single source of truth
 
-**Addresses pitfalls:**
-- Subprocess output buffering (environment variables)
-- readline blocking forever (timeout pattern)
-- Zombie processes (graceful shutdown, start_new_session=True)
-- Pipe buffer deadlock (continuous reading)
+**Addresses:**
+- Critical pitfall #1 (unbounded blast radius): Pre-flight checks prevent unsafe execution
+- Critical pitfall #2 (AI hallucination): Structured action types prevent arbitrary commands
+- Critical pitfall #4 (no rollback): Reversibility classification per action type
+- Critical pitfall #5 (state complexity): Single state store, explicit FSM
 
-**Research flag:** High complexity, edge cases in signal handling and buffering. Consider phase-level research if issues arise during implementation.
+**Research flag:** Standard patterns - database schema and type design are well-established. No additional research needed.
 
-### Phase 3: Live Output Capture and Display
-**Rationale:** Depends on Phase 2 (subprocess management) and Phase 1 (layout). The "demo within a demo" - showing real daemons running is the core value prop.
-
-**Delivers:**
-- Integration of subprocess reader with OutputBuffer
-- Monitor panel rendering with color coding
-- Agent panel rendering with color coding
-- Real-time refresh at 4-10 fps
-
-**Addresses pitfalls:**
-- Rich Live + concurrent output corruption (use live.console exclusively)
-- Refresh rate tuning (10 fps for smooth subprocess output)
-
-**Research flag:** Standard patterns once architecture is in place. Skip phase-level research.
-
-### Phase 4: Cluster Status Polling
-**Rationale:** Independent of subprocess work. Reuses existing PDClient/PrometheusClient. Can run in parallel with Phase 3 if needed.
+### Phase 2: PD API Action Implementation
+**Rationale:** With safety gates in place, implement actual PD API interactions. Start with lowest-risk actions (leader transfer) before higher-risk ones (drain store).
 
 **Delivers:**
-- poll_cluster_status() async function
-- Cluster status panel with node health (3/3 healthy vs. 2/3 healthy)
-- Color-coded health indicators (green/yellow/red)
-- Integration with existing subject code
+- PDClient POST methods: create_operator, set_schedule_config, set_store_state
+- TiKVSubject action implementations: transfer_leader, split_region, set_leader_schedule_limit
+- Dry-run validation for each action type (precondition checks)
+- Action execution audit trail with state snapshots
 
-**Addresses features:**
-- Cluster status summary (table stakes)
-- Node count with health breakdown (table stakes)
+**Addresses:**
+- Table stakes: PD API actions, dry-run mode, action audit trail
+- Feature from FEATURES.md: transfer-leader, region peer scheduling, scheduler limit adjustment
+- Pitfall #11 (timeout ambiguity): Idempotent action design
 
-**Research flag:** Uses existing clients. Skip phase-level research.
+**Uses:**
+- httpx for POST endpoints
+- Pydantic for ActionResult validation
+- Existing PDClient async client
 
-### Phase 5: Keyboard Input and Chapter Navigation
-**Rationale:** Depends on Phase 1 (layout exists to update). Simple in isolation, complex in integration with Live display. Non-blocking input is critical for async compatibility.
+**Research flag:** May need deeper research - PD API operator status query patterns for pre-flight checks (pitfall #14: PD scheduler conflict). Consider using /gsd:research-phase to investigate PD operator coordination.
 
-**Delivers:**
-- Non-blocking stdin polling (select.select on Unix, msvcrt.kbhit on Windows)
-- Keyboard listener async task
-- Chapter state machine (healthy -> fault -> diagnosis -> recovery -> exit)
-- Narration panel updates on chapter transition
-
-**Addresses pitfalls:**
-- Keyboard input blocking event loop (non-blocking polling)
-- Terminal raw mode not restored (try/finally wrapper)
-
-**Research flag:** Platform-specific behavior (Windows vs. Unix). May need phase-level research for Windows compatibility.
-
-### Phase 6: Workload Visualization
-**Rationale:** Depends on Phase 4 (cluster polling) for metrics. Uses sparklines library. Visual polish that makes degradation unmissable.
+### Phase 3: Approval Workflow
+**Rationale:** With actions implementable, add human approval gates. Risk-tiered design prevents approval from blocking incident response.
 
 **Delivers:**
-- MetricsTracker with rolling window (30 data points)
-- Sparkline rendering via sparklines library
-- Workload panel with ops/sec display
-- Color shift on degradation (green -> yellow -> red)
+- TicketDB approval CRUD methods
+- Risk classification per action type (low/medium/high)
+- Approval timeout with escalation
+- CLI commands: actions list/show/approve/reject
+- AgentRunner integration to create proposals after diagnosis
 
-**Addresses features:**
-- Ops/sec histogram or sparkline (differentiator)
-- Degradation color shift (differentiator)
+**Addresses:**
+- Critical pitfall #3 (approval blocks response): Risk-tiered approvals, timeouts
+- Table stakes: human approval gate, approval audit trail
+- Feature from FEATURES.md: approval workflow with context display
 
-**Research flag:** Standard library integration. Skip phase-level research.
+**Research flag:** Standard patterns - approval workflows well-documented in operator best practices. No additional research needed.
 
-### Phase 7: Fault Injection Integration
-**Rationale:** Depends on all previous phases (full TUI must exist to show fault impact). Reuses existing ChaosDemo Docker code. Final integration that brings everything together.
+### Phase 4: Action Executor Integration
+**Rationale:** Orchestrate all components into complete flow. This phase integrates types, PD API, approval, and audit into end-to-end action execution.
 
 **Delivers:**
-- Docker client integration (reuse from existing chaos.py)
-- Kill container on chapter transition (keypress triggers)
-- Restart container on recovery chapter
-- Container status in cluster panel
-- End-to-end demo flow
+- ActionExecutor class with dry-run, state capture, execution, audit
+- ProposedAction in DiagnosisOutput (structured action from Claude)
+- AgentRunner creates ActionProposal after diagnosis
+- Action execution loop processing approved actions
+- Complete audit trail with pre/post state snapshots
 
-**Addresses features:**
-- Chapter progression via keypress (table stakes)
-- Before/after cluster state (differentiator)
-- Detection moment highlighting (differentiator)
+**Addresses:**
+- Integration pitfall #10 (results not visible): Automatic ticket updates with action outcome
+- Feature from FEATURES.md: confidence-based approval routing, post-action verification
+- Pitfall #6 (staging-only testing): Production dry-run mode enables safe validation
 
-**Research flag:** Reuses existing code. Skip phase-level research.
+**Research flag:** May need deeper research - Production validation strategies and chaos engineering integration. Consider using /gsd:research-phase for testing approach.
 
 ### Phase Ordering Rationale
 
-- **Foundation first (Phase 1-2):** Layout and subprocess management are independent building blocks. Getting these right early prevents rework.
-- **Value-driven middle (Phase 3-4):** Live output capture and cluster status are the core demo features. Build these before polish.
-- **Polish last (Phase 5-7):** Keyboard navigation, workload viz, and fault injection are the "wow" factors but depend on foundations.
-- **Parallel-friendly:** Phase 3 and Phase 4 can run in parallel if resources allow.
-- **Testability:** Each phase is independently testable. Phase 2 can be tested with simple subprocesses. Phase 3 can use mock buffers. Phase 5 can be tested with static layouts.
+- **Safety first:** Phase 1 establishes guardrails before any execution capability exists. Without pre-flight checks and structured outputs, even dry-run validation is unsafe.
+- **Incremental risk:** Phase 2 implements lowest-risk action (leader transfer) first. Dry-run mode enables testing without cluster impact.
+- **Approval integration:** Phase 3 adds human gates after actions are implementable but before automatic execution. Enables manual testing of actions.
+- **Complete flow:** Phase 4 integrates all components only after each layer is validated independently.
+
+**Dependency chain:** Types -> Database -> PD API -> Approval -> Executor. Each phase depends on previous, but has minimal internal dependencies enabling focused implementation.
+
+**Pitfall avoidance:**
+- Additive architecture (Phase 1) prevents breaking observe-only flow
+- Structured outputs (Phase 1) prevent hallucination risks
+- Risk-tiered approval (Phase 3) prevents workflow bottlenecks
+- Dry-run mode throughout enables production validation
 
 ### Research Flags
 
-**Phases needing potential deeper research:**
-- **Phase 2 (Subprocess Management):** Complex edge cases in signal handling and buffering. If buffering issues persist despite `PYTHONUNBUFFERED=1`, may need PTY research.
-- **Phase 5 (Keyboard Input):** Platform-specific behavior. Windows compatibility may need focused research.
+Phases likely needing deeper research during planning:
+- **Phase 2 (PD API):** PD operator status query patterns for scheduler conflict detection (pitfall #14). Research needed: how to coordinate manual operator creation with PD background schedulers.
+- **Phase 4 (Testing):** Production validation strategies and chaos engineering integration (pitfall #6). Research needed: safe methods for testing actions in production environment.
 
-**Phases with standard patterns (skip research):**
-- **Phase 1:** Well-documented Rich patterns
-- **Phase 3:** Direct application of Phase 1 + Phase 2
-- **Phase 4:** Uses existing clients
-- **Phase 6:** Standard library integration
-- **Phase 7:** Code reuse from existing demo
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (Foundation):** Database schema, type design, state machines are well-documented patterns
+- **Phase 3 (Approval):** Human-in-the-loop workflows extensively documented in operator best practices
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Rich 14.x verified on PyPI, official docs comprehensive, asyncio is stdlib. readchar and sparklines are stable, zero-dependency packages. |
-| Features | MEDIUM | Feature priorities are based on established TUI patterns (k9s, btop) and conference demo best practices. Technical audience expectations are well-understood, but some features (detection highlighting timing) may need adjustment during implementation. |
-| Architecture | MEDIUM | Subprocess pattern is verified via asyncio docs and community examples. Rich + asyncio compatibility is confirmed. However, the specific combination (3 concurrent tasks + Live display + keyboard input) hasn't been battle-tested in this exact configuration. |
-| Pitfalls | HIGH | All 6 critical pitfalls are verified via GitHub issues, official docs, and community blogs. Prevention strategies are concrete and testable. Phase mapping is explicit. |
+| Stack | HIGH | No new dependencies needed. httpx, Pydantic, aiosqlite already in use and sufficient. PD API endpoints verified in official tikv/pd router.go source. |
+| Features | HIGH | Table stakes and differentiators validated against Kubernetes operator capability levels and AIOps best practices. MVP scope clear. |
+| Architecture | HIGH | Additive design preserves existing functionality. Component boundaries well-defined. PD API integration points documented in official sources. |
+| Pitfalls | HIGH | Critical pitfalls verified across multiple production incident reports and operator security audits. Mitigation strategies sourced from operator best practices. |
 
 **Overall confidence:** HIGH
 
-The technical approach is sound and well-documented. The main uncertainty is in the "feel" of the demo (timing, color choices, panel sizing) which requires iteration. The architecture avoids risky dependencies and leverages existing stable code.
-
 ### Gaps to Address
 
-**Gaps identified during research:**
+- **PD scheduler coordination protocol:** Research identifies potential conflicts between manual operator actions and PD background schedulers, but specific coordination mechanism needs validation. Recommend /gsd:research-phase in Phase 2 for PD operator status query patterns.
 
-- **Windows keyboard input compatibility:** Research focused on Unix patterns (select.select). Windows requires msvcrt.kbhit(). Implementation will need platform-specific code. Address in Phase 5 with platform detection.
+- **Production testing strategy:** Dry-run mode provides validation without execution, but research shows staging-only testing insufficient. Need specific approach for production validation that's safe but realistic. Recommend /gsd:research-phase in Phase 4 for chaos engineering integration.
 
-- **PTY vs. Pipe for non-Python subprocesses:** If the operator adds non-Python daemons in the future, buffering may require PTY. Current implementation with Python subprocesses + PYTHONUNBUFFERED=1 is sufficient. Document limitation.
+- **Action reversibility catalog:** Research identifies need to categorize actions as reversible/partial/irreversible, but specific reversibility for each action type needs determination during implementation. Document during Phase 1 action type design.
 
-- **Optimal refresh rate:** Research suggests 4-10 fps, but the "right" rate depends on subprocess output frequency and terminal performance. Plan to make refresh_per_second configurable and tune during testing.
-
-- **Detection timing tuning:** Research doesn't specify exact countdown duration or highlight timing. These are presentation details that need user testing. Plan for iteration in Phase 7.
-
-- **Graceful degradation on AI timeout:** Research doesn't cover fallback UX if Claude API is slow or fails. Existing ChaosDemo has this logic - ensure TUI version preserves it. Document in Phase 7 requirements.
+- **RBAC requirements per action:** Research recommends least privilege per action type, but specific permissions needed for each PD API endpoint need enumeration. Document during Phase 2 PD API implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-
-**Official documentation (verified 2026-01-24):**
-- [Rich Live Display](https://rich.readthedocs.io/en/latest/live.html) - Live display patterns, refresh rates, context management
-- [Rich Layout](https://rich.readthedocs.io/en/latest/layout.html) - Multi-panel layout splitting, ratios, nesting
-- [Python asyncio-subprocess](https://docs.python.org/3/library/asyncio-subprocess.html) - create_subprocess_exec, stdout.readline, pipe patterns
-- [Python asyncio-task](https://docs.python.org/3/library/asyncio-task.html) - TaskGroup (Python 3.11+), gather behavior, exception handling
-- [readchar PyPI](https://pypi.org/project/readchar/) - Version 4.2.1, cross-platform keyboard input
-- [sparklines PyPI](https://pypi.org/project/sparklines/) - Version 0.7.0, unicode visualization
-
-**Verified GitHub issues:**
-- [Rich #1530](https://github.com/willmcgugan/rich/issues/1530) - Live displays thread safety, confirmed prevention strategy
-- [Rich #3523](https://github.com/Textualize/rich/issues/3523) - Progress with stream output, confirmed console routing pattern
+- [tikv/pd router.go](https://github.com/tikv/pd/blob/master/server/api/router.go) - Complete PD API route definitions
+- [PD HTTP Client Package](https://pkg.go.dev/github.com/tikv/pd/client/http) - HTTP API constants and methods
+- [PD Control User Guide](https://docs.pingcap.com/tidb/stable/pd-control/) - pd-ctl commands and operator reference
+- [PD Scheduling Introduction Wiki](https://github.com/tikv/pd/wiki/Scheduling-Introduction) - Operator concepts and scheduling behavior
+- [TiDB Operator Concurrent Operations Issue](https://github.com/pingcap/tidb-operator/issues/720) - Production incident: concurrent operations causing tombstone
+- Existing codebase: operator_tikv/pd_client.py, operator_core/agent/runner.py, operator_core/db/tickets.py
 
 ### Secondary (MEDIUM confidence)
-
-**Community resources:**
-- [Will McGugan - Building Rich Terminal Dashboards](https://www.willmcgugan.com/blog/tech/post/building-rich-terminal-dashboards/) - Layout patterns from Rich author
-- [roguelynn - Graceful Shutdowns with asyncio](https://roguelynn.com/words/asyncio-graceful-shutdowns/) - Signal handling patterns
-- [Luca Da Rin Fioretto - Capture subprocess output in real-time](https://lucadrf.dev/blog/python-subprocess-buffers/) - Buffering solutions, PYTHONUNBUFFERED pattern
-- [Asyncio Coroutine Patterns](https://yeraydiazdiaz.medium.com/asyncio-coroutine-patterns-errors-and-cancellation-3bb422e961ff) - TaskGroup vs. gather patterns
-
-**Reference implementations:**
-- [k9s - Kubernetes CLI](https://k9scli.io/) - Real-time cluster monitoring UX patterns
-- [btop](https://linuxblog.io/btop-the-htop-alternative/) - System monitoring dashboard patterns
+- [Kubernetes Operator Capability Levels](https://sdk.operatorframework.io/docs/overview/operator-capabilities/) - Operator maturity model
+- [Red Hat: Kubernetes Operators Security Practices](https://www.redhat.com/en/blog/kubernetes-operators-good-security-practices) - RBAC and privilege guidance
+- [Snyk: Security Implications of Kubernetes Operators](https://snyk.io/blog/security-implications-of-kubernetes-operators/) - 59 of 66 K8s CVEs from ecosystem
+- [Skywork: Agentic AI Safety Best Practices 2025](https://skywork.ai/blog/agentic-ai-safety-best-practices-2025-enterprise/) - 39% bypass guardrails stat
+- [Permit.io: Human-in-the-Loop Best Practices](https://www.permit.io/blog/human-in-the-loop-for-ai-agents-best-practices-frameworks-use-cases-and-demo) - Approval workflow patterns
+- [Lakera: Guide to LLM Hallucinations](https://www.lakera.ai/blog/guide-to-hallucinations-in-large-language-models) - 2-5% hallucination rates
+- [FlowHunt: Human in the Loop Middleware](https://www.flowhunt.io/blog/human-in-the-loop-middleware-python-safe-ai-agents/) - asyncio.Event pattern for approval
 
 ### Tertiary (LOW confidence)
-
-**Demo best practices:**
-- [How to Present Chaos Testing Effectively](https://www.resumly.ai/blog/how-to-present-chaos-testing-and-learnings-effectively) - Presentation narrative, pacing
-- [Live Demos Guide](https://www.arcade.software/post/live-demos-guide) - Demo preparation, recovery from failure
-- [Dashboard Design UX Patterns](https://www.pencilandpaper.io/articles/ux-pattern-analysis-data-dashboards) - F-pattern, card layout (general UX, not TUI-specific)
+- [Chaos Engineering AI Testing Resources](https://github.com/chaosync-org/awesome-ai-agent-testing) - Testing framework options
 
 ---
-*Research completed: 2026-01-24*
+*Research completed: 2026-01-25*
 *Ready for roadmap: yes*
