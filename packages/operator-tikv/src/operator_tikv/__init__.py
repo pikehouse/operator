@@ -2,23 +2,27 @@
 TiKV subject implementation for the AI-powered operator.
 
 This package provides the TiKV-specific implementation of the Subject interface
-defined in operator-core. It includes:
+defined in operator-protocols. It includes:
 
-- TiKVSubject: Complete Subject Protocol implementation
+- TiKVSubject: Complete Subject Protocol implementation (SubjectProtocol)
+- TiKVInvariantChecker: Health invariant checking (InvariantCheckerProtocol)
 - PD API client for cluster state observation
 - Prometheus metrics client for performance monitoring
 - TiKV-specific response types for API parsing
-- TiKV invariant definitions
+- Factory function for CLI integration
 - Log parser for event extraction
 """
 
+# Re-export InvariantViolation from operator_protocols for convenience
+from operator_protocols import InvariantViolation
+
+from operator_tikv.factory import create_tikv_subject_and_checker
 from operator_tikv.invariants import (
     HIGH_LATENCY_CONFIG,
-    InvariantChecker,
     InvariantConfig,
-    InvariantViolation,
     LOW_DISK_SPACE_CONFIG,
     STORE_DOWN_CONFIG,
+    TiKVInvariantChecker,
 )
 from operator_tikv.log_parser import (
     LeadershipChange,
@@ -46,17 +50,23 @@ from operator_tikv.types import (
     PrometheusVectorResult,
 )
 
+# Backward compatibility alias - InvariantChecker is now TiKVInvariantChecker
+InvariantChecker = TiKVInvariantChecker
+
 __all__ = [
     # Subject
     "TiKVSubject",
     "TIKV_CONFIG",
+    # Factory
+    "create_tikv_subject_and_checker",
     # Clients
     "PDClient",
     "PrometheusClient",
-    # Invariants
-    "InvariantChecker",
+    # Invariants (TiKVInvariantChecker is the new name, InvariantChecker kept for backward compat)
+    "TiKVInvariantChecker",
+    "InvariantChecker",  # Backward compatibility alias
     "InvariantConfig",
-    "InvariantViolation",
+    "InvariantViolation",  # Re-exported from operator_protocols
     "STORE_DOWN_CONFIG",
     "HIGH_LATENCY_CONFIG",
     "LOW_DISK_SPACE_CONFIG",
