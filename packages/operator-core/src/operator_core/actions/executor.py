@@ -211,6 +211,90 @@ class ActionExecutor:
 
         return created
 
+    async def propose_workflow(
+        self,
+        name: str,
+        description: str,
+        action_recommendations: list["ActionRecommendation"],
+        ticket_id: int | None = None,
+    ) -> int:
+        """
+        Create a workflow proposal from multiple action recommendations.
+
+        Validates all actions exist and parameters are valid before
+        creating the workflow. All actions in a workflow share approval
+        (approve workflow = approve all actions).
+
+        Args:
+            name: Workflow name (e.g., "drain_and_verify")
+            description: What this workflow accomplishes
+            action_recommendations: List of ActionRecommendations to include
+            ticket_id: Optional ticket ID for traceability
+
+        Returns:
+            Created workflow ID
+
+        Raises:
+            ObserveOnlyError: If safety mode is OBSERVE
+            ValueError: If any action not found in registry
+            ValidationError: If any action parameters fail validation
+        """
+        # Check safety - proposals blocked in observe mode
+        self._safety.check_can_execute()
+
+        if not action_recommendations:
+            raise ValueError("Workflow must contain at least one action")
+
+        # Validate all actions exist and parameters are valid
+        for rec in action_recommendations:
+            definition = self._registry.get_definition(rec.action_name)
+            if definition is None:
+                raise ValueError(
+                    f"Unknown action '{rec.action_name}' in workflow. "
+                    f"Available actions: {self._registry.list_action_names()}"
+                )
+            validate_action_params(definition, rec.parameters)
+
+        # Create proposals from recommendations
+        proposals = [
+            ActionProposal(
+                ticket_id=ticket_id,
+                action_name=rec.action_name,
+                action_type=ActionType.SUBJECT,
+                parameters=rec.parameters,
+                reason=rec.reason,
+                status=ActionStatus.PROPOSED,
+                proposed_at=datetime.now(),
+                proposed_by="agent",
+            )
+            for rec in action_recommendations
+        ]
+
+        # Create workflow in database
+        from operator_core.db.actions import ActionDB
+
+        async with ActionDB(self.db_path) as db:
+            workflow_id = await db.create_workflow(
+                name=name,
+                description=description,
+                actions=proposals,
+                ticket_id=ticket_id,
+            )
+
+        # Log workflow created
+        await self._auditor.log_event(
+            proposal_id=None,
+            event_type="workflow_created",
+            event_data={
+                "workflow_id": workflow_id,
+                "name": name,
+                "action_count": len(proposals),
+            },
+            actor="agent",
+        )
+
+        return workflow_id
+
     async def validate_proposal(self, proposal_id: int) -> ActionProposal:
         """
         Validate a proposal's parameters (pre-execution check).
