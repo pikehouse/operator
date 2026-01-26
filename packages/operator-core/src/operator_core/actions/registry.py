@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
+from operator_core.actions.types import ActionType
+
 if TYPE_CHECKING:
     from operator_core.subject import Subject
 
@@ -45,15 +47,17 @@ class ParamDef(BaseModel):
 
 class ActionDefinition(BaseModel):
     """
-    Complete definition of an action available from a subject.
+    Complete definition of an action available from a subject or as a general tool.
 
     ActionDefinitions are provided by subjects and describe what actions
-    can be performed, their parameters, and risk level.
+    can be performed, their parameters, and risk level. General tools also
+    use ActionDefinition with ActionType.TOOL.
 
     Attributes:
         name: Action name matching Subject method (e.g., "transfer_leader")
         description: Human-readable description for prompts
         parameters: Parameter definitions keyed by parameter name
+        action_type: Source type (SUBJECT for subject methods, TOOL for general tools)
         risk_level: "low", "medium", "high" for future approval tiers
         requires_approval: Whether action needs human approval (default False per APR-01)
 
@@ -66,6 +70,7 @@ class ActionDefinition(BaseModel):
                 "region_id": ParamDef(type="int", description="Region to transfer"),
                 "to_store_id": ParamDef(type="str", description="Target store ID"),
             },
+            action_type=ActionType.SUBJECT,
             risk_level="medium",
             requires_approval=False,
         )
@@ -76,6 +81,10 @@ class ActionDefinition(BaseModel):
     description: str = Field(..., description="Human-readable description")
     parameters: dict[str, ParamDef] = Field(
         default_factory=dict, description="Parameter definitions keyed by name"
+    )
+    action_type: ActionType = Field(
+        default=ActionType.SUBJECT,
+        description="Source type: subject method or general tool",
     )
     risk_level: str = Field(
         default="low", description="Risk level: low, medium, high"
