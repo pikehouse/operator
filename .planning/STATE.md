@@ -4,9 +4,9 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 16 of 20 (Core Abstraction Refactoring)
-**Plan:** — (ready to plan)
-**Status:** Ready to plan Phase 16
-**Last activity:** 2026-01-26 - Roadmap created for v2.1
+**Plan:** 01 of 05 completed
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 16-01-PLAN.md (operator-protocols package)
 
 Progress: [..........] 0% (0/5 phases)
 
@@ -66,6 +66,11 @@ See: .planning/MILESTONES.md
 - Fire-and-forget action semantics for PD API calls
 - Tools use same ActionDefinition model with action_type=ActionType.TOOL
 
+**Key decisions from v2.1 (Phase 16):**
+- Observation type is dict[str, Any] for maximum flexibility across subjects
+- store_id field name preserved in InvariantViolation for backward compatibility
+- operator-protocols package has zero dependencies
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): Complex architectural change - audit TiKV coupling first
 - Phase 17 (Lua Scripts): Verify atomic patterns prevent race conditions
@@ -73,12 +78,12 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Roadmap created for v2.1 milestone
-**Resume with:** `/gsd:plan-phase 16` to plan Core Abstraction Refactoring
+**Stopped at:** Completed 16-01-PLAN.md (operator-protocols package)
+**Resume with:** `/gsd:execute-phase` to run 16-02-PLAN.md
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (v2.1 roadmap created)*
+*State updated: 2026-01-26 (16-01 completed)*
