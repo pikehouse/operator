@@ -684,6 +684,60 @@ class ActionDB:
         await self._conn.commit()
 
     # =========================================================================
+    # Scheduling operations (WRK-02)
+    # =========================================================================
+
+    async def list_ready_scheduled(self) -> list[ActionProposal]:
+        """
+        Get validated actions ready for scheduled execution.
+
+        Returns actions that:
+        - Have status 'validated'
+        - Have a scheduled_at timestamp
+        - scheduled_at is in the past (ready to execute)
+        - Are approved (if part of approved workflow, or individually approved)
+
+        Returns:
+            List of ActionProposal objects ordered by scheduled_at ASC
+        """
+        now = datetime.now().isoformat()
+
+        async with self._conn.execute(
+            """
+            SELECT * FROM action_proposals
+            WHERE status = 'validated'
+              AND scheduled_at IS NOT NULL
+              AND scheduled_at <= ?
+              AND (approved_at IS NOT NULL OR workflow_id IS NOT NULL)
+            ORDER BY scheduled_at ASC
+            """,
+            (now,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        return [self._row_to_proposal(row) for row in rows]
+
+    async def update_scheduled_at(
+        self,
+        proposal_id: int,
+        scheduled_at: datetime | None,
+    ) -> None:
+        """
+        Update the scheduled execution time for a proposal.
+
+        Args:
+            proposal_id: The proposal ID to update
+            scheduled_at: When to execute (None to clear scheduling)
+        """
+        scheduled_str = scheduled_at.isoformat() if scheduled_at else None
+
+        await self._conn.execute(
+            "UPDATE action_proposals SET scheduled_at = ? WHERE id = ?",
+            (scheduled_str, proposal_id),
+        )
+        await self._conn.commit()
+
+    # =========================================================================
     # Record operations
     # =========================================================================
 
