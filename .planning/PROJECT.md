@@ -10,12 +10,13 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ## Current State
 
-**Shipped:** v1.0 (2026-01-25)
-**Code:** 6,223 lines Python across 2 packages (operator-core, operator-tikv)
-**Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD
+**Shipped:** v1.1 (2026-01-25)
+**Code:** ~8,200 lines Python across 2 packages (operator-core, operator-tikv)
+**Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Rich TUI
 
 ### What Works
 
+- `./scripts/run-tui.sh` — Rich TUI demo with live panels, key-press chapters, fault injection
 - `operator demo chaos` — Full E2E demo with fault injection and AI diagnosis
 - `operator monitor run` — Continuous invariant checking with ticket creation
 - `operator agent start` — AI diagnosis daemon processing tickets
@@ -34,24 +35,25 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Monitor loop: checks cluster invariants, detects anomalies — v1.0
 - AI diagnosis: structured reasoning with alternatives considered — v1.0
 - Chaos injection: node kill via Docker — v1.0
+- TUI-based demo with live multi-panel dashboard — v1.1
+- Real monitor and agent daemons running as subprocesses — v1.1
+- Cluster status panel showing node health with color indicators — v1.1
+- Workload panel with ops/sec sparkline — v1.1
+- Key-press driven demo chapters with countdown fault injection — v1.1
 
 ### Active
 
-- [ ] TUI-based demo with live multi-panel dashboard
-- [ ] Real monitor and agent daemons running (not one-shot calls)
-- [ ] Cluster status panel showing node health
-- [ ] Workload panel with ops/sec histogram
-- [ ] Key-press driven demo chapters (inject fault, recover)
+- [ ] Agent action execution (currently observe-only, recommendations in tickets)
 
-## Current Milestone: v1.1 TUI Demo
+## Next Milestone: v2.0 Agent Actions
 
-**Goal:** Upgrade the demo to a Rich-based live dashboard showing the operator actually running.
+**Goal:** Enable the agent to execute its recommendations, not just observe and diagnose.
 
 **Target features:**
-- Multi-panel TUI (cluster status, monitor, agent, workload, narration)
-- Real daemons running as subprocesses with live output capture
-- Workload histogram that turns red when degraded
-- Key-press chapter progression (healthy → fault → diagnosis → recovery → exit)
+- Action execution framework (currently observe-only)
+- Leader transfer, region scheduling via PD API
+- Dry-run mode for safe testing
+- Action approval workflow (agent proposes, human confirms)
 
 ### Out of Scope
 
@@ -109,4 +111,4 @@ The leap here is **single service → distributed system**. A rate limiter has o
 | Active invariant checking in demo | Don't passively poll, actively check | Good — Detection within 2-4 seconds |
 
 ---
-*Last updated: 2026-01-25 after starting v1.1 milestone*
+*Last updated: 2026-01-25 after completing v1.1 milestone*

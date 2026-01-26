@@ -201,7 +201,8 @@ def create_recovery_chapter(on_enter: Callable[[], Awaitable[None]]) -> Chapter:
     return Chapter(
         title="Stage 6: Recovery",
         narration=(
-            "Restarting the killed node...\n\n"
+            "Demo will now restart the killed node.\n"
+            "[dim](Agent action execution coming in v2 — currently observe-only)[/dim]\n\n"
             "Watch the CLUSTER panel return to all green.\n"
             "Workload should recover to normal levels."
         ),
