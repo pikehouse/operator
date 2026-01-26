@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 14 - Approval Workflow (COMPLETE)
-**Plan:** 2 of 2 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 14-02-PLAN.md
+**Phase:** 15 - Workflow Actions (In progress)
+**Plan:** 5 of 5 in current phase (1 complete)
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 15-05-PLAN.md
 
-**Progress:** [████████████████████░] 100% (2/2 plans in Phase 14)
+**Progress:** [████░░░░░░░░░░░░░░░░] 20% (1/5 plans in Phase 15)
 
 ## Project Reference
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 | 12 | Action Foundation | 7 | COMPLETE |
 | 13 | TiKV Subject Actions | 4 | COMPLETE |
 | 14 | Approval Workflow | 3 | COMPLETE |
-| 15 | Workflow Actions | 3 | Pending |
+| 15 | Workflow Actions | 3 | In progress |
 
 **Total requirements:** 17
 **Mapped:** 17/17
@@ -92,15 +92,20 @@ See: .planning/MILESTONES.md
 - Plan 02: Environment variable default is false (autonomous mode by default)
 - Plan 02: Approval gate checked in execute_proposal, not validate_proposal
 
+**Decisions from Phase 15:**
+- Plan 05: Tools use same ActionDefinition model with action_type=ActionType.TOOL
+- Plan 05: Wait tool capped at 300 seconds to prevent excessive delays
+- Plan 05: execute_tool dispatcher pattern for extensibility
+
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 14-02-PLAN.md (Phase 14 complete)
-**Resume with:** `/gsd:execute-phase 15` to start Phase 15 (Workflow Actions)
+**Stopped at:** Completed 15-05-PLAN.md
+**Resume with:** Continue Phase 15 plans (01-04 remain)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 14 complete)*
+*State updated: 2026-01-26 (Plan 15-05 complete)*
