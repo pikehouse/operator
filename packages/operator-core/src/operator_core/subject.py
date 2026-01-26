@@ -37,9 +37,12 @@ All methods are async to support non-blocking I/O with httpx clients.
 The operator core injects HTTP clients - subjects should not create their own.
 """
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from operator_core.types import ClusterMetrics, Region, Store, StoreMetrics
+
+if TYPE_CHECKING:
+    from operator_core.actions.registry import ActionDefinition
 
 
 @runtime_checkable
@@ -206,5 +209,22 @@ class Subject(Protocol):
 
         Args:
             n: Maximum region moves per cycle (0 to disable).
+        """
+        ...
+
+    # -------------------------------------------------------------------------
+    # Action Discovery - Runtime action introspection
+    # -------------------------------------------------------------------------
+
+    def get_action_definitions(self) -> list["ActionDefinition"]:
+        """
+        Return definitions of all actions this subject supports.
+
+        Used by ActionRegistry to discover available actions at runtime.
+        Each definition includes the action name, parameter schema,
+        description, and risk level.
+
+        Returns:
+            List of ActionDefinition objects describing available actions.
         """
         ...
