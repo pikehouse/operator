@@ -154,3 +154,95 @@ class PDClient:
             leader_store_id=leader_id,
             peer_store_ids=peer_ids,
         )
+
+    # -------------------------------------------------------------------------
+    # Operator/Scheduler Methods - POST operations for scheduling actions
+    # -------------------------------------------------------------------------
+
+    async def add_transfer_leader_operator(
+        self, region_id: int, to_store_id: int
+    ) -> None:
+        """
+        Add transfer-leader operator via PD API.
+
+        Posts a transfer-leader operator request to PD, which schedules
+        the region's leadership to move to the specified store.
+
+        Args:
+            region_id: The region whose leader should be transferred.
+            to_store_id: The destination store ID for leadership.
+
+        Raises:
+            httpx.HTTPStatusError: On HTTP errors (4xx, 5xx responses).
+
+        Note:
+            Fire-and-forget: Returns when PD accepts the request.
+            Does not wait for actual transfer completion.
+        """
+        response = await self.http.post(
+            "/pd/api/v1/operators",
+            json={
+                "name": "transfer-leader",
+                "region_id": region_id,
+                "store_id": to_store_id,
+            },
+        )
+        response.raise_for_status()
+
+    async def add_transfer_peer_operator(
+        self, region_id: int, from_store_id: int, to_store_id: int
+    ) -> None:
+        """
+        Add transfer-peer operator via PD API.
+
+        Posts a transfer-peer operator request to PD, which schedules
+        the region's replica to move from one store to another.
+
+        Args:
+            region_id: The region whose replica should be moved.
+            from_store_id: The source store ID holding the replica.
+            to_store_id: The destination store ID for the replica.
+
+        Raises:
+            httpx.HTTPStatusError: On HTTP errors (4xx, 5xx responses).
+
+        Note:
+            Fire-and-forget: Returns when PD accepts the request.
+            Does not wait for actual transfer completion.
+        """
+        response = await self.http.post(
+            "/pd/api/v1/operators",
+            json={
+                "name": "transfer-peer",
+                "region_id": region_id,
+                "from_store_id": from_store_id,
+                "to_store_id": to_store_id,
+            },
+        )
+        response.raise_for_status()
+
+    async def add_evict_leader_scheduler(self, store_id: int) -> None:
+        """
+        Add evict-leader-scheduler via PD API.
+
+        Posts an evict-leader-scheduler request to PD, which continuously
+        moves all region leaders away from the specified store.
+
+        Args:
+            store_id: The store ID to drain leaders from.
+
+        Raises:
+            httpx.HTTPStatusError: On HTTP errors (4xx, 5xx responses).
+
+        Note:
+            This is a persistent scheduler - leaders are continuously
+            evicted until the scheduler is removed via DELETE.
+        """
+        response = await self.http.post(
+            "/pd/api/v1/schedulers",
+            json={
+                "name": "evict-leader-scheduler",
+                "store_id": store_id,
+            },
+        )
+        response.raise_for_status()
