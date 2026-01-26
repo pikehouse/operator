@@ -2,10 +2,10 @@
 TiKVSubject - TiKV implementation of the Subject Protocol.
 
 This module provides TiKVSubject, the complete implementation of the
-Subject Protocol defined in operator-core for TiKV distributed databases.
+SubjectProtocol defined in operator-protocols for TiKV distributed databases.
 
 TiKVSubject:
-- Implements all Subject Protocol observations using PDClient and PrometheusClient
+- Implements SubjectProtocol with observe() method returning dict[str, Any]
 - Implements core actions: transfer_leader, transfer_peer, drain_store
 - Provides get_config() class method for capability registration
 - Provides get_action_definitions() for Phase 12 ActionRegistry integration
@@ -19,10 +19,12 @@ Per CONTEXT.md decisions:
 """
 
 from dataclasses import dataclass
+from typing import Any
 
 from operator_core.actions.registry import ActionDefinition, ParamDef
 from operator_core.config import Action, Observation, SLO, SubjectConfig
-from operator_core.types import ClusterMetrics, Region, Store, StoreMetrics
+from operator_core.types import Region
+from operator_protocols.types import ClusterMetrics, Store, StoreMetrics
 
 from operator_tikv.pd_client import PDClient
 from operator_tikv.prom_client import PrometheusClient
@@ -231,6 +233,79 @@ class TiKVSubject:
                 requires_approval=False,
             ),
         ]
+
+    # -------------------------------------------------------------------------
+    # SubjectProtocol.observe() - Generic observation interface
+    # -------------------------------------------------------------------------
+
+    async def observe(self) -> dict[str, Any]:
+        """
+        Gather current TiKV cluster observations.
+
+        Implements SubjectProtocol.observe() by collecting store states,
+        cluster metrics, and per-store metrics into a unified observation dict.
+
+        Returns:
+            Dictionary with the following structure:
+            {
+                "stores": [{"id": str, "address": str, "state": str}, ...],
+                "cluster_metrics": {
+                    "store_count": int,
+                    "region_count": int,
+                    "leader_count": {store_id: int, ...}
+                },
+                "store_metrics": {
+                    store_id: {
+                        "qps": float,
+                        "latency_p99_ms": float,
+                        "disk_used_bytes": int,
+                        "disk_total_bytes": int,
+                        "cpu_percent": float,
+                        "raft_lag": int
+                    }, ...
+                }
+            }
+
+        Note:
+            Store metrics are only collected for stores in "Up" state.
+            Failed metric collection is silently skipped to avoid
+            blocking the entire observation.
+        """
+        # Get store states
+        stores = await self.pd.get_stores()
+
+        # Get cluster-level metrics
+        cluster_metrics = await self.get_cluster_metrics()
+
+        # Get per-store metrics for up stores
+        store_metrics: dict[str, dict[str, Any]] = {}
+        for store in stores:
+            if store.state == "Up":
+                try:
+                    metrics = await self.get_store_metrics(store.id)
+                    store_metrics[store.id] = {
+                        "qps": metrics.qps,
+                        "latency_p99_ms": metrics.latency_p99_ms,
+                        "disk_used_bytes": metrics.disk_used_bytes,
+                        "disk_total_bytes": metrics.disk_total_bytes,
+                        "cpu_percent": metrics.cpu_percent,
+                        "raft_lag": metrics.raft_lag,
+                    }
+                except Exception:
+                    # Skip failed metrics - don't block observation
+                    pass
+
+        return {
+            "stores": [
+                {"id": s.id, "address": s.address, "state": s.state} for s in stores
+            ],
+            "cluster_metrics": {
+                "store_count": cluster_metrics.store_count,
+                "region_count": cluster_metrics.region_count,
+                "leader_count": cluster_metrics.leader_count,
+            },
+            "store_metrics": store_metrics,
+        }
 
     # -------------------------------------------------------------------------
     # Observations - Read-only queries about system state
