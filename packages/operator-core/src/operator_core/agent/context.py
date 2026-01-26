@@ -19,7 +19,7 @@ from operator_core.types import ClusterMetrics, Store
 
 if TYPE_CHECKING:
     from operator_core.db.tickets import TicketDB
-    from operator_tikv.subject import TiKVSubject
+    from operator_protocols import SubjectProtocol
 
 
 @dataclass
@@ -58,11 +58,11 @@ class ContextGatherer:
         prompt = build_diagnosis_prompt(context)
     """
 
-    def __init__(self, subject: "TiKVSubject", db: "TicketDB") -> None:
+    def __init__(self, subject: "SubjectProtocol", db: "TicketDB") -> None:
         """Initialize context gatherer with data sources.
 
         Args:
-            subject: TiKVSubject for cluster state observations
+            subject: SubjectProtocol for cluster state observations
             db: TicketDB for similar ticket history queries
         """
         self.subject = subject

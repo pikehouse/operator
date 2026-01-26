@@ -5,22 +5,18 @@ This module provides the CLI command for running the monitor daemon:
 
 Per RESEARCH.md patterns:
 - Use envvar parameter for environment variable fallback
-- Create httpx clients with timeout for HTTP operations
-- Wire up TiKVSubject, InvariantChecker, MonitorLoop
+- Uses factory pattern for subject creation (no direct TiKV imports)
+- Wire up subject, checker, MonitorLoop via factory
 """
 
 import asyncio
 import os
 from pathlib import Path
 
-import httpx
 import typer
 
+from operator_core.cli.subject_factory import AVAILABLE_SUBJECTS, create_subject
 from operator_core.monitor.loop import MonitorLoop
-from operator_tikv.invariants import InvariantChecker
-from operator_tikv.pd_client import PDClient
-from operator_tikv.prom_client import PrometheusClient
-from operator_tikv.subject import TiKVSubject
 
 monitor_app = typer.Typer(help="Run the operator monitor daemon")
 
@@ -30,6 +26,12 @@ DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
 
 @monitor_app.command("run")
 def run_monitor(
+    subject: str = typer.Option(
+        ...,  # Required (no default)
+        "--subject",
+        "-s",
+        help=f"Subject to monitor ({', '.join(AVAILABLE_SUBJECTS)})",
+    ),
     interval: float = typer.Option(
         30.0, "--interval", "-i", help="Check interval in seconds"
     ),
@@ -63,7 +65,7 @@ def run_monitor(
     # Ensure database directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print("Starting monitor daemon...")
+    print(f"Starting monitor daemon for subject: {subject}")
     print(f"  PD endpoint: {pd_endpoint}")
     print(f"  Prometheus: {prometheus_url}")
     print(f"  Interval: {interval}s")
@@ -73,23 +75,25 @@ def run_monitor(
     print()
 
     async def _run() -> None:
-        async with httpx.AsyncClient(base_url=pd_endpoint, timeout=10.0) as pd_http:
-            async with httpx.AsyncClient(
-                base_url=prometheus_url, timeout=10.0
-            ) as prom_http:
-                subject = TiKVSubject(
-                    pd=PDClient(http=pd_http),
-                    prom=PrometheusClient(http=prom_http),
-                )
-                checker = InvariantChecker()
+        try:
+            # Use factory to create subject and checker
+            subject_instance, checker = await create_subject(
+                subject,
+                pd_endpoint=pd_endpoint,
+                prometheus_url=prometheus_url,
+            )
 
-                loop = MonitorLoop(
-                    subject=subject,
-                    checker=checker,
-                    db_path=db_path,
-                    interval_seconds=interval,
-                )
+            loop = MonitorLoop(
+                subject=subject_instance,
+                checker=checker,
+                db_path=db_path,
+                interval_seconds=interval,
+            )
 
-                await loop.run()
+            await loop.run()
+        except ValueError as e:
+            # Handle unknown subject error with user-friendly message
+            print(f"Error: {e}")
+            raise typer.Exit(1)
 
     asyncio.run(_run())

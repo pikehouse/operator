@@ -22,7 +22,7 @@ import aiosqlite
 
 from operator_core.db.schema import SCHEMA_SQL
 from operator_core.monitor.types import Ticket, TicketStatus, make_violation_key
-from operator_tikv.invariants import InvariantViolation
+from operator_protocols import InvariantViolation
 
 
 class TicketDB:

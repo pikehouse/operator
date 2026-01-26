@@ -31,7 +31,7 @@ from operator_core.agent.diagnosis import DiagnosisOutput, format_diagnosis_mark
 from operator_core.agent.prompt import SYSTEM_PROMPT, build_diagnosis_prompt
 from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import Ticket, TicketStatus
-from operator_tikv.subject import TiKVSubject
+from operator_protocols import SubjectProtocol
 
 if TYPE_CHECKING:
     from operator_core.actions.executor import ActionExecutor
@@ -50,7 +50,7 @@ class AgentRunner:
     Uses same daemon pattern as MonitorLoop per Phase 4.
 
     Example:
-        subject = TiKVSubject(pd=pd_client, prom=prom_client)
+        subject = SubjectProtocol(pd=pd_client, prom=prom_client)
         runner = AgentRunner(
             subject=subject,
             db_path=Path("~/.operator/tickets.db"),
@@ -61,7 +61,7 @@ class AgentRunner:
 
     def __init__(
         self,
-        subject: TiKVSubject,
+        subject: SubjectProtocol,
         db_path: Path,
         anthropic_client: AsyncAnthropic | None = None,
         poll_interval: float = 10.0,
@@ -72,7 +72,7 @@ class AgentRunner:
         Initialize agent runner.
 
         Args:
-            subject: TiKVSubject for cluster observations
+            subject: SubjectProtocol for cluster observations
             db_path: Path to SQLite database file
             anthropic_client: Optional AsyncAnthropic client (created if None)
             poll_interval: Seconds between polling cycles (default 10)
