@@ -13,15 +13,18 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from operator_core.types import Store, StoreMetrics
+from operator_protocols.types import Store, StoreMetrics
+from operator_protocols import InvariantViolation
 from operator_tikv.invariants import (
     HIGH_LATENCY_CONFIG,
-    InvariantChecker,
     InvariantConfig,
-    InvariantViolation,
     LOW_DISK_SPACE_CONFIG,
     STORE_DOWN_CONFIG,
+    TiKVInvariantChecker,
 )
+
+# Alias for backward compatibility in tests
+InvariantChecker = TiKVInvariantChecker
 
 
 # =============================================================================

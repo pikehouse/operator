@@ -6,6 +6,8 @@ This module implements TiKV-specific invariants that detect cluster issues:
 - High latency: P99 latency exceeds threshold
 - Low disk space: Disk usage exceeds threshold
 
+Implements InvariantCheckerProtocol from operator_protocols.
+
 Per CONTEXT.md decisions:
 - Grace period configurable per invariant
 - Fixed thresholds (not baseline-relative)
@@ -18,30 +20,10 @@ Per RESEARCH.md Pattern 4:
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from typing import Any
 
-from operator_core.types import Store, StoreMetrics
-
-
-@dataclass
-class InvariantViolation:
-    """
-    Represents an active invariant violation.
-
-    Attributes:
-        invariant_name: Name of the violated invariant (e.g., "store_down")
-        message: Human-readable description of the violation
-        first_seen: When the violation was first detected
-        last_seen: When the violation was most recently confirmed
-        store_id: Optional store ID if violation is store-specific
-        severity: Violation severity ("critical", "warning", "info")
-    """
-
-    invariant_name: str
-    message: str
-    first_seen: datetime
-    last_seen: datetime
-    store_id: str | None = None
-    severity: str = "warning"
+from operator_protocols import InvariantViolation
+from operator_protocols.types import Store, StoreMetrics
 
 
 @dataclass
@@ -84,21 +66,28 @@ LOW_DISK_SPACE_CONFIG = InvariantConfig(
 )
 
 
-class InvariantChecker:
+class TiKVInvariantChecker:
     """
-    Tracks invariant violations with grace period support.
+    TiKV-specific invariant checker implementing InvariantCheckerProtocol.
 
+    Tracks invariant violations with grace period support.
     Maintains state for each invariant to track when violations
     were first seen, enabling grace period logic.
 
-    Example:
-        checker = InvariantChecker()
+    Implements InvariantCheckerProtocol.check() for generic observation processing,
+    while also exposing TiKV-specific check methods for backward compatibility.
 
-        # Check store health
+    Example:
+        checker = TiKVInvariantChecker()
+
+        # Generic protocol usage (observation dict from TiKVSubject.observe())
+        observation = await subject.observe()
+        violations = checker.check(observation)
+
+        # TiKV-specific usage (direct Store/StoreMetrics objects)
         stores = await pd_client.get_stores()
         violations = checker.check_stores_up(stores)
 
-        # Check latency (with grace period)
         metrics = await prom_client.get_store_metrics(...)
         violations = checker.check_latency(metrics)
     """
@@ -108,6 +97,68 @@ class InvariantChecker:
         # Track first_seen time for each violation key
         # Key format: "{invariant_name}:{store_id}" or just "{invariant_name}"
         self._first_seen: dict[str, datetime] = {}
+
+    # -------------------------------------------------------------------------
+    # InvariantCheckerProtocol.check() - Generic observation interface
+    # -------------------------------------------------------------------------
+
+    def check(self, observation: dict[str, Any]) -> list[InvariantViolation]:
+        """
+        Check TiKV-specific invariants against an observation.
+
+        Implements InvariantCheckerProtocol.check() by examining the observation
+        dict (as returned by TiKVSubject.observe()) and running all TiKV-specific
+        health checks.
+
+        Args:
+            observation: Dictionary with keys:
+                - "stores": List of store dicts with id, address, state
+                - "store_metrics": Dict mapping store_id to metrics dict
+
+        Returns:
+            List of InvariantViolation objects for all currently active
+            violations. Returns an empty list if no violations are detected.
+        """
+        violations: list[InvariantViolation] = []
+
+        # Check store health from observation
+        stores_data = observation.get("stores", [])
+        stores = [
+            Store(
+                id=s["id"],
+                address=s["address"],
+                state=s["state"],
+            )
+            for s in stores_data
+        ]
+        violations.extend(self.check_stores_up(stores))
+
+        # Check metrics for stores that have metrics data
+        store_metrics_data = observation.get("store_metrics", {})
+        for store_id, metrics_data in store_metrics_data.items():
+            metrics = StoreMetrics(
+                store_id=store_id,
+                qps=metrics_data.get("qps", 0.0),
+                latency_p99_ms=metrics_data.get("latency_p99_ms", 0.0),
+                disk_used_bytes=metrics_data.get("disk_used_bytes", 0),
+                disk_total_bytes=metrics_data.get("disk_total_bytes", 1),
+                cpu_percent=metrics_data.get("cpu_percent", 0.0),
+                raft_lag=metrics_data.get("raft_lag", 0),
+            )
+
+            # Check latency invariant
+            if violation := self.check_latency(metrics):
+                violations.append(violation)
+
+            # Check disk space invariant
+            if violation := self.check_disk_space(metrics):
+                violations.append(violation)
+
+        return violations
+
+    # -------------------------------------------------------------------------
+    # TiKV-specific check methods (backward compatibility)
+    # -------------------------------------------------------------------------
 
     def _get_violation_key(self, invariant_name: str, store_id: str | None) -> str:
         """Generate unique key for tracking a specific violation."""
