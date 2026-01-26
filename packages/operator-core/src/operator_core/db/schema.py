@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS action_proposals (
     proposed_by TEXT NOT NULL DEFAULT 'agent',  -- agent or user
     validated_at TEXT,                      -- When parameters were validated
     cancelled_at TEXT,                      -- When action was cancelled
+    approved_at TEXT,                       -- ISO8601 timestamp when approved
+    approved_by TEXT,                       -- Who approved: 'user' typically
+    rejected_at TEXT,                       -- ISO8601 timestamp when rejected
+    rejected_by TEXT,                       -- Who rejected
+    rejection_reason TEXT,                  -- Why the proposal was rejected
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)

@@ -66,6 +66,44 @@ class ActionDB:
         # Execute both schemas - tickets first (for foreign key), then actions
         await self._conn.executescript(SCHEMA_SQL)
         await self._conn.executescript(ACTIONS_SCHEMA_SQL)
+
+        # Migration: Add approval columns if they don't exist
+        # Use individual try/except blocks per column (Pattern 4 from 14-RESEARCH.md)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN approved_at TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN approved_by TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN rejected_at TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN rejected_by TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN rejection_reason TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
         await self._conn.commit()
 
     def _row_to_proposal(self, row: aiosqlite.Row) -> ActionProposal:
@@ -81,6 +119,14 @@ class ActionDB:
         # Parse datetime strings
         proposed_at = datetime.fromisoformat(row["proposed_at"])
 
+        # Parse approval datetime fields (may be None)
+        approved_at = (
+            datetime.fromisoformat(row["approved_at"]) if row["approved_at"] else None
+        )
+        rejected_at = (
+            datetime.fromisoformat(row["rejected_at"]) if row["rejected_at"] else None
+        )
+
         # Parse parameters JSON
         parameters = json.loads(row["parameters"]) if row["parameters"] else {}
 
@@ -94,6 +140,11 @@ class ActionDB:
             status=ActionStatus(row["status"]),
             proposed_at=proposed_at,
             proposed_by=row["proposed_by"],
+            approved_at=approved_at,
+            approved_by=row["approved_by"],
+            rejected_at=rejected_at,
+            rejected_by=row["rejected_by"],
+            rejection_reason=row["rejection_reason"],
         )
 
     def _row_to_record(self, row: aiosqlite.Row) -> ActionRecord:
@@ -296,6 +347,113 @@ class ActionDB:
         await self._conn.commit()
 
         return count
+
+    # =========================================================================
+    # Approval operations
+    # =========================================================================
+
+    async def is_approved(self, proposal_id: int) -> bool:
+        """
+        Check if a proposal has been approved.
+
+        Args:
+            proposal_id: The proposal ID to check
+
+        Returns:
+            True if the proposal has been approved, False otherwise
+        """
+        async with self._conn.execute(
+            "SELECT approved_at FROM action_proposals WHERE id = ?",
+            (proposal_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+
+        return row is not None and row["approved_at"] is not None
+
+    async def approve_proposal(
+        self,
+        proposal_id: int,
+        approved_by: str = "user",
+    ) -> None:
+        """
+        Mark a validated proposal as approved.
+
+        Args:
+            proposal_id: The proposal ID to approve
+            approved_by: Who approved (default: "user")
+
+        Raises:
+            ValueError: If proposal not found or not in VALIDATED status
+        """
+        # First check proposal exists and is in VALIDATED status
+        proposal = await self.get_proposal(proposal_id)
+
+        if proposal is None:
+            raise ValueError(f"Proposal {proposal_id} not found")
+
+        if proposal.status != ActionStatus.VALIDATED:
+            raise ValueError(
+                f"Proposal {proposal_id} is {proposal.status.value}, "
+                "expected 'validated'"
+            )
+
+        now = datetime.now().isoformat()
+
+        await self._conn.execute(
+            """
+            UPDATE action_proposals SET
+                approved_at = ?,
+                approved_by = ?
+            WHERE id = ?
+            """,
+            (now, approved_by, proposal_id),
+        )
+        await self._conn.commit()
+
+    async def reject_proposal(
+        self,
+        proposal_id: int,
+        rejected_by: str = "user",
+        reason: str = "",
+    ) -> None:
+        """
+        Mark a validated proposal as rejected and cancel it.
+
+        Args:
+            proposal_id: The proposal ID to reject
+            rejected_by: Who rejected (default: "user")
+            reason: Why the proposal was rejected
+
+        Raises:
+            ValueError: If proposal not found or not in VALIDATED status
+        """
+        # First check proposal exists and is in VALIDATED status
+        proposal = await self.get_proposal(proposal_id)
+
+        if proposal is None:
+            raise ValueError(f"Proposal {proposal_id} not found")
+
+        if proposal.status != ActionStatus.VALIDATED:
+            raise ValueError(
+                f"Proposal {proposal_id} is {proposal.status.value}, "
+                "expected 'validated'"
+            )
+
+        now = datetime.now().isoformat()
+
+        await self._conn.execute(
+            """
+            UPDATE action_proposals SET
+                rejected_at = ?,
+                rejected_by = ?,
+                rejection_reason = ?,
+                status = ?,
+                cancelled_at = ?
+            WHERE id = ?
+            """,
+            (now, rejected_by, reason, ActionStatus.CANCELLED.value, now, proposal_id),
+        )
+        await self._conn.commit()
 
     # =========================================================================
     # Record operations
