@@ -4,9 +4,9 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 17 of 20 (Rate Limiter Service Foundation)
-**Plan:** 03 of 03 completed
+**Plan:** 04 of 04 completed (gap closure)
 **Status:** Phase 17 complete
-**Last activity:** 2026-01-26 - Completed 17-03-PLAN.md (HTTP API and FastAPI application)
+**Last activity:** 2026-01-26 - Completed 17-04-PLAN.md (Metrics wiring gap closure)
 
 Progress: [#####.....] 50% (2/5 phases complete)
 
@@ -90,6 +90,8 @@ See: .planning/MILESTONES.md
 - 429 status code set automatically when rate limit exceeded
 - Node registration uses hash keys with TTL for automatic expiration on failure
 - Background heartbeat task maintains registration continuously
+- Decorator approach for histogram timing (@CHECK_LATENCY.time())
+- Gauge update on counters endpoint reflects current state per query
 
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
@@ -98,7 +100,7 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 17-03-PLAN.md (HTTP API and FastAPI application)
+**Stopped at:** Completed 17-04-PLAN.md (Metrics wiring gap closure)
 **Resume with:** Phase 18 (Docker Compose Environment)
 
 ## Phase 16 Completion Summary
@@ -115,16 +117,17 @@ Total tests passing: 86
 
 ## Phase 17 Completion Summary
 
-All 3 plans of Phase 17 completed:
+All 4 plans of Phase 17 completed:
 - 17-01: Created package structure with config, Redis client, and empty api/ directory
 - 17-02: Implemented sliding window rate limiter with atomic Lua script
 - 17-03: Built FastAPI application with rate limiting endpoints, management APIs, and Prometheus metrics
+- 17-04: Wired CHECK_LATENCY histogram and ACTIVE_COUNTERS gauge (gap closure)
 
-Rate limiter service is ready for deployment (Phase 18).
+Rate limiter service is fully instrumented and ready for deployment (Phase 18).
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 17 complete)*
+*State updated: 2026-01-26 (Phase 17 complete with gap closure)*
