@@ -554,6 +554,136 @@ class ActionDB:
         await self._conn.commit()
 
     # =========================================================================
+    # Workflow operations (WRK-01)
+    # =========================================================================
+
+    def _row_to_workflow(self, row: aiosqlite.Row) -> WorkflowProposal:
+        """
+        Convert a database row to a WorkflowProposal.
+
+        Args:
+            row: Database row with workflow fields
+
+        Returns:
+            WorkflowProposal instance
+        """
+        created_at = datetime.fromisoformat(row["created_at"])
+
+        return WorkflowProposal(
+            id=row["id"],
+            name=row["name"],
+            description=row["description"],
+            ticket_id=row["ticket_id"],
+            status=WorkflowStatus(row["status"]),
+            created_at=created_at,
+        )
+
+    async def create_workflow(
+        self,
+        name: str,
+        description: str,
+        actions: list[ActionProposal],
+        ticket_id: int | None = None,
+    ) -> int:
+        """
+        Create a workflow with its actions.
+
+        Creates the workflow record, then creates each action proposal
+        linked to the workflow with proper execution_order.
+
+        Args:
+            name: Workflow name (e.g., "drain_and_verify")
+            description: What this workflow accomplishes
+            actions: List of ActionProposal objects to include
+            ticket_id: Optional ticket ID for traceability
+
+        Returns:
+            The created workflow ID
+        """
+        # Insert workflow
+        cursor = await self._conn.execute(
+            """
+            INSERT INTO workflows (name, description, ticket_id, status)
+            VALUES (?, ?, ?, 'pending')
+            """,
+            (name, description, ticket_id),
+        )
+        workflow_id = cursor.lastrowid
+
+        # Insert actions with workflow_id and execution_order
+        for i, action in enumerate(actions):
+            # Set workflow fields
+            action.workflow_id = workflow_id
+            action.execution_order = i
+
+            await self.create_proposal(action)
+
+        await self._conn.commit()
+        return workflow_id
+
+    async def list_workflow_actions(
+        self, workflow_id: int
+    ) -> list[ActionProposal]:
+        """
+        Get all actions for a workflow in execution order.
+
+        Args:
+            workflow_id: The workflow ID
+
+        Returns:
+            List of ActionProposal objects ordered by execution_order
+        """
+        async with self._conn.execute(
+            """
+            SELECT * FROM action_proposals
+            WHERE workflow_id = ?
+            ORDER BY execution_order ASC
+            """,
+            (workflow_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        return [self._row_to_proposal(row) for row in rows]
+
+    async def get_workflow(self, workflow_id: int) -> WorkflowProposal | None:
+        """
+        Fetch a workflow by ID.
+
+        Args:
+            workflow_id: The workflow ID
+
+        Returns:
+            The WorkflowProposal if found, None otherwise
+        """
+        async with self._conn.execute(
+            "SELECT * FROM workflows WHERE id = ?",
+            (workflow_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+
+        if row:
+            return self._row_to_workflow(row)
+        return None
+
+    async def update_workflow_status(
+        self,
+        workflow_id: int,
+        status: WorkflowStatus,
+    ) -> None:
+        """
+        Update the status of a workflow.
+
+        Args:
+            workflow_id: The workflow ID to update
+            status: The new status
+        """
+        await self._conn.execute(
+            "UPDATE workflows SET status = ? WHERE id = ?",
+            (status.value, workflow_id),
+        )
+        await self._conn.commit()
+
+    # =========================================================================
     # Record operations
     # =========================================================================
 
