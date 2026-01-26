@@ -738,6 +738,103 @@ class ActionDB:
         await self._conn.commit()
 
     # =========================================================================
+    # Retry operations (WRK-03)
+    # =========================================================================
+
+    async def list_retry_eligible(self) -> list[ActionProposal]:
+        """
+        Get failed actions eligible for retry.
+
+        Returns actions that:
+        - Have status 'failed'
+        - Have retry_count < max_retries
+        - Have a next_retry_at timestamp in the past (ready to retry)
+
+        Returns:
+            List of ActionProposal objects ordered by next_retry_at ASC
+        """
+        now = datetime.now().isoformat()
+
+        async with self._conn.execute(
+            """
+            SELECT * FROM action_proposals
+            WHERE status = 'failed'
+              AND retry_count < max_retries
+              AND next_retry_at IS NOT NULL
+              AND next_retry_at <= ?
+            ORDER BY next_retry_at ASC
+            """,
+            (now,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        return [self._row_to_proposal(row) for row in rows]
+
+    async def increment_retry_count(
+        self,
+        proposal_id: int,
+        error_message: str | None = None,
+    ) -> None:
+        """
+        Increment retry count and record last error.
+
+        Args:
+            proposal_id: The proposal ID to update
+            error_message: Error from the failed attempt
+        """
+        await self._conn.execute(
+            """
+            UPDATE action_proposals SET
+                retry_count = retry_count + 1,
+                last_error = ?
+            WHERE id = ?
+            """,
+            (error_message, proposal_id),
+        )
+        await self._conn.commit()
+
+    async def update_next_retry(
+        self,
+        proposal_id: int,
+        next_retry_at: datetime | None,
+    ) -> None:
+        """
+        Update the next retry time for a failed action.
+
+        Args:
+            proposal_id: The proposal ID to update
+            next_retry_at: When to retry next (None to disable retry)
+        """
+        retry_str = next_retry_at.isoformat() if next_retry_at else None
+
+        await self._conn.execute(
+            "UPDATE action_proposals SET next_retry_at = ? WHERE id = ?",
+            (retry_str, proposal_id),
+        )
+        await self._conn.commit()
+
+    async def reset_for_retry(self, proposal_id: int) -> None:
+        """
+        Reset a failed action to validated status for retry.
+
+        This is called before retrying an action to move it back
+        to a state where it can be executed again.
+
+        Args:
+            proposal_id: The proposal ID to reset
+        """
+        await self._conn.execute(
+            """
+            UPDATE action_proposals SET
+                status = 'validated',
+                next_retry_at = NULL
+            WHERE id = ?
+            """,
+            (proposal_id,),
+        )
+        await self._conn.commit()
+
+    # =========================================================================
     # Record operations
     # =========================================================================
 
