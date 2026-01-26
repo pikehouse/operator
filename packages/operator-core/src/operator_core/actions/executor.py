@@ -26,8 +26,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from operator_core.actions.audit import ActionAuditor
-from operator_core.actions.registry import ActionRegistry
+from operator_core.actions.registry import ActionDefinition, ActionRegistry
 from operator_core.actions.safety import ObserveOnlyError, SafetyController
+from operator_core.actions.tools import execute_tool, get_general_tools
 from operator_core.actions.types import (
     ActionProposal,
     ActionRecord,
@@ -131,6 +132,17 @@ class ActionExecutor:
         """
         return self._approval_mode
 
+    def get_all_definitions(self) -> list[ActionDefinition]:
+        """
+        Get all available action definitions (subject + general tools).
+
+        Returns:
+            Combined list of ActionDefinition from registry and general tools
+        """
+        subject_actions = self._registry.get_definitions()
+        general_tools = get_general_tools()
+        return subject_actions + general_tools
+
     async def propose_action(
         self,
         recommendation: "ActionRecommendation",
@@ -157,8 +169,16 @@ class ActionExecutor:
         # Check safety - proposals blocked in observe mode
         self._safety.check_can_execute()
 
-        # Validate action exists in registry
+        # Validate action exists in registry or general tools
         definition = self._registry.get_definition(recommendation.action_name)
+
+        # Check if it's a general tool
+        if definition is None:
+            for tool in get_general_tools():
+                if tool.name == recommendation.action_name:
+                    definition = tool
+                    break
+
         if definition is None:
             raise ValueError(
                 f"Unknown action '{recommendation.action_name}'. "
@@ -168,11 +188,11 @@ class ActionExecutor:
         # Validate parameters against definition
         validate_action_params(definition, recommendation.parameters)
 
-        # Create proposal
+        # Create proposal (use definition's action_type)
         proposal = ActionProposal(
             ticket_id=ticket_id,
             action_name=recommendation.action_name,
-            action_type=ActionType.SUBJECT,
+            action_type=definition.action_type,
             parameters=recommendation.parameters,
             reason=recommendation.reason,
             status=ActionStatus.PROPOSED,
@@ -307,14 +327,21 @@ class ActionExecutor:
             result_data: dict[str, Any] | None = None
 
             try:
-                # Call subject method dynamically
-                method = getattr(subject, proposal.action_name, None)
-                if method is None:
-                    raise ValueError(
-                        f"Subject has no method '{proposal.action_name}'"
+                if proposal.action_type == ActionType.TOOL:
+                    # Execute general tool
+                    result = await execute_tool(
+                        proposal.action_name,
+                        proposal.parameters,
                     )
+                else:
+                    # Execute subject method dynamically
+                    method = getattr(subject, proposal.action_name, None)
+                    if method is None:
+                        raise ValueError(
+                            f"Subject has no method '{proposal.action_name}'"
+                        )
+                    result = await method(**proposal.parameters)
 
-                result = await method(**proposal.parameters)
                 success = True
                 result_data = {"result": result} if result is not None else None
 
