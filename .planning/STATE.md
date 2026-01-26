@@ -4,11 +4,11 @@
 
 **Milestone:** v2.0 Agent Actions
 **Phase:** 12 - Action Foundation
-**Plan:** Not started
-**Status:** Ready for planning
-**Last activity:** 2026-01-26 - Roadmap created for v2.0
+**Plan:** 1 of 4 in current phase
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 12-01-PLAN.md
 
-**Progress:** [░░░░░░░░░░░░░░░░░░░░] 0% (0/4 phases)
+**Progress:** [█████░░░░░░░░░░░░░░░] 25% (1/4 plans in Phase 12)
 
 ## Project Reference
 
@@ -22,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 12 | Action Foundation | 7 | Pending |
+| 12 | Action Foundation | 7 | In progress |
 | 13 | TiKV Subject Actions | 4 | Pending |
 | 14 | Approval Workflow | 3 | Pending |
 | 15 | Workflow Actions | 3 | Pending |
@@ -64,15 +64,20 @@ See: .planning/MILESTONES.md
 - Risk-tiered approval prevents workflow bottlenecks
 - PD API operators: transfer-leader, transfer-peer, set-store-state
 
+**Decisions from Phase 12:**
+- Pydantic BaseModel for action types (validation + serialization)
+- Separate ACTIONS_SCHEMA_SQL for schema modularity
+- cancel_all_pending cancels both proposed and validated statuses
+
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Roadmap created for v2.0
-**Resume with:** `/gsd:plan-phase 12` to create Phase 12 plan
+**Stopped at:** Completed 12-01-PLAN.md
+**Resume with:** `/gsd:execute-phase 12` to continue Phase 12
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (v2.0 roadmap created)*
+*State updated: 2026-01-26 (12-01-PLAN.md complete)*
