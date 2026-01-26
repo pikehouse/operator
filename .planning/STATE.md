@@ -74,6 +74,9 @@ See: .planning/MILESTONES.md
 - Factory functions for CLI integration to avoid direct subject imports
 - --subject flag is required (no default) for explicit subject selection
 - Factory returns tuple (subject, checker) for convenience
+- MonitorLoop uses generic observe/check pattern (16-03)
+- Region/RegionId kept in operator_core.types for backward compat (deprecated) (16-03)
+- demo/chaos.py stays TiKV-specific (not core functionality) (16-03)
 
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): Complex architectural change - audit TiKV coupling first
