@@ -18,6 +18,9 @@ This module provides the data structures for action management:
 - ObserveOnlyError: Exception when execution blocked
 - ActionExecutor: Orchestrator for proposal and execution flow
 - ApprovalRequiredError: Exception when approval is required but not granted
+- get_general_tools: General tools available beyond subject actions
+- execute_tool: Execute a general tool by name
+- TOOL_EXECUTORS: Map of tool names to executor functions
 
 Exports:
     ActionStatus: Enum of action lifecycle states
@@ -36,6 +39,9 @@ Exports:
     ObserveOnlyError: Observe mode exception
     ActionExecutor: Action proposal and execution orchestrator
     ApprovalRequiredError: Exception for unapproved execution attempts
+    get_general_tools: Function returning general tool definitions
+    execute_tool: Function to execute a general tool
+    TOOL_EXECUTORS: Dict mapping tool names to executor functions
 """
 
 from operator_core.actions.audit import (
@@ -52,6 +58,11 @@ from operator_core.actions.safety import (
     ObserveOnlyError,
     SafetyController,
     SafetyMode,
+)
+from operator_core.actions.tools import (
+    TOOL_EXECUTORS,
+    execute_tool,
+    get_general_tools,
 )
 from operator_core.actions.types import (
     ActionProposal,
@@ -79,6 +90,9 @@ __all__ = [
     "ParamDef",
     "SafetyController",
     "SafetyMode",
+    "TOOL_EXECUTORS",
     "ValidationError",
+    "execute_tool",
+    "get_general_tools",
     "validate_action_params",
 ]
