@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 16 of 20 (Core Abstraction Refactoring)
-**Plan:** 04 of 05 completed
-**Status:** In progress
-**Last activity:** 2026-01-26 - Completed 16-04-PLAN.md (CLI subject selection)
+**Plan:** 05 of 05 completed
+**Status:** Phase complete
+**Last activity:** 2026-01-26 - Completed 16-05-PLAN.md (protocol compliance tests)
 
-Progress: [..........] 0% (0/5 phases)
+Progress: [##........] 20% (1/5 phases)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 16 — Decouple operator-core from TiKV-specific types so any Subject can be monitored
+**Current focus:** Phase 16 complete - Ready for Phase 17 (Rate Limiter Service Foundation)
 
 ## Milestones
 
@@ -31,13 +31,13 @@ See: .planning/MILESTONES.md
 
 ## v2.1 Phase Overview
 
-| Phase | Goal | Requirements |
-|-------|------|--------------|
-| 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) |
-| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) |
-| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) |
-| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) |
-| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) |
+| Phase | Goal | Requirements | Status |
+|-------|------|--------------|--------|
+| 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
+| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | — |
+| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | — |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
+| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
 ## Archives
 
@@ -77,20 +77,33 @@ See: .planning/MILESTONES.md
 - MonitorLoop uses generic observe/check pattern (16-03)
 - Region/RegionId kept in operator_core.types for backward compat (deprecated) (16-03)
 - demo/chaos.py stays TiKV-specific (not core functionality) (16-03)
+- Protocol compliance tests validate abstraction works (16-05)
 
 **Research flags for v2.1:**
-- Phase 16 (Core Refactoring): Complex architectural change - audit TiKV coupling first
+- Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): Verify atomic patterns prevent race conditions
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 16-04-PLAN.md (CLI subject selection)
-**Resume with:** `/gsd:execute-phase` to run 16-05-PLAN.md
+**Stopped at:** Completed Phase 16 (all 5 plans)
+**Resume with:** `/gsd:execute-phase` to run Phase 17
+
+## Phase 16 Completion Summary
+
+All 5 plans of Phase 16 completed:
+- 16-01: Created operator-protocols package (SubjectProtocol, InvariantCheckerProtocol, InvariantViolation)
+- 16-02: Updated TiKV subject to implement protocols via factory
+- 16-03: Removed TiKV imports from operator-core, MonitorLoop uses protocols
+- 16-04: Added CLI subject selection with --subject flag
+- 16-05: Validated abstraction with protocol compliance tests
+
+Total new tests: 26 (15 protocol compliance + 11 generic monitor)
+Total tests passing: 86
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (16-04 completed)*
+*State updated: 2026-01-26 (Phase 16 complete)*
