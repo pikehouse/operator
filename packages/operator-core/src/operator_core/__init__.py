@@ -37,6 +37,8 @@ from operator_core.types import (
     StoreId,
     StoreMetrics,
 )
+# Re-export InvariantViolation from operator_protocols for convenience
+from operator_protocols import InvariantViolation
 
 __all__ = [
     "__version__",
@@ -49,6 +51,8 @@ __all__ = [
     "RegionId",
     "StoreMetrics",
     "ClusterMetrics",
+    # Invariant types (from operator_protocols)
+    "InvariantViolation",
     # Config Types
     "Action",
     "Observation",
