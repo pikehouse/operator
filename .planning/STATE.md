@@ -4,11 +4,11 @@
 
 **Milestone:** v2.0 Agent Actions
 **Phase:** 15 - Workflow Actions (In progress)
-**Plan:** 3 of 5 complete in current phase
+**Plan:** 4 of 5 complete in current phase
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 15-03-PLAN.md
+**Last activity:** 2026-01-26 - Completed 15-02-PLAN.md
 
-**Progress:** [████████████░░░░░░░░] 60% (3/5 plans in Phase 15)
+**Progress:** [████████████████░░░░] 80% (4/5 plans in Phase 15)
 
 ## Project Reference
 
@@ -94,6 +94,7 @@ See: .planning/MILESTONES.md
 
 **Decisions from Phase 15:**
 - Plan 01: Add columns to base schema AND migrations (both for new and existing DBs)
+- Plan 02: Scheduling query checks approved_at OR workflow_id for flexible approval model
 - Plan 03: RetryConfig uses dataclass for simplicity over Pydantic
 - Plan 03: Default max_attempts=3, min_wait=1s, max_wait=60s, base=2, jitter=0.5
 - Plan 03: schedule_next_retry uses RetryConfig.max_attempts not proposal.max_retries
@@ -104,7 +105,7 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 15-03-PLAN.md
+**Stopped at:** Completed 15-02-PLAN.md
 **Resume with:** Continue Phase 15 plans (04 remains)
 
 ## Open Issues
@@ -112,4 +113,4 @@ See: .planning/MILESTONES.md
 *None*
 
 ---
-*State updated: 2026-01-26 (Plan 15-03 complete)*
+*State updated: 2026-01-26 (Plan 15-02 complete)*
