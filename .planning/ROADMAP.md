@@ -73,6 +73,12 @@ Plans:
 
 **Dependencies:** Phase 13 (actions must exist to approve)
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Approval infrastructure (database schema, ActionDB methods)
+- [ ] 14-02-PLAN.md — Approval gate in executor and CLI commands
+
 **Requirements:**
 - ACT-03: Agent can use general tools beyond subject-defined actions
 - APR-01: Action approval is configurable (on/off, default off)
@@ -132,7 +138,7 @@ Archived in milestones/v1.1-ROADMAP.md
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
 | 13 | v2.0 | 1/1 | Complete | 2026-01-26 |
-| 14 | v2.0 | 0/? | Pending | - |
+| 14 | v2.0 | 0/2 | Pending | - |
 | 15 | v2.0 | 0/? | Pending | - |
 
 ---
@@ -142,3 +148,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *Phase 12 completed: 2026-01-26*
 *Phase 13 planned: 2026-01-26*
 *Phase 13 completed: 2026-01-26*
+*Phase 14 planned: 2026-01-26*
