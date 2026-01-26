@@ -5,10 +5,10 @@
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 17 of 20 (Rate Limiter Service Foundation)
 **Plan:** 04 of 04 completed (gap closure)
-**Status:** Phase 17 complete
+**Status:** Phase 17 verified complete
 **Last activity:** 2026-01-26 - Completed 17-04-PLAN.md (Metrics wiring gap closure)
 
-Progress: [#####.....] 50% (2/5 phases complete)
+Progress: [######....] 60% (3/5 phases complete)
 
 ## Project Reference
 
@@ -34,7 +34,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
-| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | COMPLETE |
+| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | — |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
@@ -130,4 +130,4 @@ Rate limiter service is fully instrumented and ready for deployment (Phase 18).
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 17 complete with gap closure)*
+*State updated: 2026-01-26 (Phase 17 verified complete)*

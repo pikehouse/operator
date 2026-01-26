@@ -76,7 +76,7 @@ Plans:
 - [x] 17-01-PLAN.md - Package setup with config and Redis client
 - [x] 17-02-PLAN.md - Sliding window rate limiter with Lua script
 - [x] 17-03-PLAN.md - API endpoints, Prometheus metrics, and FastAPI app
-- [ ] 17-04-PLAN.md - Wire unused metrics (gap closure: latency histogram, active counters gauge)
+- [x] 17-04-PLAN.md - Wire unused metrics (gap closure: latency histogram, active counters gauge)
 
 ### Phase 18: Docker Compose Environment
 
@@ -122,7 +122,7 @@ Plans:
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16 - Core Abstraction | v2.1 | 5/5 | Complete | 2026-01-26 |
-| 17 - Rate Limiter Service | v2.1 | 3/4 | Gap closure | - |
+| 17 - Rate Limiter Service | v2.1 | 4/4 | Complete | 2026-01-26 |
 | 18 - Docker Compose | v2.1 | 0/TBD | Not started | - |
 | 19 - operator-ratelimiter | v2.1 | 0/TBD | Not started | - |
 | 20 - E2E Demo | v2.1 | 0/TBD | Not started | - |
@@ -137,3 +137,4 @@ Plans:
 *Phase 16 completed: 2026-01-26*
 *Phase 17 planned: 2026-01-26*
 *Phase 17 gap closure plan added: 2026-01-26*
+*Phase 17 completed: 2026-01-26*

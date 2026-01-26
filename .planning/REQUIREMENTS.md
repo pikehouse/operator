@@ -17,10 +17,10 @@ Requirements for Multi-Subject Support milestone. Each maps to roadmap phases.
 
 ### Rate Limiter Service
 
-- [ ] **RLSVC-01**: Rate limiter runs as 3+ containerized nodes sharing Redis state
-- [ ] **RLSVC-02**: Sliding window counter implemented with atomic Lua scripts
-- [ ] **RLSVC-03**: HTTP management API exposes node list, counters, and limits
-- [ ] **RLSVC-04**: Prometheus metrics exported from each node
+- [x] **RLSVC-01**: Rate limiter runs as 3+ containerized nodes sharing Redis state
+- [x] **RLSVC-02**: Sliding window counter implemented with atomic Lua scripts
+- [x] **RLSVC-03**: HTTP management API exposes node list, counters, and limits
+- [x] **RLSVC-04**: Prometheus metrics exported from each node
 - [ ] **RLSVC-05**: Docker Compose environment with Redis, nodes, Prometheus
 
 ### operator-ratelimiter Package
@@ -95,10 +95,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-03 | Phase 16 | Complete |
 | CORE-04 | Phase 16 | Complete |
 | CORE-05 | Phase 16 | Complete |
-| RLSVC-01 | Phase 17 | Pending |
-| RLSVC-02 | Phase 17 | Pending |
-| RLSVC-03 | Phase 17 | Pending |
-| RLSVC-04 | Phase 17 | Pending |
+| RLSVC-01 | Phase 17 | Complete |
+| RLSVC-02 | Phase 17 | Complete |
+| RLSVC-03 | Phase 17 | Complete |
+| RLSVC-04 | Phase 17 | Complete |
 | RLSVC-05 | Phase 18 | Pending |
 | RLPKG-01 | Phase 19 | Pending |
 | RLPKG-02 | Phase 19 | Pending |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after roadmap creation*
+*Last updated: 2026-01-26 (Phase 17 complete)*
