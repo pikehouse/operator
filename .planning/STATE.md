@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 12 - Action Foundation (COMPLETE)
-**Plan:** 4 of 4 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 12-04-PLAN.md
+**Phase:** 13 - TiKV Subject Actions (In progress)
+**Plan:** 1 of 1 in current phase
+**Status:** Plan 01 complete
+**Last activity:** 2026-01-26 - Completed 13-01-PLAN.md
 
-**Progress:** [████████████████████] 100% (4/4 plans in Phase 12)
+**Progress:** [█████████████████████] 100% (1/1 plans in Phase 13)
 
 ## Project Reference
 
@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 12 | Action Foundation | 7 | COMPLETE |
-| 13 | TiKV Subject Actions | 4 | Pending |
+| 13 | TiKV Subject Actions | 4 | COMPLETE |
 | 14 | Approval Workflow | 3 | Pending |
 | 15 | Workflow Actions | 3 | Pending |
 
@@ -77,15 +77,22 @@ See: .planning/MILESTONES.md
 - Optional executor parameter in AgentRunner preserves v1 observe-only behavior
 - ActionRecommendation separate from existing recommended_action text field
 
+**Decisions from Phase 13:**
+- Fire-and-forget action semantics - return on API success, don't poll for completion
+- Minimal validation - let PD API reject invalid requests
+- Pass-through errors - don't transform PD error messages
+- Hyphenated operator names in PD API (transfer-leader, not transfer_leader)
+- Store ID type conversion (str to int) at Subject layer
+
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 12-04-PLAN.md (Phase 12 complete)
-**Resume with:** `/gsd:execute-phase 13` to start Phase 13 (TiKV Subject Actions)
+**Stopped at:** Completed 13-01-PLAN.md (Phase 13 complete)
+**Resume with:** `/gsd:execute-phase 14` to start Phase 14 (Approval Workflow)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 12 complete)*
+*State updated: 2026-01-26 (Phase 13 complete)*
