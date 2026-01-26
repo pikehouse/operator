@@ -6,23 +6,20 @@ This module provides CLI commands for the AI diagnosis agent:
 
 Per RESEARCH.md patterns:
 - Use envvar parameter for environment variable fallback
-- Create httpx clients with timeout for HTTP operations
-- Wire up TiKVSubject and AgentRunner
+- Uses factory pattern for subject creation (no direct TiKV imports)
+- Wire up subject and AgentRunner via factory
 """
 
 import asyncio
 import os
 from pathlib import Path
 
-import httpx
 import typer
 
 from operator_core.agent.runner import AgentRunner
+from operator_core.cli.subject_factory import AVAILABLE_SUBJECTS, create_subject
 from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import TicketStatus
-from operator_tikv.pd_client import PDClient
-from operator_tikv.prom_client import PrometheusClient
-from operator_tikv.subject import TiKVSubject
 
 agent_app = typer.Typer(help="Run the AI diagnosis agent")
 
@@ -32,6 +29,12 @@ DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
 
 @agent_app.command("start")
 def start_agent(
+    subject: str = typer.Option(
+        ...,  # Required
+        "--subject",
+        "-s",
+        help=f"Subject to monitor ({', '.join(AVAILABLE_SUBJECTS)})",
+    ),
     interval: float = typer.Option(
         10.0, "--interval", "-i", help="Poll interval in seconds"
     ),
@@ -69,7 +72,7 @@ def start_agent(
     # Ensure database directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print("Starting agent daemon...")
+    print(f"Starting agent daemon for subject: {subject}")
     print(f"  PD endpoint: {pd_endpoint}")
     print(f"  Prometheus: {prometheus_url}")
     print(f"  Poll interval: {interval}s")
@@ -80,23 +83,26 @@ def start_agent(
     print()
 
     async def _run() -> None:
-        async with httpx.AsyncClient(base_url=pd_endpoint, timeout=10.0) as pd_http:
-            async with httpx.AsyncClient(
-                base_url=prometheus_url, timeout=10.0
-            ) as prom_http:
-                subject = TiKVSubject(
-                    pd=PDClient(http=pd_http),
-                    prom=PrometheusClient(http=prom_http),
-                )
+        try:
+            # Use factory to create subject (checker not needed for agent)
+            subject_instance, _checker = await create_subject(
+                subject,
+                pd_endpoint=pd_endpoint,
+                prometheus_url=prometheus_url,
+            )
 
-                runner = AgentRunner(
-                    subject=subject,
-                    db_path=db_path,
-                    poll_interval=interval,
-                    model=model,
-                )
+            runner = AgentRunner(
+                subject=subject_instance,
+                db_path=db_path,
+                poll_interval=interval,
+                model=model,
+            )
 
-                await runner.run()
+            await runner.run()
+        except ValueError as e:
+            # Handle unknown subject error with user-friendly message
+            print(f"Error: {e}")
+            raise typer.Exit(1)
 
     asyncio.run(_run())
 
@@ -104,6 +110,12 @@ def start_agent(
 @agent_app.command("diagnose")
 def diagnose_ticket(
     ticket_id: int = typer.Argument(..., help="Ticket ID to diagnose"),
+    subject: str = typer.Option(
+        ...,  # Required
+        "--subject",
+        "-s",
+        help=f"Subject to use for context gathering ({', '.join(AVAILABLE_SUBJECTS)})",
+    ),
     pd_endpoint: str = typer.Option(
         None, "--pd", envvar="PD_ENDPOINT", help="PD endpoint (e.g., http://pd:2379)"
     ),
@@ -159,43 +171,47 @@ def diagnose_ticket(
 
             print(f"Diagnosing ticket {ticket_id}: {ticket.invariant_name}")
 
-            async with httpx.AsyncClient(base_url=pd_endpoint, timeout=10.0) as pd_http:
-                async with httpx.AsyncClient(
-                    base_url=prometheus_url, timeout=10.0
-                ) as prom_http:
-                    subject = TiKVSubject(
-                        pd=PDClient(http=pd_http),
-                        prom=PrometheusClient(http=prom_http),
-                    )
+            try:
+                # Use factory to create subject
+                subject_instance, _checker = await create_subject(
+                    subject,
+                    pd_endpoint=pd_endpoint,
+                    prometheus_url=prometheus_url,
+                )
 
-                    # Gather context
-                    gatherer = ContextGatherer(subject, db)
-                    context = await gatherer.gather(ticket)
-                    prompt = build_diagnosis_prompt(context)
+                # Gather context
+                gatherer = ContextGatherer(subject_instance, db)
+                context = await gatherer.gather(ticket)
+                prompt = build_diagnosis_prompt(context)
 
-                    print("Calling Claude for diagnosis...")
+                print("Calling Claude for diagnosis...")
 
-                    # Invoke Claude
-                    client = AsyncAnthropic()
-                    response = await client.beta.messages.parse(
-                        model=model,
-                        max_tokens=4096,
-                        betas=["structured-outputs-2025-11-13"],
-                        system=SYSTEM_PROMPT,
-                        messages=[{"role": "user", "content": prompt}],
-                        output_format=DiagnosisOutput,
-                    )
+                # Invoke Claude
+                client = AsyncAnthropic()
+                response = await client.beta.messages.parse(
+                    model=model,
+                    max_tokens=4096,
+                    betas=["structured-outputs-2025-11-13"],
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                    output_format=DiagnosisOutput,
+                )
 
-                    if response.stop_reason == "refusal":
-                        print("Claude refused to diagnose this ticket")
-                        raise typer.Exit(1)
+                if response.stop_reason == "refusal":
+                    print("Claude refused to diagnose this ticket")
+                    raise typer.Exit(1)
 
-                    # Format and store diagnosis
-                    diagnosis_output = response.parsed_output
-                    diagnosis_md = format_diagnosis_markdown(diagnosis_output)
-                    await db.update_diagnosis(ticket_id, diagnosis_md)
+                # Format and store diagnosis
+                diagnosis_output = response.parsed_output
+                diagnosis_md = format_diagnosis_markdown(diagnosis_output)
+                await db.update_diagnosis(ticket_id, diagnosis_md)
 
-                    print(f"Diagnosis complete (severity: {diagnosis_output.severity})")
-                    print(f"View with: operator tickets show {ticket_id}")
+                print(f"Diagnosis complete (severity: {diagnosis_output.severity})")
+                print(f"View with: operator tickets show {ticket_id}")
+
+            except ValueError as e:
+                # Handle unknown subject error
+                print(f"Error: {e}")
+                raise typer.Exit(1)
 
     asyncio.run(_diagnose())
