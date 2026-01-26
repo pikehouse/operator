@@ -9,6 +9,7 @@ import redis.asyncio as redis
 from ..redis_client import get_redis
 from ..limiter import RateLimiter
 from ..config import settings
+from ..metrics import set_active_counters
 
 management_router = APIRouter(prefix="/api", tags=["management"])
 
@@ -103,6 +104,9 @@ async def get_counters(
                 remaining=max(0, settings.default_limit - count),
             )
         )
+
+    # Update active counters metric
+    set_active_counters(len(counters))
 
     return CountersResponse(counters=counters)
 
