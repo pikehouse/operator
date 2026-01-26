@@ -1,546 +1,699 @@
-# Pitfalls Research: TUI Demo
+# Pitfalls Research: Rate Limiter Subject
 
-**Domain:** Multi-panel TUI with live subprocess output (Rich + asyncio)
-**Researched:** 2026-01-24
-**Confidence:** HIGH (verified via official docs and GitHub issues)
+**Domain:** Distributed rate limiter as second operator Subject
+**Researched:** 2026-01-26
+**Confidence:** HIGH (verified via official Redis docs, existing operator patterns, and distributed systems research)
+
+## Context
+
+This research identifies pitfalls specific to:
+1. Building a distributed rate limiter (intentionally simple, demo/proof-of-concept)
+2. Adding a second Subject to the existing operator-core abstraction
+3. Using Redis for distributed coordination
+4. Proving the operator abstraction generalizes beyond TiKV
+
+**Key constraint:** This is a demo proving the abstraction works, not a production rate limiter. Pitfalls focus on things that would break the demo or invalidate the proof.
+
+---
 
 ## Critical Pitfalls
 
-### 1. Subprocess Output Buffering Causes Delayed/Missing Output
+### 1. Subject Interface Mismatch — TiKV-Specific Types Leak Into Core
 
-**Problem:** When capturing stdout from subprocesses, output appears all at once at the end instead of streaming line-by-line, or lines are missing entirely. This is because when stdout is piped (not a TTY), most programs switch from line buffering to full buffering.
+**What goes wrong:** The existing operator-core types (`Store`, `Region`, `StoreMetrics`, `ClusterMetrics`) are TiKV-specific concepts. A rate limiter has no "stores" or "regions" — it has buckets, keys, and rate configurations. Attempting to shoehorn rate limiter concepts into TiKV types produces meaningless results.
 
-**Warning signs:**
-- Output appears only when subprocess exits
-- Long pauses followed by burst of output
-- Python subprocess output is particularly delayed
-- Works in terminal directly but not when captured
+**Why this happens:**
+- The current `Subject` Protocol directly uses TiKV types in method signatures
+- `get_stores() -> list[Store]` assumes all subjects have "stores"
+- The `MonitorLoop` hardcodes calls to `check_stores_up()`, `check_latency()`, `check_disk_space()`
+- `InvariantChecker` uses TiKV-specific invariants
 
-**Prevention:**
-- For Python subprocesses: use `-u` flag or set `PYTHONUNBUFFERED=1`
-- For general subprocesses: wrap with `stdbuf -oL` on Linux/macOS
-- Consider using PTY (pseudo-terminal) via `pty.openpty()` to trick subprocess into line buffering
-- Test with `print(flush=True)` in any Python code that will run as subprocess
-
-**Phase to address:** Phase 1 (subprocess infrastructure) - Must be designed in from the start
-
-**Sources:**
-- [Luca Da Rin Fioretto - Capture Python subprocess output in real-time](https://lucadrf.dev/blog/python-subprocess-buffers/)
-- [Processing subprocess output in realtime](https://tbrink.science/blog/2017/04/30/processing-the-output-of-a-subprocess-with-python-in-realtime/)
-
----
-
-### 2. Rich Live Display + Concurrent Output = Corruption
-
-**Problem:** Rich's Live display and Console printing have separate locks. When logging or printing from threads/tasks while Live is running, output gets lost, misplaced, or display artifacts persist. Log lines vanish entirely or status remnants corrupt output.
-
-**Warning signs:**
-- Log messages disappear intermittently
-- Status bar text appears inline with log output
-- Output appears in wrong order
-- Visual artifacts after Live stops
-
-**Prevention:**
-- ALWAYS use `progress.console.print()` or `live.console.print()` for output during live display - never raw `print()`
-- Enable `redirect_stdout=True, redirect_stderr=True` on Live (default)
-- For logging during Live: configure logging handler to use the Live's console
-- Avoid concurrent threads writing to console - funnel all output through asyncio tasks that coordinate with Live
-
-**Phase to address:** Phase 1 (TUI scaffolding) - Architecture decision affects all panels
-
-**Sources:**
-- [GitHub Issue #1530 - live displays and console printing are not thread safe](https://github.com/willmcgugan/rich/issues/1530)
-- [GitHub Issue #3523 - Progress with stream text output](https://github.com/Textualize/rich/issues/3523)
-
----
-
-### 3. readline() Blocks Forever on Long-Running Subprocess
-
-**Problem:** `await proc.stdout.readline()` blocks indefinitely if the subprocess never closes stdout. For daemon-like processes (monitor, agent), there's no EOF to signal "done reading." The coroutine hangs forever.
-
-**Warning signs:**
-- TUI freezes waiting for subprocess output
-- Only first few lines appear, then nothing
-- Works with short-lived commands, fails with daemons
-- `asyncio.wait_for()` timeout constantly triggers
-
-**Prevention:**
-- Use `asyncio.wait_for(proc.stdout.readline(), timeout=0.1)` with short timeout
-- Catch `asyncio.TimeoutError` and continue loop (no output available is not an error)
-- Track subprocess lifecycle separately from output reading
-- Pattern:
+**Evidence from codebase:**
 ```python
-while proc.returncode is None:
-    try:
-        line = await asyncio.wait_for(proc.stdout.readline(), timeout=0.1)
-        if line:
-            handle_line(line)
-    except asyncio.TimeoutError:
-        continue  # No output, check if still running
+# packages/operator-core/src/operator_core/subject.py
+async def get_stores(self) -> list[Store]:  # TiKV-specific
+async def get_store_metrics(self, store_id: str) -> StoreMetrics:  # TiKV-specific
 ```
 
-**Phase to address:** Phase 2 (subprocess output capture) - Core reading loop design
+```python
+# packages/operator-core/src/operator_core/monitor/loop.py
+from operator_tikv.invariants import InvariantChecker, InvariantViolation  # Direct TiKV import!
+```
 
-**Sources:**
-- [Python asyncio-subprocess documentation](https://docs.python.org/3/library/asyncio-subprocess.html)
-- [Making subprocess async friendly](https://blog.est.im/2024/stdout-11)
+**Consequences:**
+- Rate limiter cannot implement the current Subject Protocol
+- Proves the abstraction DOESN'T generalize (opposite of demo goal)
+- Requires either forcing unnatural mapping or breaking the interface
+
+**Warning signs:**
+- Methods returning empty lists or dummy values to satisfy interface
+- Comments like "N/A for rate limiter"
+- Invariant checks that always pass or always fail
+
+**Prevention:**
+1. **Refactor Subject Protocol before implementing rate limiter:**
+   - Make observation methods generic: `get_entities() -> list[Entity]` where `Entity` is subject-specific
+   - Or use a capabilities pattern: subject declares what observations it supports
+   - Move TiKV-specific types to `operator_tikv.types`
+
+2. **Create subject-specific type hierarchies:**
+   ```python
+   # Generic in operator-core
+   @dataclass
+   class SubjectEntity:
+       id: str
+       state: str
+
+   # TiKV-specific
+   class Store(SubjectEntity):
+       address: str
+
+   # Rate limiter-specific
+   class RateLimitBucket(SubjectEntity):
+       key: str
+       current_count: int
+       max_count: int
+   ```
+
+3. **Make InvariantChecker pluggable:**
+   - Subject provides its own invariant checker
+   - MonitorLoop calls `subject.get_invariant_checker()` not hardcoded TiKV checker
+
+**Phase to address:** Phase 1 — Must refactor core abstractions before implementing rate limiter Subject
 
 ---
 
-### 4. SIGINT Leaves Terminal in Broken State
+### 2. Race Conditions in Counter-Based Rate Limiting
 
-**Problem:** If user presses Ctrl+C while in alternate screen mode or raw input mode, the terminal may be left unusable. No echo, no line editing, alternate screen persists. User has to type `reset` blindly.
+**What goes wrong:** Two requests concurrently read the counter from Redis, both see value `4`, both check if `4 + 1 <= 5` (limit), both increment to `5`. Result: 6 requests allowed when limit was 5.
+
+**Why this happens:**
+- Naive pattern: `GET`, check, `INCR` as separate operations
+- Redis is single-threaded but clients are not
+- Network latency between operations allows interleaving
+
+**Consequences:**
+- Rate limits exceeded (demo shows wrong behavior)
+- Under high concurrency, limits can be significantly exceeded
+- Non-deterministic failures make demo unreliable
 
 **Warning signs:**
-- After Ctrl+C, typing produces no visible output
-- Terminal looks "stuck" on TUI display
-- Previous command history inaccessible
-- Works fine during normal exit, breaks on interrupt
+- Tests pass with single client, fail with concurrent clients
+- Rate limit of 10 occasionally allows 11-15 requests
+- "Works most of the time" behavior
 
 **Prevention:**
-- ALWAYS use context managers: `with console.screen():` or `with Live():`
-- Register signal handlers BEFORE entering alternate screen
-- In signal handler: explicitly stop Live, restore terminal, THEN exit
-- Use `atexit.register()` as backup, but remember it doesn't run on SIGKILL
-- Pattern:
-```python
-def cleanup():
-    live.stop()
-    console.set_alt_screen(False)
+1. **Use atomic Lua scripts (strongly recommended):**
+   ```lua
+   -- Atomic increment and check
+   local current = redis.call('INCR', KEYS[1])
+   if current == 1 then
+       redis.call('EXPIRE', KEYS[1], ARGV[1])
+   end
+   if current > tonumber(ARGV[2]) then
+       return 0  -- Rejected
+   end
+   return 1  -- Allowed
+   ```
 
-signal.signal(signal.SIGINT, lambda s, f: (cleanup(), sys.exit(130)))
-atexit.register(cleanup)
-```
+2. **Or use Redis MULTI/EXEC transactions** (less flexible but simpler)
 
-**Phase to address:** Phase 1 (TUI scaffolding) - Must be in place before any Live usage
+3. **Never use GET-check-INCR pattern** — this is the canonical race condition
+
+4. **Test with concurrent requests:**
+   ```python
+   async def test_concurrent_rate_limiting():
+       tasks = [check_rate_limit("key") for _ in range(100)]
+       results = await asyncio.gather(*tasks)
+       allowed = sum(results)
+       assert allowed == 10  # Exactly the limit
+   ```
+
+**Phase to address:** Phase 2 — Core rate limiting implementation
 
 **Sources:**
-- [Rich Live Display documentation](https://rich.readthedocs.io/en/latest/live.html)
-- [Python atexit documentation](https://docs.python.org/3/library/atexit.html)
-- [roguelynn - Graceful Shutdowns with asyncio](https://roguelynn.com/words/asyncio-graceful-shutdowns/)
+- [Redis Race Condition](https://redis.io/glossary/redis-race-condition/)
+- [Fixing Race Conditions in Redis Counters](https://dev.to/silentwatcher_95/fixing-race-conditions-in-redis-counters-why-lua-scripting-is-the-key-to-atomicity-and-reliability-38a4)
 
 ---
 
-### 5. Zombie/Orphan Subprocesses After Parent Crash
+### 3. Redis Key Expiration Race — Non-Expiring Keys
 
-**Problem:** If the parent Python process crashes or is killed, spawned subprocesses (monitor, agent) keep running. Next demo run fails because ports are in use or multiple instances cause conflicts.
+**What goes wrong:** A key gets expired between a `RENAME`/`INCR` sequence. `INCR` on non-existing key creates it without TTL. The key lives forever, rate limit counter persists across windows.
+
+**Why this happens:**
+- Redis expires keys asynchronously
+- Multi-step operations have gaps where expiration can occur
+- `INCR` on non-existing key sets value to 1 (without TTL)
+
+**Evidence:** [GitHub Issue](https://github.com/Tabcorp/redis-rate-limiter/issues/1) documents this exact bug — hard to reproduce but causes "rate-limited forever" state.
+
+**Consequences:**
+- Users stuck at rate limit indefinitely
+- Demo breaks when key unexpectedly persists
+- Requires manual Redis intervention to fix
 
 **Warning signs:**
-- "Address already in use" errors on restart
-- Multiple instances of monitor/agent running
-- `ps aux` shows orphaned Python processes
-- Works first time, fails on retry
+- Rate limiting works initially, then user is "permanently" limited
+- Redis keys without TTL accumulating over time
+- Rate limits not resetting at window boundaries
 
 **Prevention:**
-- Create subprocess in new process group: `start_new_session=True`
-- Track all subprocess PIDs explicitly
-- On exit, send SIGTERM to process group, wait with timeout, then SIGKILL
-- Use `proc.wait()` after `proc.terminate()` to reap zombies
-- Pattern:
-```python
-proc = await asyncio.create_subprocess_exec(
-    *cmd,
-    start_new_session=True,  # Own process group
-    stdout=asyncio.subprocess.PIPE
-)
-# On cleanup:
-proc.terminate()
-try:
-    await asyncio.wait_for(proc.wait(), timeout=5.0)
-except asyncio.TimeoutError:
-    proc.kill()
-    await proc.wait()
-```
+1. **Always set TTL atomically with increment (Lua script):**
+   ```lua
+   local current = redis.call('INCR', KEYS[1])
+   if current == 1 then
+       redis.call('EXPIRE', KEYS[1], ARGV[1])
+   end
+   return current
+   ```
 
-**Phase to address:** Phase 2 (subprocess lifecycle) - Must be part of subprocess abstraction
+2. **Never use RENAME in rate limiting logic** — expiration race window is too risky
+
+3. **Add TTL verification in health checks:**
+   ```python
+   async def check_key_health(redis, key):
+       ttl = await redis.ttl(key)
+       if ttl == -1:  # Key exists without expiration
+           logger.warning(f"Rate limit key {key} has no TTL!")
+   ```
+
+**Phase to address:** Phase 2 — Lua script implementation must handle TTL atomically
 
 **Sources:**
-- [How to Safely Kill Python Subprocesses Without Zombies](https://dev.to/generatecodedev/how-to-safely-kill-python-subprocesses-without-zombies-3h9g)
-- [Handling sub-process hierarchies](https://stefan.sofa-rockers.org/2013/08/15/handling-sub-process-hierarchies-python-linux-os-x/)
+- [Race condition that leads to non-expiring redis key](https://github.com/Tabcorp/redis-rate-limiter/issues/1)
 
 ---
 
-### 6. asyncio.gather() Exception Doesn't Cancel Siblings
+### 4. MonitorLoop Coupling to TiKV — Invariant Check Hardcoding
 
-**Problem:** By default, if one task in `asyncio.gather()` raises an exception, the other tasks keep running. The exception propagates but the remaining coroutines aren't cancelled, leading to resource leaks and inconsistent state.
+**What goes wrong:** The `MonitorLoop` directly imports and uses `operator_tikv.invariants.InvariantChecker`. Adding a rate limiter subject means either:
+- Creating a separate monitor loop (code duplication)
+- Modifying MonitorLoop to handle multiple subject types (coupling)
+- Breaking the abstraction entirely
 
-**Warning signs:**
-- One panel crashes but others keep updating (partial UI)
-- Resources not released after error
-- Error handling seems to work but subprocess keeps running
-- Cleanup code never executes
-
-**Prevention:**
-- Use `TaskGroup` (Python 3.11+) instead of `gather()` - automatically cancels siblings on exception
-- If using `gather()`, wrap in try/except and explicitly cancel tasks
-- For subprocess management, always cancel related tasks when subprocess dies
-- Pattern:
+**Evidence from codebase:**
 ```python
-# Python 3.11+ preferred approach
-async with asyncio.TaskGroup() as tg:
-    tg.create_task(run_monitor())
-    tg.create_task(run_agent())
-    tg.create_task(update_ui())
-# Any exception cancels all tasks
+# packages/operator-core/src/operator_core/monitor/loop.py
+from operator_tikv.invariants import InvariantChecker, InvariantViolation
+from operator_tikv.subject import TiKVSubject
+
+class MonitorLoop:
+    def __init__(
+        self,
+        subject: TiKVSubject,  # Hardcoded to TiKV!
+        checker: InvariantChecker,  # TiKV-specific checker!
+        ...
+    )
 ```
 
-**Phase to address:** Phase 1 (async architecture) - Task management pattern choice
+**Consequences:**
+- Cannot reuse MonitorLoop for rate limiter
+- Either duplicate loop logic or create tight coupling
+- Proves abstraction doesn't work (defeats demo purpose)
 
-**Sources:**
-- [Python asyncio-task documentation](https://docs.python.org/3/library/asyncio-task.html)
-- [Asyncio Coroutine Patterns: Errors and cancellation](https://yeraydiazdiaz.medium.com/asyncio-coroutine-patterns-errors-and-cancellation-3bb422e961ff)
+**Warning signs:**
+- Creating `RateLimiterMonitorLoop` that copies `MonitorLoop` code
+- `isinstance(subject, TiKVSubject)` checks appearing in core
+- Import cycles between core and subject packages
+
+**Prevention:**
+1. **Make MonitorLoop subject-agnostic:**
+   ```python
+   class MonitorLoop:
+       def __init__(
+           self,
+           subject: Subject,  # Protocol, not concrete type
+           invariant_checker: InvariantCheckerProtocol,  # Generic protocol
+           ...
+       )
+   ```
+
+2. **Define InvariantChecker protocol in core:**
+   ```python
+   # operator_core/monitor/types.py
+   class InvariantCheckerProtocol(Protocol):
+       async def check_all(self, subject: Subject) -> list[InvariantViolation]:
+           ...
+   ```
+
+3. **Each subject provides its own checker:**
+   ```python
+   # operator_tikv
+   class TiKVInvariantChecker(InvariantCheckerProtocol):
+       async def check_all(self, subject: TiKVSubject) -> list[InvariantViolation]:
+           ...
+
+   # operator_ratelimit
+   class RateLimitInvariantChecker(InvariantCheckerProtocol):
+       async def check_all(self, subject: RateLimitSubject) -> list[InvariantViolation]:
+           ...
+   ```
+
+**Phase to address:** Phase 1 — Core refactoring before rate limiter implementation
 
 ---
 
 ## Moderate Pitfalls
 
-### 7. Keyboard Input Blocks Event Loop
+### 5. Clock Skew in Distributed Time Windows
 
-**Problem:** Standard `input()` is blocking and will freeze the entire asyncio event loop. Even with threading, mixing terminal input with Rich Live display causes conflicts.
+**What goes wrong:** Rate limiter uses time-based windows (e.g., "10 requests per minute"). If Redis server clock differs from application server clocks, windows don't align properly. Requests near boundaries may be incorrectly allowed or rejected.
+
+**Why this happens:**
+- Cloud VMs can have clock drift
+- NTP synchronization isn't perfect (10-100ms typical)
+- Redis server time may differ from client time
+
+**Consequences:**
+- Rate limits off by a few requests near window boundaries
+- For demo: minor issue unless demo specifically tests boundary behavior
+- Non-deterministic test failures
 
 **Warning signs:**
-- TUI freezes when waiting for keypress
-- Rich animations stop during input
-- Keypresses buffer and execute all at once
-- Works in tests, breaks in real terminal
+- Tests pass/fail inconsistently
+- Rate limit works but allows 11 requests instead of 10 occasionally
+- Works locally, flaky in CI/cloud
 
 **Prevention:**
-- Rich's basic `Prompt` classes are blocking - avoid during Live display
-- Use non-blocking stdin reading with `select()` or `fcntl` + raw mode
-- Consider Textual if complex keyboard handling needed
-- For simple demo chapters: use a dedicated input reader task with small poll interval
-- Pattern using select:
-```python
-import sys, select, tty, termios
+1. **Use Redis server time, not client time:**
+   ```lua
+   local now = redis.call('TIME')[1]  -- Redis server timestamp
+   ```
 
-def get_key_nonblocking():
-    if select.select([sys.stdin], [], [], 0)[0]:
-        return sys.stdin.read(1)
-    return None
-```
+2. **For demo: accept window approximation is not exact** — Cloudflare found only 0.003% of requests affected
 
-**Phase to address:** Phase 3 (chapter navigation) - Input handling design
+3. **Avoid testing exact boundary behavior** — test "approximately 10 per minute" not "exactly 10"
+
+4. **Document as known limitation** — production systems need more sophisticated handling
+
+**Phase to address:** Phase 2 — Design decision, document limitation
 
 **Sources:**
-- [GitHub asyncio Issue #213 - Implement async input()](https://github.com/python/asyncio/issues/213)
-- [Non-blocking stdin in Python 3](https://ballingt.com/nonblocking-stdin-in-python-3/)
+- [Why you shouldn't use Redis as a rate limiter](https://medium.com/ratelimitly/why-you-shouldnt-use-redis-as-a-rate-limiter-part-1-of-2-3d4261f5b38a)
 
 ---
 
-### 8. Terminal Raw Mode Not Restored on Exception
+### 6. Sliding Window Log Memory Growth
 
-**Problem:** When using raw mode for keyboard input, if an exception occurs before `termios.tcsetattr()` restores settings, the terminal is left in raw mode. No echo, no Ctrl+C, must close terminal.
+**What goes wrong:** Sliding window using sorted sets stores timestamp for each request. High-traffic keys accumulate thousands of entries. Memory grows unbounded.
+
+**Why this happens:**
+- Each request adds: `ZADD key timestamp timestamp`
+- Need to call `ZREMRANGEBYSCORE` to clean old entries
+- If cleanup not done atomically, entries accumulate
+
+**Consequences:**
+- Redis memory usage grows over time
+- Demo Redis instance runs out of memory
+- Performance degrades as sorted sets grow
 
 **Warning signs:**
-- After crash, can't see what you type
-- Ctrl+C doesn't work
-- Backspace doesn't work as expected
-- Terminal needs `reset` or `stty sane` to recover
+- Redis memory increasing over demo duration
+- `ZCARD` on rate limit keys shows thousands of entries
+- Demo slows down over time
 
 **Prevention:**
-- ALWAYS use try/finally when modifying terminal settings
-- Store original settings BEFORE any modification
-- Restore in finally block AND in signal handlers
-- Pattern:
-```python
-old_settings = termios.tcgetattr(sys.stdin)
-try:
-    tty.setcbreak(sys.stdin)
-    # ... do input handling ...
-finally:
-    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
-```
+1. **Clean old entries in same Lua script as adding:**
+   ```lua
+   local now = tonumber(ARGV[1])
+   local window = tonumber(ARGV[2])
+   local cutoff = now - window
 
-**Phase to address:** Phase 3 (chapter navigation) - Must wrap any raw mode usage
+   -- Clean old entries first
+   redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', cutoff)
 
-**Sources:**
-- [The Perils of Python's Raw Terminal Mode](https://runebook.dev/en/docs/python/library/tty/tty.setraw)
+   -- Add new entry
+   redis.call('ZADD', KEYS[1], now, now)
+
+   -- Set expiration on key itself (belt and suspenders)
+   redis.call('EXPIRE', KEYS[1], window)
+
+   return redis.call('ZCARD', KEYS[1])
+   ```
+
+2. **For demo: use simpler fixed window** — less accurate but no memory growth
+
+3. **Monitor memory in demo health checks**
+
+**Phase to address:** Phase 2 — Algorithm choice affects complexity
 
 ---
 
-### 9. Pipe Buffer Deadlock
+### 7. Redis Connection Handling — Async Client Lifecycle
 
-**Problem:** If a subprocess produces enough output that the OS pipe buffer fills up (typically 64KB), the subprocess blocks waiting for the pipe to drain. If the parent is waiting for the subprocess to exit before reading, both processes deadlock.
+**What goes wrong:** Creating new Redis connections per request, or not properly closing connections. Connection pool exhausted, Redis refuses connections.
+
+**Why this happens:**
+- Async Redis clients need explicit lifecycle management
+- Connection pools have limits
+- Not awaiting cleanup properly
+
+**Evidence from TiKV subject pattern:**
+```python
+# TiKVSubject receives injected httpx clients
+@dataclass
+class TiKVSubject:
+    pd: PDClient
+    prom: PrometheusClient
+```
+
+**Consequences:**
+- "Max connections exceeded" errors
+- Demo crashes after running for a while
+- Memory leaks from unclosed connections
 
 **Warning signs:**
-- Subprocess hangs after producing some output
-- Works with small output, hangs with verbose logging
-- Process never exits, can't read more output
-- Timeout on `proc.wait()` after some output was read
+- Works initially, fails after minutes
+- Redis logs showing connection refused
+- Python warnings about unclosed connections
 
 **Prevention:**
-- ALWAYS read stdout/stderr continuously, don't wait for subprocess to exit first
-- Use `communicate()` for simple cases (reads everything then waits)
-- For live streaming: read in separate task, coordinate with process lifecycle
-- Consider separate stderr task or `stderr=asyncio.subprocess.STDOUT` to merge
+1. **Follow TiKV pattern — inject Redis client:**
+   ```python
+   @dataclass
+   class RateLimitSubject:
+       redis: redis.asyncio.Redis  # Injected, lifecycle managed externally
+   ```
 
-**Phase to address:** Phase 2 (output streaming) - Part of output reader design
+2. **Use connection pooling:**
+   ```python
+   redis = redis.asyncio.Redis.from_url(
+       "redis://localhost:6379",
+       max_connections=10,
+   )
+   ```
 
-**Sources:**
-- [Python subprocess documentation](https://docs.python.org/3/library/subprocess.html)
-- [Python asyncio-subprocess documentation](https://docs.python.org/3/library/asyncio-subprocess.html)
+3. **Ensure proper cleanup in context managers**
+
+**Phase to address:** Phase 2 — Follow established injection pattern
 
 ---
 
-### 10. Progress/Live Refresh Rate Conflicts
+### 8. Invariant Domain Mismatch — What Does "Healthy" Mean?
 
-**Problem:** Rich Live's refresh rate (default 4/sec) can conflict with update frequency of subprocess output or cause visual tearing. Too slow = laggy feel. Too fast = CPU waste and potential flicker.
+**What goes wrong:** TiKV invariants check "store up", "latency low", "disk space available". What are the equivalent invariants for a rate limiter? Forcing TiKV invariant patterns produces meaningless checks.
+
+**Why this happens:**
+- Rate limiter health is fundamentally different from TiKV health
+- "Store down" has no equivalent — rate limiter doesn't have stores
+- Must define new invariant semantics from scratch
+
+**Possible rate limiter invariants:**
+- Redis connection healthy
+- No clients permanently rate-limited (stuck keys)
+- Rate limit configurations loaded
+- No keys without TTL (the race condition bug)
+- Request latency acceptable
+
+**Consequences:**
+- Copy-paste TiKV invariants = meaningless or always-passing checks
+- Demo shows invariant system but checks nothing useful
+- Fails to prove abstraction generalizes
 
 **Warning signs:**
-- Output appears in "chunks" instead of streaming
-- Visual tearing or flicker
-- High CPU usage during idle periods
-- Updates visible only every 250ms even with fast output
+- All invariant checks pass regardless of state
+- Invariants don't detect real rate limiter problems
+- Comments like "placeholder invariant"
 
 **Prevention:**
-- Set `refresh_per_second` based on expected update frequency
-- For subprocess output: 10-20 fps is usually good balance
-- Use `live.update()` to trigger immediate refresh on important changes
-- Don't refresh faster than your eye can perceive (~60fps max)
+1. **Design rate limiter invariants first:**
+   - `redis_healthy`: Can connect to Redis
+   - `no_stuck_keys`: No keys without TTL
+   - `config_loaded`: Rate limit configs present
 
-**Phase to address:** Phase 1 (TUI scaffolding) - Configuration decision
+2. **Ensure invariants are meaningful:**
+   - Should fail when something is wrong
+   - Should pass when things are healthy
+   - Detection within demo window
 
-**Sources:**
-- [Rich Live Display documentation](https://rich.readthedocs.io/en/latest/live.html)
+3. **Make InvariantChecker subject-specific** (see pitfall #4)
+
+**Phase to address:** Phase 1 — Define invariants as part of Subject design
 
 ---
 
-## Minor Pitfalls
+## Demo/Proof-of-Concept Pitfalls
 
-### 11. Unicode/Emoji Width Causes Alignment Issues
+### 9. Failing to Prove Generalization — Demo Tests Same Path as TiKV
 
-**Problem:** Different terminals calculate character widths differently, especially for emoji and CJK characters. Tables and panels may misalign across different terminal emulators.
+**What goes wrong:** Demo uses rate limiter but exercises same code paths as TiKV demo. Doesn't prove the abstraction generalizes — just proves TiKV-shaped subject works.
+
+**Why this happens:**
+- Natural tendency to follow existing patterns
+- Easier to copy TiKV demo structure
+- Doesn't surface abstraction problems until too late
+
+**What the demo should prove:**
+1. A non-TiKV subject can implement the Subject Protocol
+2. MonitorLoop works with any subject
+3. AI diagnosis works with non-TiKV context
+4. The abstraction enables adding new subjects without modifying core
+
+**What would invalidate the proof:**
+- Rate limiter subject has empty/stub methods to satisfy Protocol
+- MonitorLoop required modification for rate limiter
+- AI diagnosis required rate-limiter-specific prompts in core
+- Significant code duplication between TiKV and rate limiter
 
 **Warning signs:**
-- Alignment looks fine in iTerm, broken in Terminal.app
-- Box drawing characters don't line up
-- Text overflows panel boundaries
-- Works on macOS, breaks on Linux
+- `NotImplementedError` in rate limiter Subject methods
+- `if isinstance(subject, RateLimitSubject)` in core code
+- New core modules created specifically for rate limiter
 
 **Prevention:**
-- Test on multiple terminal emulators early
-- Avoid emoji in fixed-width layouts (or document limitation)
-- Use ASCII box drawing when alignment is critical
-- Rich handles most cases, but verify with target terminals
+1. **Define success criteria upfront:**
+   - Rate limiter implements full Subject Protocol
+   - MonitorLoop unmodified (or minimally modified)
+   - AI diagnosis context gatherer works generically
 
-**Phase to address:** Phase 4 (polish) - Cosmetic, test across environments
+2. **Refactor core BEFORE implementing rate limiter** — not after
 
-**Sources:**
-- [7 Things learned building a modern TUI Framework](https://www.textualize.io/blog/7-things-ive-learned-building-a-modern-tui-framework/)
+3. **Track "generalization debt"** — modifications to core that assume rate limiter
+
+**Phase to address:** Phase 1 — Establish success criteria before implementation
 
 ---
 
-### 12. Subprocess Environment Inheritance
+### 10. Over-Engineering the Rate Limiter — Production Features in Demo
 
-**Problem:** Subprocesses inherit parent's environment, which may not include necessary PATH entries, virtual environment, or may include unwanted variables like `TERM` that affect output formatting.
+**What goes wrong:** Implementing distributed consensus, exactly-once semantics, multi-region coordination, sophisticated algorithms. Demo becomes complex, obscures the abstraction proof.
+
+**Why this happens:**
+- Rate limiting is a well-studied problem with many solutions
+- Natural temptation to implement "properly"
+- Confusing demo goals with production goals
+
+**What the demo needs:**
+- Simple rate limiter that works
+- Enough complexity to have meaningful invariants
+- Clear demonstration of Subject Protocol
+
+**What the demo does NOT need:**
+- Exactly-once guarantees
+- Multi-region support
+- Sophisticated burst handling
+- Production-grade monitoring
+- High availability
 
 **Warning signs:**
-- Subprocess can't find commands that work in shell
-- Color output works in terminal but not captured
-- Virtual environment packages not found
-- Subprocess behaves differently than when run manually
+- Implementing RedLock for distributed locks
+- Adding circuit breakers
+- Multi-Redis coordination
+- "Just one more feature" scope creep
 
 **Prevention:**
-- Explicitly pass environment with `env=` parameter
-- Include `PYTHONUNBUFFERED=1` explicitly
-- Consider `TERM=dumb` to disable colors in captured output, or preserve for color support
-- Ensure PATH includes necessary directories
+1. **Define "done" clearly:**
+   - Fixed window or simple token bucket
+   - Single Redis instance
+   - Basic health invariants
+   - Works for demo scenarios
 
-**Phase to address:** Phase 2 (subprocess launch) - Part of subprocess configuration
+2. **Document what's intentionally simplified:**
+   - Clock skew tolerance
+   - Race condition handling (Lua script is fine)
+   - Recovery scenarios
 
----
+3. **Time-box implementation:** If it takes more than a day, it's too complex
 
-## Terminal/TTY Considerations
-
-### PTY vs Pipe Tradeoffs
-
-| Approach | Pros | Cons |
-|----------|------|------|
-| Pipes (default) | Simple, portable | Full buffering, no TTY features |
-| PTY | Line buffering, TTY features | Platform-specific, more complex, echo issues |
-| stdbuf wrapper | Simple fix for buffering | Linux-only, not all programs respect it |
-
-**Recommendation:** Start with pipes + `PYTHONUNBUFFERED=1` for Python subprocesses. Only add PTY complexity if buffering is still an issue with non-Python processes.
-
-### Alternate Screen Best Practices
-
-1. Always use context manager (`with console.screen():`)
-2. Handle SIGINT before entering alternate screen
-3. If crash leaves terminal stuck: type `reset` (works blind)
-4. Test Ctrl+C handling early in development
-5. Consider NOT using alternate screen for simpler cleanup
-
-### Terminal Compatibility Matrix
-
-| Feature | macOS Terminal | iTerm2 | Linux VT | Windows Terminal |
-|---------|---------------|--------|----------|------------------|
-| Rich Live | Yes | Yes | Yes | Yes (some limitations) |
-| Alternate Screen | Yes | Yes | Yes | Yes |
-| 256 Colors | Yes | Yes | Usually | Yes |
-| True Color | No | Yes | Depends | Yes |
-| Unicode | Yes | Yes | Varies | Yes |
+**Phase to address:** All phases — Constant vigilance against scope creep
 
 ---
 
-## asyncio + Rich Gotchas
+### 11. Redis Dependency Making Demo Fragile
 
-### Event Loop Integration
+**What goes wrong:** Demo requires Redis running, but Redis not part of existing docker-compose. Demo fails because Redis isn't started.
 
-1. **Rich is sync, asyncio is async:** Rich's Live is thread-based internally, not native async. Use from main thread.
+**Current docker-compose includes:**
+- TiKV cluster (3 nodes)
+- PD cluster (3 nodes)
+- Prometheus
+- Grafana
+- go-ycsb load generator
 
-2. **Don't block the event loop:** Any blocking call (file I/O, CPU work) freezes Live refresh. Use `run_in_executor()` for blocking operations.
+**Consequences:**
+- Demo instructions incomplete
+- "Works on my machine" when Redis running locally
+- CI fails because Redis not in compose
 
-3. **Task exceptions silently swallowed:** If a task raises and you don't await it, exception may be lost. Always await tasks or use TaskGroup.
+**Warning signs:**
+- Demo README has "make sure Redis is running" step
+- Tests skip if Redis unavailable
+- Docker-compose doesn't include Redis
 
-### Correct Pattern for Rich + asyncio
+**Prevention:**
+1. **Add Redis to docker-compose:**
+   ```yaml
+   services:
+     redis:
+       image: redis:7
+       ports:
+         - "6379:6379"
+       healthcheck:
+         test: ["CMD", "redis-cli", "ping"]
+   ```
 
-```python
-async def main():
-    console = Console()
+2. **Make Redis optional for TiKV demo** — only required for rate limiter demo
 
-    with Live(layout, console=console, refresh_per_second=10) as live:
-        async with asyncio.TaskGroup() as tg:
-            tg.create_task(read_subprocess_output(proc, panel, live))
-            tg.create_task(handle_keyboard(live))
-            tg.create_task(update_metrics(live))
-```
+3. **Or use separate compose file:**
+   - `docker-compose.yml` — TiKV demo (existing)
+   - `docker-compose.ratelimit.yml` — Rate limiter demo
 
-### Common Mistakes
-
-| Mistake | Consequence | Fix |
-|---------|-------------|-----|
-| `print()` during Live | Output lost or corrupted | Use `live.console.print()` |
-| `input()` during Live | Event loop blocks | Use non-blocking stdin |
-| Create Live from task | Thread issues | Create in main coroutine |
-| Forget to stop Live | Terminal state leaked | Use context manager |
-
----
-
-## Subprocess Management Issues
-
-### Output Capture Patterns
-
-**Pattern 1: Simple (blocks until done)**
-```python
-stdout, stderr = await proc.communicate()
-# Only use for short-lived processes
-```
-
-**Pattern 2: Streaming (for long-running)**
-```python
-async def stream_output(proc, callback):
-    while True:
-        try:
-            line = await asyncio.wait_for(proc.stdout.readline(), 0.1)
-            if line:
-                callback(line.decode())
-            elif proc.returncode is not None:
-                break
-        except asyncio.TimeoutError:
-            if proc.returncode is not None:
-                break
-```
-
-**Pattern 3: With PTY (for stubborn buffering)**
-```python
-import pty
-master, slave = pty.openpty()
-proc = await asyncio.create_subprocess_exec(
-    *cmd,
-    stdout=slave,
-    stderr=slave
-)
-os.close(slave)
-# Read from master fd
-```
-
-### Graceful Shutdown Sequence
-
-1. Signal subprocesses to stop (SIGTERM)
-2. Wait with timeout (5-10 seconds)
-3. Force kill if needed (SIGKILL)
-4. Reap zombie processes (`wait()`)
-5. Stop Live display
-6. Restore terminal settings
-7. Exit
-
-### Process Lifecycle States
-
-```
-STARTING -> RUNNING -> STOPPING -> STOPPED
-              |           |
-              v           v
-           CRASHED    FORCE_KILLED
-```
-
-Track state explicitly to avoid operations on wrong state (e.g., reading from stopped process).
+**Phase to address:** Phase 3 — Infrastructure setup
 
 ---
 
-## Phase-Specific Warnings
+## Redis Coordination Pitfalls
 
-| Phase | Topic | Likely Pitfall | Mitigation |
-|-------|-------|----------------|------------|
-| 1 | TUI scaffolding | Terminal state corruption | Context managers + signal handlers |
-| 1 | Async architecture | Task exception handling | Use TaskGroup not gather |
-| 2 | Subprocess launch | Buffering delays output | PYTHONUNBUFFERED + test early |
-| 2 | Output streaming | readline blocks forever | Timeout + returncode check |
-| 3 | Keyboard input | Blocks event loop | Non-blocking stdin polling |
-| 3 | Chapter transitions | State inconsistency | Explicit state machine |
-| 4 | Polish | Terminal compatibility | Test multiple terminals |
+### 12. Lua Script Loading and Caching
+
+**What goes wrong:** Loading Lua script on every request. Performance degrades, unnecessary network round-trips.
+
+**Why this happens:**
+- Simple approach: `EVAL script keys args` every time
+- Script is re-parsed on every call
+- Network transfers script text repeatedly
+
+**Consequences:**
+- Higher latency than necessary
+- Demo may appear slow
+- Not demonstrating good Redis practices
+
+**Prevention:**
+1. **Use SCRIPT LOAD and EVALSHA:**
+   ```python
+   # On startup
+   sha = await redis.script_load(LUA_SCRIPT)
+
+   # On each request
+   result = await redis.evalsha(sha, keys=[key], args=[window, limit])
+   ```
+
+2. **Handle NOSCRIPT error (script evicted):**
+   ```python
+   try:
+       result = await redis.evalsha(sha, ...)
+   except redis.exceptions.NoScriptError:
+       result = await redis.eval(LUA_SCRIPT, ...)  # Re-load
+   ```
+
+3. **redis-py handles this automatically with `Script` class**
+
+**Phase to address:** Phase 2 — Implementation detail
+
+---
+
+### 13. Key Naming Collisions
+
+**What goes wrong:** Rate limiter keys collide with other Redis users. Key prefix not consistent or configurable.
+
+**Why this happens:**
+- Using simple keys like `user:123`
+- Shared Redis instance with other services
+- No namespace prefix
+
+**Consequences:**
+- Keys overwritten by other services
+- Rate limits applied incorrectly
+- Debugging confusion
+
+**Prevention:**
+1. **Use consistent prefix:**
+   ```python
+   KEY_PREFIX = "ratelimit:"
+   key = f"{KEY_PREFIX}{client_id}:{endpoint}"
+   ```
+
+2. **Make prefix configurable** for multi-tenant scenarios
+
+3. **Document key format** in rate limiter design
+
+**Phase to address:** Phase 2 — Design decision
 
 ---
 
-## Summary of Prevention Strategies
+## Prevention Summary
 
-### Day 1 Decisions (Phase 1)
+### Phase 1: Core Refactoring (CRITICAL)
 
-- [ ] Choose TaskGroup over gather for task management
-- [ ] Set up signal handlers before Live display
-- [ ] Use context managers for all terminal state changes
-- [ ] Design output routing through Live's console
+Before implementing rate limiter:
 
-### Subprocess Infrastructure (Phase 2)
+- [ ] Refactor Subject Protocol to be type-agnostic
+- [ ] Move TiKV types from operator-core to operator-tikv
+- [ ] Make MonitorLoop accept generic Subject and InvariantChecker
+- [ ] Define InvariantCheckerProtocol in core
+- [ ] Establish success criteria for generalization proof
 
-- [ ] Add `PYTHONUNBUFFERED=1` to subprocess environment
-- [ ] Implement output reading with timeout, not blocking readline
-- [ ] Track subprocess lifecycle state explicitly
-- [ ] Use `start_new_session=True` for clean process groups
-- [ ] Implement graceful shutdown with SIGTERM -> wait -> SIGKILL
+### Phase 2: Rate Limiter Implementation
 
-### Input Handling (Phase 3)
+- [ ] Use Lua scripts for atomic operations (prevent race conditions)
+- [ ] Set TTL atomically with increment (prevent non-expiring keys)
+- [ ] Follow TiKV pattern for client injection
+- [ ] Choose simple algorithm (fixed window or basic token bucket)
+- [ ] Define meaningful invariants (redis_healthy, no_stuck_keys)
+- [ ] Use SCRIPT LOAD/EVALSHA for performance
 
-- [ ] Use non-blocking stdin with select/poll
-- [ ] Restore terminal settings in finally block
-- [ ] Test Ctrl+C handling at every chapter transition
+### Phase 3: Infrastructure
 
-### Testing Strategy
+- [ ] Add Redis to docker-compose
+- [ ] Health checks for Redis
+- [ ] Key prefix configured
 
-- [ ] Test Ctrl+C at every possible moment
-- [ ] Test with verbose subprocess output (fill pipe buffer)
-- [ ] Test rapid keypress sequences
-- [ ] Test on at least 2 different terminal emulators
-- [ ] Test subprocess crash scenarios
+### Testing Checklist
+
+- [ ] Test with concurrent requests (race condition verification)
+- [ ] Test key expiration (no stuck keys)
+- [ ] Test Redis connection failure handling
+- [ ] Verify invariants detect actual problems
+- [ ] Run full demo without TiKV-specific modifications to core
 
 ---
+
+## Confidence Assessment
+
+| Area | Confidence | Reason |
+|------|------------|--------|
+| Subject interface mismatch | HIGH | Direct code inspection of operator-core |
+| Race conditions | HIGH | Well-documented Redis pattern, multiple sources |
+| Key expiration race | HIGH | Documented GitHub issue with exact reproduction |
+| MonitorLoop coupling | HIGH | Direct code inspection |
+| Clock skew | MEDIUM | Real issue but minor for demo |
+| Invariant domain mismatch | HIGH | Logical analysis of TiKV vs rate limiter |
+| Demo scope creep | HIGH | Common pattern, known risk |
 
 ## Sources
 
-### Official Documentation
-- [Rich Live Display](https://rich.readthedocs.io/en/latest/live.html)
-- [Python asyncio-subprocess](https://docs.python.org/3/library/asyncio-subprocess.html)
-- [Python subprocess](https://docs.python.org/3/library/subprocess.html)
-- [Python asyncio-task](https://docs.python.org/3/library/asyncio-task.html)
-- [Python atexit](https://docs.python.org/3/library/atexit.html)
+### Primary (HIGH confidence)
+- [Redis Race Condition Glossary](https://redis.io/glossary/redis-race-condition/)
+- [Redis Lua Atomicity](https://redis.io/learn/develop/java/spring/rate-limiting/fixed-window/reactive-lua)
+- [asyncio-redis-rate-limit Library](https://github.com/wemake-services/asyncio-redis-rate-limit)
+- Operator codebase inspection (packages/operator-core, packages/operator-tikv)
 
-### GitHub Issues
-- [Rich #1530 - Live displays thread safety](https://github.com/willmcgugan/rich/issues/1530)
-- [Rich #3523 - Progress with stream output](https://github.com/Textualize/rich/issues/3523)
-- [asyncio #213 - Implement async input()](https://github.com/python/asyncio/issues/213)
+### Secondary (MEDIUM confidence)
+- [Building Distributed Rate Limiting System with Redis and Lua](https://www.freecodecamp.org/news/build-rate-limiting-system-using-redis-and-lua/)
+- [Distributed Rate Limiting at Ably](https://ably.com/blog/distributed-rate-limiting-scale-your-platform)
+- [Rate Limiter for the Real World - ByteByteGo](https://blog.bytebytego.com/p/rate-limiter-for-the-real-world)
 
-### Community Resources
-- [roguelynn - Graceful Shutdowns with asyncio](https://roguelynn.com/words/asyncio-graceful-shutdowns/)
-- [Luca Da Rin Fioretto - Capture subprocess output in real-time](https://lucadrf.dev/blog/python-subprocess-buffers/)
-- [Non-blocking stdin in Python 3](https://ballingt.com/nonblocking-stdin-in-python-3/)
-- [Asyncio Coroutine Patterns](https://yeraydiazdiaz.medium.com/asyncio-coroutine-patterns-errors-and-cancellation-3bb422e961ff)
-- [Textualize Blog - 7 Things learned building a TUI](https://www.textualize.io/blog/7-things-ive-learned-building-a-modern-tui-framework/)
+### Tertiary (LOW confidence)
+- Various Medium articles on rate limiting patterns
+- Stack Overflow discussions on Redis race conditions
