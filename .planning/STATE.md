@@ -4,9 +4,9 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 16 of 20 (Core Abstraction Refactoring)
-**Plan:** 01 of 05 completed
+**Plan:** 02 of 05 completed
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 16-01-PLAN.md (operator-protocols package)
+**Last activity:** 2026-01-26 - Completed 16-02-PLAN.md (operator-tikv protocol migration)
 
 Progress: [..........] 0% (0/5 phases)
 
@@ -70,6 +70,8 @@ See: .planning/MILESTONES.md
 - Observation type is dict[str, Any] for maximum flexibility across subjects
 - store_id field name preserved in InvariantViolation for backward compatibility
 - operator-protocols package has zero dependencies
+- TiKVInvariantChecker.check() parses observation dict to typed objects internally
+- Factory functions for CLI integration to avoid direct subject imports
 
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): Complex architectural change - audit TiKV coupling first
@@ -78,12 +80,12 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 16-01-PLAN.md (operator-protocols package)
-**Resume with:** `/gsd:execute-phase` to run 16-02-PLAN.md
+**Stopped at:** Completed 16-02-PLAN.md (operator-tikv protocol migration)
+**Resume with:** `/gsd:execute-phase` to run 16-03-PLAN.md
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (16-01 completed)*
+*State updated: 2026-01-26 (16-02 completed)*
