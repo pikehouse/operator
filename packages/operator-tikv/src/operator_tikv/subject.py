@@ -6,15 +6,16 @@ Subject Protocol defined in operator-core for TiKV distributed databases.
 
 TiKVSubject:
 - Implements all Subject Protocol observations using PDClient and PrometheusClient
-- Defers all actions to Phase 5 (raise NotImplementedError)
+- Implements core actions: transfer_leader, transfer_peer, drain_store
 - Provides get_config() class method for capability registration
+- Provides get_action_definitions() for Phase 12 ActionRegistry integration
 - Uses injected HTTP clients per CONTEXT.md
 
 Per CONTEXT.md decisions:
 - TiKV is the primary subject (referenced as 'tikv')
 - Fixed thresholds for latency alerting
 - Conservative resource thresholds (70%+)
-- Actions deferred to later phase
+- Fire-and-forget action semantics (return on API success)
 """
 
 from dataclasses import dataclass
@@ -51,9 +52,14 @@ TIKV_CONFIG = SubjectConfig(
             description="Set maximum replica moves per scheduling cycle",
         ),
         Action(
+            "transfer_peer",
+            ["region_id", "from_store_id", "to_store_id"],
+            description="Move region replica from one store to another",
+        ),
+        Action(
             "drain_store",
             ["store_id"],
-            description="Evacuate all regions from a store",
+            description="Evacuate all leaders from a store",
         ),
         Action(
             "set_low_space_threshold",
@@ -120,10 +126,11 @@ class TiKVSubject:
     TiKV implementation of the Subject Protocol.
 
     Provides observations about TiKV cluster state through PD API and
-    Prometheus metrics. Actions are deferred to Phase 5.
+    Prometheus metrics. Implements action methods for leader transfer,
+    peer transfer, and store drain operations.
 
     Attributes:
-        pd: PDClient for cluster state queries (stores, regions)
+        pd: PDClient for cluster state queries and action execution
         prom: PrometheusClient for performance metrics
 
     Example:
@@ -244,20 +251,45 @@ class TiKVSubject:
         )
 
     # -------------------------------------------------------------------------
-    # Actions - Operations that modify system state (deferred to Phase 5)
+    # Actions - Operations that modify system state
     # -------------------------------------------------------------------------
 
     async def transfer_leader(self, region_id: int, to_store_id: str) -> None:
         """
         Transfer region leadership to another store.
 
-        Note:
-            Action implementation deferred to Phase 5.
+        Fire-and-forget: returns when PD API accepts the request.
+        Does not wait for actual leader transfer completion.
+
+        Args:
+            region_id: The region whose leader should be transferred.
+            to_store_id: The destination store ID for leadership.
 
         Raises:
-            NotImplementedError: Always - action not yet implemented.
+            httpx.HTTPStatusError: On PD API errors (4xx, 5xx).
         """
-        raise NotImplementedError("Actions deferred to Phase 5")
+        await self.pd.add_transfer_leader_operator(region_id, int(to_store_id))
+
+    async def transfer_peer(
+        self, region_id: int, from_store_id: str, to_store_id: str
+    ) -> None:
+        """
+        Move region replica from one store to another.
+
+        Fire-and-forget: returns when PD API accepts the request.
+        Does not wait for actual replica transfer completion.
+
+        Args:
+            region_id: The region whose replica should be moved.
+            from_store_id: The source store ID holding the replica.
+            to_store_id: The destination store ID for the replica.
+
+        Raises:
+            httpx.HTTPStatusError: On PD API errors (4xx, 5xx).
+        """
+        await self.pd.add_transfer_peer_operator(
+            region_id, int(from_store_id), int(to_store_id)
+        )
 
     async def split_region(self, region_id: int) -> None:
         """
@@ -297,15 +329,25 @@ class TiKVSubject:
 
     async def drain_store(self, store_id: str) -> None:
         """
-        Evacuate all regions from a store.
+        Evacuate all leaders from a store.
 
-        Note:
-            Action implementation deferred to Phase 5.
+        Creates an evict-leader-scheduler that continuously moves leaders
+        away from the specified store until the scheduler is removed.
+
+        Fire-and-forget: returns when PD API accepts the request.
+        Does not wait for actual leader evacuation completion.
+
+        Args:
+            store_id: The store ID to drain leaders from.
 
         Raises:
-            NotImplementedError: Always - action not yet implemented.
+            httpx.HTTPStatusError: On PD API errors (4xx, 5xx).
+
+        Note:
+            This is a persistent scheduler - leaders are continuously
+            evicted until the scheduler is removed via PD API.
         """
-        raise NotImplementedError("Actions deferred to Phase 5")
+        await self.pd.add_evict_leader_scheduler(int(store_id))
 
     async def set_low_space_threshold(self, percent: float) -> None:
         """
