@@ -9,11 +9,11 @@ Requirements for Multi-Subject Support milestone. Each maps to roadmap phases.
 
 ### Core Abstraction
 
-- [ ] **CORE-01**: Subject Protocol uses generic types, not TiKV-specific types
-- [ ] **CORE-02**: MonitorLoop accepts any Subject implementing InvariantCheckerProtocol
-- [ ] **CORE-03**: CLI supports --subject flag to select subject type
-- [ ] **CORE-04**: TiKV-specific types moved from operator-core to operator-tikv
-- [ ] **CORE-05**: TiKV subject works unchanged after refactoring
+- [x] **CORE-01**: Subject Protocol uses generic types, not TiKV-specific types
+- [x] **CORE-02**: MonitorLoop accepts any Subject implementing InvariantCheckerProtocol
+- [x] **CORE-03**: CLI supports --subject flag to select subject type
+- [x] **CORE-04**: TiKV-specific types moved from operator-core to operator-tikv
+- [x] **CORE-05**: TiKV subject works unchanged after refactoring
 
 ### Rate Limiter Service
 
@@ -90,11 +90,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | Phase 16 | Pending |
-| CORE-02 | Phase 16 | Pending |
-| CORE-03 | Phase 16 | Pending |
-| CORE-04 | Phase 16 | Pending |
-| CORE-05 | Phase 16 | Pending |
+| CORE-01 | Phase 16 | Complete |
+| CORE-02 | Phase 16 | Complete |
+| CORE-03 | Phase 16 | Complete |
+| CORE-04 | Phase 16 | Complete |
+| CORE-05 | Phase 16 | Complete |
 | RLSVC-01 | Phase 17 | Pending |
 | RLSVC-02 | Phase 17 | Pending |
 | RLSVC-03 | Phase 17 | Pending |

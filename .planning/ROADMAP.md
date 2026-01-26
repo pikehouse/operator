@@ -51,7 +51,14 @@ Archived in milestones/v2.0-ROADMAP.md
   3. CLI supports `--subject` flag to select between tikv and ratelimiter
   4. TiKV-specific types live in operator-tikv, not operator-core
   5. Existing TiKV subject works unchanged after refactoring (no regressions)
-**Plans:** TBD
+**Plans:** 5 plans
+
+Plans:
+- [x] 16-01-PLAN.md - Create operator-protocols package with generic protocols
+- [x] 16-02-PLAN.md - Update operator-tikv to implement new protocols
+- [x] 16-03-PLAN.md - Update operator-core to use protocols (remove TiKV imports)
+- [x] 16-04-PLAN.md - Add --subject CLI flag and factory pattern
+- [x] 16-05-PLAN.md - Protocol compliance tests
 
 ### Phase 17: Rate Limiter Service Foundation
 
@@ -108,7 +115,7 @@ Archived in milestones/v2.0-ROADMAP.md
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
-| 16 - Core Abstraction | v2.1 | 0/TBD | Not started | - |
+| 16 - Core Abstraction | v2.1 | 5/5 | Complete | 2026-01-26 |
 | 17 - Rate Limiter Service | v2.1 | 0/TBD | Not started | - |
 | 18 - Docker Compose | v2.1 | 0/TBD | Not started | - |
 | 19 - operator-ratelimiter | v2.1 | 0/TBD | Not started | - |
@@ -120,3 +127,5 @@ Archived in milestones/v2.0-ROADMAP.md
 *v1.1 archived: 2026-01-25*
 *v2.0 archived: 2026-01-26*
 *v2.1 phases added: 2026-01-26*
+*Phase 16 planned: 2026-01-26*
+*Phase 16 completed: 2026-01-26*
