@@ -3,6 +3,8 @@
 Provides user-facing commands for viewing and managing action proposals:
 - list: View pending/all action proposals
 - show: View details of a specific proposal
+- approve: Approve a validated proposal for execution
+- reject: Reject a validated proposal with reason
 - cancel: Cancel a pending proposal
 - kill-switch: Emergency stop all pending actions
 - mode: Set safety mode (observe/execute)
@@ -142,6 +144,13 @@ def show_action(
         console.print(f"  Ticket: {proposal.ticket_id or 'None'}")
         console.print(f"  Proposed by: {proposal.proposed_by}")
         console.print(f"  Proposed at: {proposal.proposed_at.isoformat()}")
+        if proposal.approved_at:
+            console.print(f"  Approved by: {proposal.approved_by}")
+            console.print(f"  Approved at: {proposal.approved_at.isoformat()}")
+        if proposal.rejected_at:
+            console.print(f"  Rejected by: {proposal.rejected_by}")
+            console.print(f"  Rejected at: {proposal.rejected_at.isoformat()}")
+            console.print(f"  Rejection reason: {proposal.rejection_reason}")
         console.print()
         console.print("[bold]Parameters:[/bold]")
         if proposal.parameters:
@@ -154,6 +163,94 @@ def show_action(
         console.print(f"  {proposal.reason}")
 
     asyncio.run(_show())
+
+
+@actions_app.command("approve")
+def approve_action(
+    proposal_id: int = typer.Argument(..., help="Proposal ID to approve"),
+    db_path: Path = typer.Option(
+        None,
+        help="Database path (default: ~/.operator/operator.db)",
+    ),
+) -> None:
+    """Approve a validated action proposal for execution."""
+
+    async def _approve():
+        path = _get_db_path(db_path)
+
+        if not path.exists():
+            console.print("[red]Database not found.[/red]")
+            raise typer.Exit(1)
+
+        async with ActionDB(path) as db:
+            proposal = await db.get_proposal(proposal_id)
+
+            if not proposal:
+                console.print(f"[red]Proposal {proposal_id} not found.[/red]")
+                raise typer.Exit(1)
+
+            if proposal.status != ActionStatus.VALIDATED:
+                console.print(
+                    f"[red]Proposal {proposal_id} is {proposal.status.value}, "
+                    f"expected 'validated'.[/red]"
+                )
+                raise typer.Exit(1)
+
+            await db.approve_proposal(proposal_id, approved_by="user")
+
+            console.print(
+                f"[green]Proposal {proposal_id} approved.[/green]\n"
+                f"  Action: {proposal.action_name}\n"
+                f"  The action will execute on next agent cycle."
+            )
+
+    asyncio.run(_approve())
+
+
+@actions_app.command("reject")
+def reject_action(
+    proposal_id: int = typer.Argument(..., help="Proposal ID to reject"),
+    reason: str = typer.Option(
+        "Rejected by user",
+        help="Rejection reason",
+    ),
+    db_path: Path = typer.Option(
+        None,
+        help="Database path (default: ~/.operator/operator.db)",
+    ),
+) -> None:
+    """Reject a validated action proposal (cancels it with reason)."""
+
+    async def _reject():
+        path = _get_db_path(db_path)
+
+        if not path.exists():
+            console.print("[red]Database not found.[/red]")
+            raise typer.Exit(1)
+
+        async with ActionDB(path) as db:
+            proposal = await db.get_proposal(proposal_id)
+
+            if not proposal:
+                console.print(f"[red]Proposal {proposal_id} not found.[/red]")
+                raise typer.Exit(1)
+
+            if proposal.status != ActionStatus.VALIDATED:
+                console.print(
+                    f"[red]Proposal {proposal_id} is {proposal.status.value}, "
+                    f"expected 'validated'.[/red]"
+                )
+                raise typer.Exit(1)
+
+            await db.reject_proposal(proposal_id, rejected_by="user", reason=reason)
+
+            console.print(
+                f"[yellow]Proposal {proposal_id} rejected.[/yellow]\n"
+                f"  Action: {proposal.action_name}\n"
+                f"  Reason: {reason}"
+            )
+
+    asyncio.run(_reject())
 
 
 @actions_app.command("cancel")
