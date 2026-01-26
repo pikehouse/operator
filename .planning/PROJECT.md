@@ -45,7 +45,7 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 - [ ] Agent action execution (currently observe-only, recommendations in tickets)
 
-## Next Milestone: v2.0 Agent Actions
+## Current Milestone: v2.0 Agent Actions
 
 **Goal:** Enable the agent to execute its recommendations, not just observe and diagnose.
 
