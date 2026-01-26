@@ -70,7 +70,12 @@ Plans:
   2. Sliding window counter enforces limits exactly under concurrent load
   3. HTTP management API returns node list, counters, limits, and blocks
   4. Prometheus metrics exported from each node (requests, blocks, latency)
-**Plans:** TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 17-01-PLAN.md - Package setup with config and Redis client
+- [ ] 17-02-PLAN.md - Sliding window rate limiter with Lua script
+- [ ] 17-03-PLAN.md - API endpoints, Prometheus metrics, and FastAPI app
 
 ### Phase 18: Docker Compose Environment
 
@@ -116,7 +121,7 @@ Plans:
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16 - Core Abstraction | v2.1 | 5/5 | Complete | 2026-01-26 |
-| 17 - Rate Limiter Service | v2.1 | 0/TBD | Not started | - |
+| 17 - Rate Limiter Service | v2.1 | 0/3 | Planned | - |
 | 18 - Docker Compose | v2.1 | 0/TBD | Not started | - |
 | 19 - operator-ratelimiter | v2.1 | 0/TBD | Not started | - |
 | 20 - E2E Demo | v2.1 | 0/TBD | Not started | - |
@@ -129,3 +134,4 @@ Plans:
 *v2.1 phases added: 2026-01-26*
 *Phase 16 planned: 2026-01-26*
 *Phase 16 completed: 2026-01-26*
+*Phase 17 planned: 2026-01-26*
