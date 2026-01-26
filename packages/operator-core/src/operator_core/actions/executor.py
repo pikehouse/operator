@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 from operator_core.actions.audit import ActionAuditor
 from operator_core.actions.registry import ActionDefinition, ActionRegistry
+from operator_core.actions.retry import RetryConfig
 from operator_core.actions.safety import ObserveOnlyError, SafetyController
 from operator_core.actions.tools import execute_tool, get_general_tools
 from operator_core.actions.types import (
@@ -87,6 +88,7 @@ class ActionExecutor:
         safety: SafetyController,
         auditor: ActionAuditor,
         approval_mode: bool | None = None,
+        retry_config: RetryConfig | None = None,
     ) -> None:
         """
         Initialize the action executor.
@@ -99,11 +101,13 @@ class ActionExecutor:
             approval_mode: If True, require approval before execution.
                            If None, read from OPERATOR_APPROVAL_MODE env var.
                            Default is False (autonomous execution).
+            retry_config: Configuration for retry behavior. If None, uses defaults.
         """
         self.db_path = db_path
         self._registry = registry
         self._safety = safety
         self._auditor = auditor
+        self._retry_config = retry_config or RetryConfig()
 
         # Resolve approval mode from parameter or environment
         if approval_mode is None:
@@ -461,6 +465,68 @@ class ActionExecutor:
             final_record = await db.get_record(record.id)
 
         return final_record
+
+    async def schedule_next_retry(
+        self,
+        proposal_id: int,
+        error_message: str,
+    ) -> datetime | None:
+        """
+        Schedule the next retry attempt for a failed action.
+
+        Uses exponential backoff with jitter to calculate the next retry time.
+        If max retries exceeded, returns None and logs final failure.
+
+        Args:
+            proposal_id: ID of the failed proposal
+            error_message: Error message from the failed attempt
+
+        Returns:
+            datetime of next retry, or None if max retries exceeded
+        """
+        from operator_core.db.actions import ActionDB
+
+        async with ActionDB(self.db_path) as db:
+            proposal = await db.get_proposal(proposal_id)
+
+            if proposal is None:
+                raise ValueError(f"Proposal {proposal_id} not found")
+
+            # Increment retry count and record error
+            await db.increment_retry_count(proposal_id, error_message)
+
+            # Check if more retries allowed
+            new_retry_count = proposal.retry_count + 1
+            if not self._retry_config.should_retry(new_retry_count):
+                # Max retries exceeded
+                await self._auditor.log_event(
+                    proposal_id=proposal_id,
+                    event_type="retry_exhausted",
+                    event_data={
+                        "retry_count": new_retry_count,
+                        "max_retries": self._retry_config.max_attempts,
+                        "last_error": error_message,
+                    },
+                    actor="system",
+                )
+                return None
+
+            # Calculate next retry time
+            next_retry = self._retry_config.calculate_next_retry(new_retry_count)
+            await db.update_next_retry(proposal_id, next_retry)
+
+            # Log retry scheduled
+            await self._auditor.log_event(
+                proposal_id=proposal_id,
+                event_type="retry_scheduled",
+                event_data={
+                    "retry_count": new_retry_count,
+                    "next_retry_at": next_retry.isoformat(),
+                },
+                actor="system",
+            )
+
+            return next_retry
 
     async def cancel_proposal(self, proposal_id: int, reason: str) -> None:
         """
