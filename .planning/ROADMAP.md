@@ -80,13 +80,12 @@ Plans:
 - [ ] 14-02-PLAN.md — Approval gate in executor and CLI commands
 
 **Requirements:**
-- ACT-03: Agent can use general tools beyond subject-defined actions
 - APR-01: Action approval is configurable (on/off, default off)
 - APR-02: When approval enabled, user can approve/reject via CLI
 
 **Success Criteria:**
 1. Approval mode is configurable via config (default: off — agent executes autonomously)
-2. With approval off, agent executes actions immediately after proposing
+2. With approval off, agent executes actions immediately after validation
 3. With approval on, actions remain pending until human approves
 4. User can approve/reject pending actions via CLI when approval is enabled
 
@@ -99,6 +98,7 @@ Plans:
 **Dependencies:** Phase 14 (approval workflow must exist for multi-action approval)
 
 **Requirements:**
+- ACT-03: Agent can use general tools beyond subject-defined actions
 - WRK-01: Agent can chain multiple actions into a workflow
 - WRK-02: Agent can schedule follow-up actions
 - WRK-03: Agent can retry failed actions with backoff

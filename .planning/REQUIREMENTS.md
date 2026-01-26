@@ -87,7 +87,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ACT-01 | Phase 12 | Complete |
 | ACT-02 | Phase 13 | Complete |
-| ACT-03 | Phase 14 | Pending |
+| ACT-03 | Phase 15 | Pending |
 | ACT-04 | Phase 12 | Complete |
 | ACT-05 | Phase 12 | Complete |
 | ACT-06 | Phase 12 | Complete |
