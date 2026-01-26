@@ -97,6 +97,15 @@ Plans:
 
 **Dependencies:** Phase 14 (approval workflow must exist for multi-action approval)
 
+**Plans:** 5 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — Schema and types for workflows, scheduling, retry
+- [ ] 15-02-PLAN.md — ActionDB workflow and scheduling methods
+- [ ] 15-03-PLAN.md — Retry configuration and executor workflow methods
+- [ ] 15-04-PLAN.md — Agent runner integration for scheduled/retry actions
+- [ ] 15-05-PLAN.md — General tools (wait, log_message) for ACT-03
+
 **Requirements:**
 - ACT-03: Agent can use general tools beyond subject-defined actions
 - WRK-01: Agent can chain multiple actions into a workflow
@@ -139,7 +148,7 @@ Archived in milestones/v1.1-ROADMAP.md
 | 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
 | 13 | v2.0 | 1/1 | Complete | 2026-01-26 |
 | 14 | v2.0 | 2/2 | Complete | 2026-01-26 |
-| 15 | v2.0 | 0/? | Pending | - |
+| 15 | v2.0 | 0/5 | Planned | - |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -150,3 +159,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *Phase 13 completed: 2026-01-26*
 *Phase 14 planned: 2026-01-26*
 *Phase 14 completed: 2026-01-26*
+*Phase 15 planned: 2026-01-26*
