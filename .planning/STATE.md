@@ -4,11 +4,11 @@
 
 **Milestone:** v2.0 Agent Actions
 **Phase:** 15 - Workflow Actions (In progress)
-**Plan:** 5 of 5 in current phase (1 complete)
+**Plan:** 2 of 5 complete in current phase
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 15-05-PLAN.md
+**Last activity:** 2026-01-26 - Completed 15-01-PLAN.md
 
-**Progress:** [████░░░░░░░░░░░░░░░░] 20% (1/5 plans in Phase 15)
+**Progress:** [████████░░░░░░░░░░░░] 40% (2/5 plans in Phase 15)
 
 ## Project Reference
 
@@ -93,6 +93,7 @@ See: .planning/MILESTONES.md
 - Plan 02: Approval gate checked in execute_proposal, not validate_proposal
 
 **Decisions from Phase 15:**
+- Plan 01: Add columns to base schema AND migrations (both for new and existing DBs)
 - Plan 05: Tools use same ActionDefinition model with action_type=ActionType.TOOL
 - Plan 05: Wait tool capped at 300 seconds to prevent excessive delays
 - Plan 05: execute_tool dispatcher pattern for extensibility
@@ -100,12 +101,12 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 15-05-PLAN.md
-**Resume with:** Continue Phase 15 plans (01-04 remain)
+**Stopped at:** Completed 15-01-PLAN.md
+**Resume with:** Continue Phase 15 plans (02-04 remain)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Plan 15-05 complete)*
+*State updated: 2026-01-26 (Plan 15-01 complete)*
