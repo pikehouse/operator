@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 13 - TiKV Subject Actions (COMPLETE)
-**Plan:** 1 of 1 in current phase
-**Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 13-01-PLAN.md
+**Phase:** 14 - Approval Workflow (IN PROGRESS)
+**Plan:** 1 of 2 in current phase
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 14-01-PLAN.md
 
-**Progress:** [█████████████████████] 100% (1/1 plans in Phase 13)
+**Progress:** [██████████░░░░░░░░░░░] 50% (1/2 plans in Phase 14)
 
 ## Project Reference
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 |-------|------|--------------|--------|
 | 12 | Action Foundation | 7 | COMPLETE |
 | 13 | TiKV Subject Actions | 4 | COMPLETE |
-| 14 | Approval Workflow | 3 | Pending |
+| 14 | Approval Workflow | 3 | In progress |
 | 15 | Workflow Actions | 3 | Pending |
 
 **Total requirements:** 17
@@ -84,15 +84,20 @@ See: .planning/MILESTONES.md
 - Hyphenated operator names in PD API (transfer-leader, not transfer_leader)
 - Store ID type conversion (str to int) at Subject layer
 
+**Decisions from Phase 14 (Plan 01):**
+- Five separate columns for approval state (complete audit trail)
+- Rejection also sets status to CANCELLED (not executable)
+- approve_proposal/reject_proposal require VALIDATED status
+
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 13-01-PLAN.md (Phase 13 complete)
-**Resume with:** `/gsd:plan-phase 14` to start Phase 14 (Approval Workflow)
+**Stopped at:** Completed 14-01-PLAN.md
+**Resume with:** `/gsd:execute-phase 14` to continue with 14-02
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 13 complete)*
+*State updated: 2026-01-26 (14-01 complete)*
