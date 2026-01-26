@@ -4,11 +4,11 @@
 
 **Milestone:** v2.0 Agent Actions
 **Phase:** 12 - Action Foundation
-**Plan:** 2 of 4 in current phase
+**Plan:** 3 of 4 in current phase
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 12-02-PLAN.md
+**Last activity:** 2026-01-26 - Completed 12-03-PLAN.md
 
-**Progress:** [██████████░░░░░░░░░░] 50% (2/4 plans in Phase 12)
+**Progress:** [███████████████░░░░░] 75% (3/4 plans in Phase 12)
 
 ## Project Reference
 
@@ -71,11 +71,14 @@ See: .planning/MILESTONES.md
 - TYPE_CHECKING import guard for ActionDefinition forward reference in Subject
 - Lazy cache in ActionRegistry built on first call
 - ValidationError collects ALL errors before raising for complete user feedback
+- Default to OBSERVE mode (safe by default, explicit opt-in for execution)
+- Kill switch cancels pending AND switches to OBSERVE mode
+- Lazy imports in safety.py to break circular dependency with db.actions
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 12-02-PLAN.md
+**Stopped at:** Completed 12-03-PLAN.md
 **Resume with:** `/gsd:execute-phase 12` to continue Phase 12
 
 ## Open Issues
@@ -83,4 +86,4 @@ See: .planning/MILESTONES.md
 *None*
 
 ---
-*State updated: 2026-01-26 (12-02-PLAN.md complete)*
+*State updated: 2026-01-26 (12-03-PLAN.md complete)*
