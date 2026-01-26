@@ -36,6 +36,9 @@ from operator_tikv.subject import TiKVSubject
 if TYPE_CHECKING:
     from operator_core.actions.executor import ActionExecutor
 
+from operator_core.actions.types import ActionProposal
+from operator_core.db.actions import ActionDB
+
 
 class AgentRunner:
     """
@@ -89,6 +92,7 @@ class AgentRunner:
         self._tickets_processed = 0
         self._tickets_diagnosed = 0
         self._actions_proposed = 0
+        self._retries_succeeded = 0
 
     async def run(self) -> None:
         """
@@ -147,6 +151,12 @@ class AgentRunner:
             if self._shutdown.is_set():
                 break
             await self._diagnose_ticket(db, ticket)
+
+        # Process scheduled actions (WRK-02)
+        await self._process_scheduled_actions()
+
+        # Process retry-eligible actions (WRK-03)
+        await self._process_retry_eligible()
 
     async def _diagnose_ticket(self, db: TicketDB, ticket: Ticket) -> None:
         """
@@ -269,3 +279,130 @@ class AgentRunner:
                 print(f"Action proposal validation failed for {rec.action_name}: {e}")
             except ValueError as e:
                 print(f"Action proposal failed for {rec.action_name}: {e}")
+
+    async def _process_scheduled_actions(self) -> None:
+        """
+        Execute scheduled actions that are ready.
+
+        Queries for validated actions with scheduled_at <= now and executes them.
+        This enables WRK-02: schedule follow-up actions.
+        """
+        if self.executor is None:
+            return
+
+        async with ActionDB(self.db_path) as db:
+            ready_actions = await db.list_ready_scheduled()
+
+            if ready_actions:
+                print(f"Found {len(ready_actions)} scheduled action(s) ready to execute")
+
+            for action in ready_actions:
+                if self._shutdown.is_set():
+                    break
+
+                await self._execute_scheduled_action(action)
+
+    async def _execute_scheduled_action(self, action: ActionProposal) -> None:
+        """
+        Execute a single scheduled action.
+
+        Args:
+            action: The scheduled ActionProposal to execute
+        """
+        print(
+            f"Executing scheduled action {action.id}: {action.action_name} "
+            f"(scheduled for {action.scheduled_at})"
+        )
+
+        try:
+            record = await self.executor.execute_proposal(action.id, self.subject)
+
+            if record.success:
+                print(f"Scheduled action {action.id} completed successfully")
+            else:
+                print(f"Scheduled action {action.id} failed: {record.error_message}")
+                # Schedule retry if applicable
+                await self._schedule_retry_if_needed(action.id, record.error_message)
+
+        except Exception as e:
+            print(f"Error executing scheduled action {action.id}: {e}")
+            await self._schedule_retry_if_needed(action.id, str(e))
+
+    async def _process_retry_eligible(self) -> None:
+        """
+        Retry failed actions that are eligible.
+
+        Queries for failed actions with next_retry_at <= now and retry_count < max_retries,
+        then attempts to re-execute them. This enables WRK-03: retry with backoff.
+        """
+        if self.executor is None:
+            return
+
+        async with ActionDB(self.db_path) as db:
+            retry_actions = await db.list_retry_eligible()
+
+            if retry_actions:
+                print(f"Found {len(retry_actions)} action(s) eligible for retry")
+
+            for action in retry_actions:
+                if self._shutdown.is_set():
+                    break
+
+                await self._retry_failed_action(action)
+
+    async def _retry_failed_action(self, action: ActionProposal) -> None:
+        """
+        Retry a single failed action.
+
+        Resets the action to validated status and attempts execution again.
+
+        Args:
+            action: The failed ActionProposal to retry
+        """
+        print(
+            f"Retrying action {action.id}: {action.action_name} "
+            f"(attempt {action.retry_count + 1}/{action.max_retries})"
+        )
+
+        try:
+            # Reset action to validated for re-execution
+            async with ActionDB(self.db_path) as db:
+                await db.reset_for_retry(action.id)
+
+            # Execute the action
+            record = await self.executor.execute_proposal(action.id, self.subject)
+
+            if record.success:
+                print(f"Retry succeeded for action {action.id}")
+                self._retries_succeeded += 1
+            else:
+                print(f"Retry failed for action {action.id}: {record.error_message}")
+                await self._schedule_retry_if_needed(action.id, record.error_message)
+
+        except Exception as e:
+            print(f"Error retrying action {action.id}: {e}")
+            await self._schedule_retry_if_needed(action.id, str(e))
+
+    async def _schedule_retry_if_needed(
+        self,
+        proposal_id: int,
+        error_message: str,
+    ) -> None:
+        """
+        Schedule next retry for a failed action if retries remain.
+
+        Args:
+            proposal_id: The failed proposal ID
+            error_message: Error from the failed attempt
+        """
+        try:
+            next_retry = await self.executor.schedule_next_retry(proposal_id, error_message)
+            if next_retry:
+                import datetime
+
+                delay = (next_retry - datetime.datetime.now()).total_seconds()
+                print(f"Action {proposal_id} scheduled for retry in {delay:.1f}s")
+            else:
+                print(f"Action {proposal_id} exhausted all retries")
+        except Exception as e:
+            print(f"Error scheduling retry for action {proposal_id}: {e}")
