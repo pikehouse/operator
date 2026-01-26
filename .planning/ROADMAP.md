@@ -20,9 +20,9 @@ Enable the agent to execute its recommendations, not just observe and diagnose. 
 
 Plans:
 - [x] 12-01-PLAN.md — Action types and database schema
-- [ ] 12-02-PLAN.md — Action registry and parameter validation
-- [ ] 12-03-PLAN.md — Safety controls and audit logging
-- [ ] 12-04-PLAN.md — Agent integration and CLI commands
+- [x] 12-02-PLAN.md — Action registry and parameter validation
+- [x] 12-03-PLAN.md — Safety controls and audit logging
+- [x] 12-04-PLAN.md — Agent integration and CLI commands
 
 **Requirements:**
 - ACT-01: Action framework supports multiple action sources
@@ -125,7 +125,7 @@ Archived in milestones/v1.1-ROADMAP.md
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
-| 12 | v2.0 | 1/4 | In Progress | - |
+| 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
 | 13 | v2.0 | 0/? | Pending | - |
 | 14 | v2.0 | 0/? | Pending | - |
 | 15 | v2.0 | 0/? | Pending | - |
@@ -134,3 +134,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *Roadmap created: 2026-01-25*
 *v2.0 roadmap added: 2026-01-26*
 *Phase 12 planned: 2026-01-26*
+*Phase 12 completed: 2026-01-26*

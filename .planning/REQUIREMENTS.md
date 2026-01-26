@@ -9,13 +9,13 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 ### Action Framework
 
-- [ ] **ACT-01**: Action framework supports multiple action sources (subject-defined, tools, workflows)
+- [x] **ACT-01**: Action framework supports multiple action sources (subject-defined, tools, workflows)
 - [ ] **ACT-02**: Subject can define domain-specific actions (e.g., TiKV transfer-leader)
 - [ ] **ACT-03**: Agent can use general tools beyond subject-defined actions (with approval)
-- [ ] **ACT-04**: Agent can request an action based on diagnosis (action proposal)
-- [ ] **ACT-05**: Action parameters are validated before execution
-- [ ] **ACT-06**: Action execution result is tracked (success/failure, timing, error details)
-- [ ] **ACT-07**: All actions are recorded in audit log (who requested, what action, when, outcome)
+- [x] **ACT-04**: Agent can request an action based on diagnosis (action proposal)
+- [x] **ACT-05**: Action parameters are validated before execution
+- [x] **ACT-06**: Action execution result is tracked (success/failure, timing, error details)
+- [x] **ACT-07**: All actions are recorded in audit log (who requested, what action, when, outcome)
 
 ### Workflow Actions
 
@@ -30,8 +30,8 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 ### Safety
 
-- [ ] **SAF-01**: Kill switch can halt all pending/in-progress actions
-- [ ] **SAF-02**: Observe-only mode disables all action execution (fallback to v1 behavior)
+- [x] **SAF-01**: Kill switch can halt all pending/in-progress actions
+- [x] **SAF-02**: Observe-only mode disables all action execution (fallback to v1 behavior)
 
 ### TiKV Subject Actions
 
@@ -85,20 +85,20 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ACT-01 | Phase 12 | Pending |
+| ACT-01 | Phase 12 | Complete |
 | ACT-02 | Phase 13 | Pending |
 | ACT-03 | Phase 14 | Pending |
-| ACT-04 | Phase 12 | Pending |
-| ACT-05 | Phase 12 | Pending |
-| ACT-06 | Phase 12 | Pending |
-| ACT-07 | Phase 12 | Pending |
+| ACT-04 | Phase 12 | Complete |
+| ACT-05 | Phase 12 | Complete |
+| ACT-06 | Phase 12 | Complete |
+| ACT-07 | Phase 12 | Complete |
 | WRK-01 | Phase 15 | Pending |
 | WRK-02 | Phase 15 | Pending |
 | WRK-03 | Phase 15 | Pending |
 | APR-01 | Phase 14 | Pending |
 | APR-02 | Phase 14 | Pending |
-| SAF-01 | Phase 12 | Pending |
-| SAF-02 | Phase 12 | Pending |
+| SAF-01 | Phase 12 | Complete |
+| SAF-02 | Phase 12 | Complete |
 | TKV-01 | Phase 13 | Pending |
 | TKV-02 | Phase 13 | Pending |
 | TKV-03 | Phase 13 | Pending |
@@ -110,4 +110,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 (phase assignments added)*
+*Last updated: 2026-01-26 (Phase 12 requirements complete)*
