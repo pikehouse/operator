@@ -1,5 +1,31 @@
 # Project Milestones: Operator
 
+## v2.0 Agent Actions (Shipped: 2026-01-26)
+
+**Delivered:** Action execution framework enabling the AI agent to execute recommendations via PD API with safety controls, approval workflows, and workflow chaining.
+
+**Phases completed:** 12-15 (12 plans total)
+
+**Key accomplishments:**
+- Action execution framework with typed parameters, validation, and 6-state lifecycle
+- TiKV subject actions: transfer-leader, transfer-peer, drain-store via PD API
+- Safety infrastructure: kill switch, observe-only mode, audit logging
+- Configurable approval workflow with CLI approve/reject commands
+- Workflow chaining for multi-action sequences
+- Scheduled action execution and retry with exponential backoff
+
+**Stats:**
+- 52 files created/modified
+- ~10,900 lines added
+- 4 phases, 12 plans
+- 3 days from start to ship
+
+**Git range:** `feat(12-01)` → `docs(15)` (complete workflow-actions phase)
+
+**What's next:** v2.1 with dry-run mode, risk-tiered approvals, and extended TiKV actions
+
+---
+
 ## v1.1 TUI Demo (Shipped: 2026-01-25)
 
 **Delivered:** Rich-based live dashboard demo with real daemon output, cluster health visualization, workload sparklines, and key-press driven demo chapters.

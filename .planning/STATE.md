@@ -2,33 +2,19 @@
 
 ## Current Position
 
-**Milestone:** v2.0 Agent Actions
-**Phase:** 15 - Workflow Actions (COMPLETE)
-**Plan:** 5 of 5 complete in current phase
-**Status:** Milestone complete
-**Last activity:** 2026-01-26 - Completed Phase 15, v2.0 milestone complete
-
-**Progress:** [████████████████████] 100% (5/5 plans in Phase 15)
+**Milestone:** v2.0 Agent Actions (SHIPPED)
+**Phase:** —
+**Plan:** —
+**Status:** Ready for next milestone
+**Last activity:** 2026-01-26 - v2.0 milestone complete and archived
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-25)
+See: .planning/PROJECT.md (updated 2026-01-26)
 
-**Core value:** AI demonstrates real diagnostic reasoning about distributed systems - not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one."
+**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
 
-**Current focus:** v2.0 Agent Actions - COMPLETE. Agent can execute recommendations via PD API actions with human approval gates, workflow chaining, scheduling, and retry.
-
-## v2.0 Phase Overview
-
-| Phase | Goal | Requirements | Status |
-|-------|------|--------------|--------|
-| 12 | Action Foundation | 7 | COMPLETE |
-| 13 | TiKV Subject Actions | 4 | COMPLETE |
-| 14 | Approval Workflow | 2 | COMPLETE |
-| 15 | Workflow Actions | 4 | COMPLETE |
-
-**Total requirements:** 17
-**Completed:** 17/17
+**Current focus:** Planning next milestone
 
 ## Milestones
 
@@ -36,7 +22,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 |---------|--------|------|
 | v1.0 | SHIPPED | 2026-01-25 |
 | v1.1 | SHIPPED | 2026-01-25 |
-| v2.0 | COMPLETE | 2026-01-26 |
+| v2.0 | SHIPPED | 2026-01-26 |
 
 See: .planning/MILESTONES.md
 
@@ -49,6 +35,8 @@ See: .planning/MILESTONES.md
 | milestones/v1.1-ROADMAP.md | v1.1 roadmap (5 phases) |
 | milestones/v1.1-REQUIREMENTS.md | v1.1 requirements (11 total) |
 | milestones/v1.1-MILESTONE-AUDIT.md | v1.1 audit report |
+| milestones/v2.0-ROADMAP.md | v2.0 roadmap (4 phases) |
+| milestones/v2.0-REQUIREMENTS.md | v2.0 requirements (17 total) |
 
 ## Accumulated Context
 
@@ -56,64 +44,28 @@ See: .planning/MILESTONES.md
 - Observe-only first - proved AI diagnosis quality before action
 - Protocol-based abstractions - Subject and DeploymentTarget extensible
 - Subprocess isolation for TUI - daemons run as real processes
-- httpx, Pydantic, aiosqlite stack - no new dependencies needed for v2.0
+- httpx, Pydantic, aiosqlite stack - proven across 3 milestones
 
-**Research findings (v2.0):**
-- Safety infrastructure must exist before any action executes
-- Structured action types prevent AI hallucination
-- Risk-tiered approval prevents workflow bottlenecks
-- PD API operators: transfer-leader, transfer-peer, set-store-state
-
-**Decisions from Phase 12:**
+**Key decisions from v2.0:**
 - Pydantic BaseModel for action types (validation + serialization)
-- Separate ACTIONS_SCHEMA_SQL for schema modularity
-- cancel_all_pending cancels both proposed and validated statuses
-- TYPE_CHECKING import guard for ActionDefinition forward reference in Subject
-- Lazy cache in ActionRegistry built on first call
-- ValidationError collects ALL errors before raising for complete user feedback
 - Default to OBSERVE mode (safe by default, explicit opt-in for execution)
 - Kill switch cancels pending AND switches to OBSERVE mode
-- Lazy imports in safety.py and executor.py to break circular dependency with db.actions
-- Optional executor parameter in AgentRunner preserves v1 observe-only behavior
-- ActionRecommendation separate from existing recommended_action text field
-
-**Decisions from Phase 13:**
-- Fire-and-forget action semantics - return on API success, don't poll for completion
-- Minimal validation - let PD API reject invalid requests
-- Pass-through errors - don't transform PD error messages
-- Hyphenated operator names in PD API (transfer-leader, not transfer_leader)
-- Store ID type conversion (str to int) at Subject layer
-
-**Decisions from Phase 14:**
-- Plan 01: Five separate columns for approval state (complete audit trail)
-- Plan 01: Rejection also sets status to CANCELLED (not executable)
-- Plan 01: approve_proposal/reject_proposal require VALIDATED status
-- Plan 02: Global approval mode only (no per-action configuration yet)
-- Plan 02: Environment variable default is false (autonomous mode by default)
-- Plan 02: Approval gate checked in execute_proposal, not validate_proposal
-
-**Decisions from Phase 15:**
-- Plan 01: Add columns to base schema AND migrations (both for new and existing DBs)
-- Plan 02: Scheduling query checks approved_at OR workflow_id for flexible approval model
-- Plan 03: RetryConfig uses dataclass for simplicity over Pydantic
-- Plan 03: Default max_attempts=3, min_wait=1s, max_wait=60s, base=2, jitter=0.5
-- Plan 03: schedule_next_retry uses RetryConfig.max_attempts not proposal.max_retries
-- Plan 04: Import ActionDB and ActionProposal at module level (outside TYPE_CHECKING)
-- Plan 04: All poll loop processing methods respect shutdown signal between iterations
-- Plan 04: Error handling wraps all execution attempts, logs without crashing loop
-- Plan 05: Tools use same ActionDefinition model with action_type=ActionType.TOOL
-- Plan 05: Wait tool capped at 300 seconds to prevent excessive delays
-- Plan 05: execute_tool dispatcher pattern for extensibility
+- Fire-and-forget action semantics for PD API calls
+- Five separate columns for approval state (complete audit trail)
+- Global approval mode only (no per-action configuration yet)
+- RetryConfig uses dataclass for simplicity
+- Tools use same ActionDefinition model with action_type=ActionType.TOOL
+- Exponential backoff with jitter for retry logic
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed Phase 15 (v2.0 milestone complete)
-**Resume with:** Run /gsd:audit-milestone to verify requirements and E2E flows
+**Stopped at:** v2.0 milestone archived
+**Resume with:** /gsd:new-milestone for v2.1
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 15 complete, v2.0 milestone complete)*
+*State updated: 2026-01-26 (v2.0 milestone archived)*
