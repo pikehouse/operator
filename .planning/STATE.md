@@ -4,11 +4,11 @@
 
 **Milestone:** v2.0 Agent Actions
 **Phase:** 15 - Workflow Actions (In progress)
-**Plan:** 2 of 5 complete in current phase
+**Plan:** 3 of 5 complete in current phase
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 15-01-PLAN.md
+**Last activity:** 2026-01-26 - Completed 15-03-PLAN.md
 
-**Progress:** [████████░░░░░░░░░░░░] 40% (2/5 plans in Phase 15)
+**Progress:** [████████████░░░░░░░░] 60% (3/5 plans in Phase 15)
 
 ## Project Reference
 
@@ -94,6 +94,9 @@ See: .planning/MILESTONES.md
 
 **Decisions from Phase 15:**
 - Plan 01: Add columns to base schema AND migrations (both for new and existing DBs)
+- Plan 03: RetryConfig uses dataclass for simplicity over Pydantic
+- Plan 03: Default max_attempts=3, min_wait=1s, max_wait=60s, base=2, jitter=0.5
+- Plan 03: schedule_next_retry uses RetryConfig.max_attempts not proposal.max_retries
 - Plan 05: Tools use same ActionDefinition model with action_type=ActionType.TOOL
 - Plan 05: Wait tool capped at 300 seconds to prevent excessive delays
 - Plan 05: execute_tool dispatcher pattern for extensibility
@@ -101,12 +104,12 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 15-01-PLAN.md
-**Resume with:** Continue Phase 15 plans (02-04 remain)
+**Stopped at:** Completed 15-03-PLAN.md
+**Resume with:** Continue Phase 15 plans (04 remains)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Plan 15-01 complete)*
+*State updated: 2026-01-26 (Plan 15-03 complete)*
