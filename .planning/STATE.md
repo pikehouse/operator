@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 14 - Approval Workflow (IN PROGRESS)
-**Plan:** 1 of 2 in current phase
-**Status:** In progress
-**Last activity:** 2026-01-26 - Completed 14-01-PLAN.md
+**Phase:** 14 - Approval Workflow (COMPLETE)
+**Plan:** 2 of 2 in current phase
+**Status:** Phase complete
+**Last activity:** 2026-01-26 - Completed 14-02-PLAN.md
 
-**Progress:** [██████████░░░░░░░░░░░] 50% (1/2 plans in Phase 14)
+**Progress:** [████████████████████░] 100% (2/2 plans in Phase 14)
 
 ## Project Reference
 
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 |-------|------|--------------|--------|
 | 12 | Action Foundation | 7 | COMPLETE |
 | 13 | TiKV Subject Actions | 4 | COMPLETE |
-| 14 | Approval Workflow | 3 | In progress |
+| 14 | Approval Workflow | 3 | COMPLETE |
 | 15 | Workflow Actions | 3 | Pending |
 
 **Total requirements:** 17
@@ -84,20 +84,23 @@ See: .planning/MILESTONES.md
 - Hyphenated operator names in PD API (transfer-leader, not transfer_leader)
 - Store ID type conversion (str to int) at Subject layer
 
-**Decisions from Phase 14 (Plan 01):**
-- Five separate columns for approval state (complete audit trail)
-- Rejection also sets status to CANCELLED (not executable)
-- approve_proposal/reject_proposal require VALIDATED status
+**Decisions from Phase 14:**
+- Plan 01: Five separate columns for approval state (complete audit trail)
+- Plan 01: Rejection also sets status to CANCELLED (not executable)
+- Plan 01: approve_proposal/reject_proposal require VALIDATED status
+- Plan 02: Global approval mode only (no per-action configuration yet)
+- Plan 02: Environment variable default is false (autonomous mode by default)
+- Plan 02: Approval gate checked in execute_proposal, not validate_proposal
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 14-01-PLAN.md
-**Resume with:** `/gsd:execute-phase 14` to continue with 14-02
+**Stopped at:** Completed 14-02-PLAN.md (Phase 14 complete)
+**Resume with:** `/gsd:execute-phase 15` to start Phase 15 (Workflow Actions)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (14-01 complete)*
+*State updated: 2026-01-26 (Phase 14 complete)*
