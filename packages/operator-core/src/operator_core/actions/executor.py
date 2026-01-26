@@ -20,6 +20,7 @@ Per project patterns:
 - Log all lifecycle events via auditor
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -39,6 +40,18 @@ if TYPE_CHECKING:
     from operator_core.agent.diagnosis import ActionRecommendation
     from operator_core.db.actions import ActionDB
     from operator_core.subject import Subject
+
+
+class ApprovalRequiredError(Exception):
+    """Raised when action requires approval but hasn't been approved."""
+
+    def __init__(self, proposal_id: int, action_name: str) -> None:
+        self.proposal_id = proposal_id
+        self.action_name = action_name
+        super().__init__(
+            f"Action '{action_name}' (proposal {proposal_id}) requires approval. "
+            f"Run: operator actions approve {proposal_id}"
+        )
 
 
 class ActionExecutor:
@@ -72,6 +85,7 @@ class ActionExecutor:
         registry: ActionRegistry,
         safety: SafetyController,
         auditor: ActionAuditor,
+        approval_mode: bool | None = None,
     ) -> None:
         """
         Initialize the action executor.
@@ -81,11 +95,41 @@ class ActionExecutor:
             registry: ActionRegistry for action discovery and validation
             safety: SafetyController for execution gating
             auditor: ActionAuditor for lifecycle logging
+            approval_mode: If True, require approval before execution.
+                           If None, read from OPERATOR_APPROVAL_MODE env var.
+                           Default is False (autonomous execution).
         """
         self.db_path = db_path
         self._registry = registry
         self._safety = safety
         self._auditor = auditor
+
+        # Resolve approval mode from parameter or environment
+        if approval_mode is None:
+            self._approval_mode = (
+                os.environ.get("OPERATOR_APPROVAL_MODE", "false").lower() == "true"
+            )
+        else:
+            self._approval_mode = approval_mode
+
+    def _requires_approval(self, proposal: ActionProposal) -> bool:
+        """
+        Check if a proposal requires human approval before execution.
+
+        Currently implements global approval mode:
+        - approval_mode=False: no approval needed (autonomous)
+        - approval_mode=True: all actions need approval
+
+        Per research recommendation, start with global mode only.
+        Per-action requires_approval can be added later.
+
+        Args:
+            proposal: The proposal to check
+
+        Returns:
+            True if approval is required, False otherwise
+        """
+        return self._approval_mode
 
     async def propose_action(
         self,
@@ -217,6 +261,7 @@ class ActionExecutor:
 
         Raises:
             ObserveOnlyError: If safety mode is OBSERVE
+            ApprovalRequiredError: If approval mode is on but proposal not approved
             ValueError: If proposal not found or not validated
         """
         # Check safety - execution blocked in observe mode
@@ -230,6 +275,11 @@ class ActionExecutor:
 
             if proposal is None:
                 raise ValueError(f"Proposal {proposal_id} not found")
+
+            # Check if approval is required
+            if self._requires_approval(proposal):
+                if not proposal.is_approved:
+                    raise ApprovalRequiredError(proposal.id, proposal.action_name)
 
             if proposal.status != ActionStatus.VALIDATED:
                 raise ValueError(
