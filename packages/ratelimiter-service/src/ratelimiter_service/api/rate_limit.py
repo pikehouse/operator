@@ -7,7 +7,7 @@ import redis.asyncio as redis
 from ..redis_client import get_redis
 from ..limiter import RateLimiter
 from ..config import settings
-from ..metrics import record_rate_limit_check
+from ..metrics import record_rate_limit_check, CHECK_LATENCY
 
 rate_limit_router = APIRouter(tags=["rate-limit"])
 
@@ -34,6 +34,7 @@ async def get_limiter(redis_client: redis.Redis = Depends(get_redis)) -> RateLim
     return RateLimiter(redis_client)
 
 
+@CHECK_LATENCY.time()
 @rate_limit_router.post("/check", response_model=RateLimitResponse)
 async def check_rate_limit(
     request: RateLimitRequest,
