@@ -90,37 +90,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CORE-01 | TBD | Pending |
-| CORE-02 | TBD | Pending |
-| CORE-03 | TBD | Pending |
-| CORE-04 | TBD | Pending |
-| CORE-05 | TBD | Pending |
-| RLSVC-01 | TBD | Pending |
-| RLSVC-02 | TBD | Pending |
-| RLSVC-03 | TBD | Pending |
-| RLSVC-04 | TBD | Pending |
-| RLSVC-05 | TBD | Pending |
-| RLPKG-01 | TBD | Pending |
-| RLPKG-02 | TBD | Pending |
-| RLPKG-03 | TBD | Pending |
-| RLPKG-04 | TBD | Pending |
-| MON-01 | TBD | Pending |
-| MON-02 | TBD | Pending |
-| MON-03 | TBD | Pending |
-| MON-04 | TBD | Pending |
-| MON-05 | TBD | Pending |
-| ACT-01 | TBD | Pending |
-| ACT-02 | TBD | Pending |
-| DEMO-01 | TBD | Pending |
-| DEMO-02 | TBD | Pending |
-| DEMO-03 | TBD | Pending |
-| DEMO-04 | TBD | Pending |
+| CORE-01 | Phase 16 | Pending |
+| CORE-02 | Phase 16 | Pending |
+| CORE-03 | Phase 16 | Pending |
+| CORE-04 | Phase 16 | Pending |
+| CORE-05 | Phase 16 | Pending |
+| RLSVC-01 | Phase 17 | Pending |
+| RLSVC-02 | Phase 17 | Pending |
+| RLSVC-03 | Phase 17 | Pending |
+| RLSVC-04 | Phase 17 | Pending |
+| RLSVC-05 | Phase 18 | Pending |
+| RLPKG-01 | Phase 19 | Pending |
+| RLPKG-02 | Phase 19 | Pending |
+| RLPKG-03 | Phase 19 | Pending |
+| RLPKG-04 | Phase 19 | Pending |
+| MON-01 | Phase 19 | Pending |
+| MON-02 | Phase 19 | Pending |
+| MON-03 | Phase 19 | Pending |
+| MON-04 | Phase 19 | Pending |
+| MON-05 | Phase 19 | Pending |
+| ACT-01 | Phase 19 | Pending |
+| ACT-02 | Phase 19 | Pending |
+| DEMO-01 | Phase 18 | Pending |
+| DEMO-02 | Phase 20 | Pending |
+| DEMO-03 | Phase 20 | Pending |
+| DEMO-04 | Phase 20 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 25 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 after initial definition*
+*Last updated: 2026-01-26 after roadmap creation*

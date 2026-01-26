@@ -3,18 +3,20 @@
 ## Current Position
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
-**Phase:** —
-**Plan:** —
-**Status:** Defining requirements
-**Last activity:** 2026-01-26 - Milestone v2.1 started
+**Phase:** 16 of 20 (Core Abstraction Refactoring)
+**Plan:** — (ready to plan)
+**Status:** Ready to plan Phase 16
+**Last activity:** 2026-01-26 - Roadmap created for v2.1
+
+Progress: [..........] 0% (0/5 phases)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-26)
 
-**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
+**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** v2.1 — Second subject (custom rate limiter) to prove abstraction works for out-of-distribution systems
+**Current focus:** Phase 16 — Decouple operator-core from TiKV-specific types so any Subject can be monitored
 
 ## Milestones
 
@@ -26,6 +28,16 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 | v2.1 | IN PROGRESS | — |
 
 See: .planning/MILESTONES.md
+
+## v2.1 Phase Overview
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) |
+| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) |
+| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) |
+| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) |
 
 ## Archives
 
@@ -52,21 +64,21 @@ See: .planning/MILESTONES.md
 - Default to OBSERVE mode (safe by default, explicit opt-in for execution)
 - Kill switch cancels pending AND switches to OBSERVE mode
 - Fire-and-forget action semantics for PD API calls
-- Five separate columns for approval state (complete audit trail)
-- Global approval mode only (no per-action configuration yet)
-- RetryConfig uses dataclass for simplicity
 - Tools use same ActionDefinition model with action_type=ActionType.TOOL
-- Exponential backoff with jitter for retry logic
+
+**Research flags for v2.1:**
+- Phase 16 (Core Refactoring): Complex architectural change - audit TiKV coupling first
+- Phase 17 (Lua Scripts): Verify atomic patterns prevent race conditions
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Defining v2.1 requirements
-**Resume with:** Continue requirements/roadmap definition
+**Stopped at:** Roadmap created for v2.1 milestone
+**Resume with:** `/gsd:plan-phase 16` to plan Core Abstraction Refactoring
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (v2.1 milestone started)*
+*State updated: 2026-01-26 (v2.1 roadmap created)*
