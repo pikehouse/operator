@@ -2,11 +2,11 @@
 
 ## Current Position
 
-**Milestone:** v2.0 Agent Actions (SHIPPED)
+**Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** —
 **Plan:** —
-**Status:** Ready for next milestone
-**Last activity:** 2026-01-26 - v2.0 milestone complete and archived
+**Status:** Defining requirements
+**Last activity:** 2026-01-26 - Milestone v2.1 started
 
 ## Project Reference
 
@@ -14,7 +14,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
 
-**Current focus:** Planning next milestone
+**Current focus:** v2.1 — Second subject (custom rate limiter) to prove abstraction works for out-of-distribution systems
 
 ## Milestones
 
@@ -23,6 +23,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 | v1.0 | SHIPPED | 2026-01-25 |
 | v1.1 | SHIPPED | 2026-01-25 |
 | v2.0 | SHIPPED | 2026-01-26 |
+| v2.1 | IN PROGRESS | — |
 
 See: .planning/MILESTONES.md
 
@@ -60,12 +61,12 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** v2.0 milestone archived
-**Resume with:** /gsd:new-milestone for v2.1
+**Stopped at:** Defining v2.1 requirements
+**Resume with:** Continue requirements/roadmap definition
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (v2.0 milestone archived)*
+*State updated: 2026-01-26 (v2.1 milestone started)*

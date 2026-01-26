@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An AI-powered operator for distributed systems that monitors TiKV clusters, diagnoses issues with Claude, and can now execute remediation actions via PD API. The core is service-agnostic with TiKV as the first subject. v2.0 adds action execution with safety controls, approval workflows, and workflow chaining.
+An AI-powered operator for distributed systems that monitors clusters, diagnoses issues with Claude, and executes remediation actions. The core is service-agnostic with pluggable Subject adapters. TiKV is the first subject (v1.0-v2.0); v2.1 adds a custom distributed rate limiter as the second subject to prove the abstraction works for novel, out-of-distribution systems.
 
 ## Core Value
 
@@ -73,13 +73,20 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ### Active
 
-*No active requirements — planning next milestone*
+**v2.1 — Multi-Subject Support (Rate Limiter):**
+- Custom distributed rate limiter (3+ nodes, Redis backend)
+- Docker Compose environment for rate limiter cluster
+- `operator-ratelimiter` subject package implementing Subject Protocol
+- Rate limiting invariant monitoring (requests within limits, consistency)
+- Anomaly detection (rate leaks, false blocks, cross-node inconsistencies)
+- AI diagnosis for out-of-distribution system
+- Basic actions (reset counters, adjust limits)
 
 ### Out of Scope
 
 - TiKV source code in this repo — we orchestrate, not fork
 - Production AWS deployment — local simulation first
-- Other subjects (Kafka, Postgres) — TiKV first, extract patterns later
+- Complex rate limiter features — intentionally simple to prove abstraction
 - Web dashboard — CLI and logs
 - Free-form command execution — structured action types only
 
@@ -101,6 +108,18 @@ The leap here is **single service → distributed system**. A rate limiter has o
 - **Leader**: The store that handles reads/writes for a region
 - **PD (Placement Driver)**: Cluster brain — scheduling, metadata, load balancing
 - **Raft**: Consensus protocol for region replication
+
+### Rate Limiter Concepts (v2.1)
+
+- **Rate Limiter Node**: A service instance enforcing rate limits
+- **Redis Backend**: Shared state store for distributed counters
+- **Window**: Time period over which requests are counted (e.g., 1 minute)
+- **Limit**: Maximum requests allowed per window per key
+- **Key**: Identifier for rate limiting scope (e.g., user ID, IP, API key)
+
+### Why a Custom Rate Limiter?
+
+The goal is proving the operator works on systems Claude hasn't seen in training. Using a well-known system (Kafka, Postgres) would let Claude rely on memorized knowledge. A custom rate limiter forces the AI to actually understand the system through observation — the invariants, the metrics, the failure modes.
 
 ### Evaluation Criteria (What "Good" Looks Like)
 
@@ -135,4 +154,4 @@ The leap here is **single service → distributed system**. A rate limiter has o
 | Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
 
 ---
-*Last updated: 2026-01-26 after completing v2.0 milestone*
+*Last updated: 2026-01-26 after starting v2.1 milestone*
