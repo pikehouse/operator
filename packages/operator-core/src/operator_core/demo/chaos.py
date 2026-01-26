@@ -1,6 +1,14 @@
 """
 Chaos demo orchestration for AI diagnosis showcase.
 
+NOTE: This module is TiKV-specific and intentionally imports from operator_tikv.
+It is part of the demo/ package which is not core functionality. Future work
+may generalize this to work with any SubjectProtocol implementation via a
+demo factory pattern.
+
+TODO(16-03): Consider moving TiKV-specific demo logic to operator-tikv package
+or creating a generic demo framework that works with any SubjectProtocol.
+
 This module provides the ChaosDemo class that sequences the end-to-end
 chaos demonstration:
 1. Ensure cluster is healthy
