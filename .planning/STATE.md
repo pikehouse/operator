@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 17 of 20 (Rate Limiter Service Foundation)
-**Plan:** 01 of 03 completed
+**Plan:** 02 of 03 completed
 **Status:** In progress
-**Last activity:** 2026-01-26 - Completed 17-01-PLAN.md (package foundation)
+**Last activity:** 2026-01-26 - Completed 17-02-PLAN.md (sliding window rate limiter)
 
-Progress: [##........] 20% (1/5 phases, 1/3 plans in phase 17)
+Progress: [####......] 40% (1/5 phases, 2/3 plans in phase 17)
 
 ## Project Reference
 
@@ -34,7 +34,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
-| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | 1/3 plans |
+| 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | 2/3 plans |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | — |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
@@ -83,16 +83,19 @@ See: .planning/MILESTONES.md
 - pydantic-settings for env config (RATELIMITER_ prefix)
 - Connection pool pattern for async Redis (not per-request connections)
 - decode_responses=True for string returns instead of bytes
+- Lua script returns [allowed, count, remaining, retry_after] tuple
+- Unique member format timestamp:sequence prevents duplicates at same millisecond
+- Key prefix 'ratelimit:' for Redis namespacing
 
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
-- Phase 17 (Lua Scripts): Verify atomic patterns prevent race conditions
+- Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
 
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 17-01-PLAN.md (package foundation)
-**Resume with:** `/gsd:execute-plan` to run 17-02-PLAN.md
+**Stopped at:** Completed 17-02-PLAN.md (sliding window rate limiter)
+**Resume with:** `/gsd:execute-plan` to run 17-03-PLAN.md
 
 ## Phase 16 Completion Summary
 
@@ -111,4 +114,4 @@ Total tests passing: 86
 *None*
 
 ---
-*State updated: 2026-01-26 (17-01 complete)*
+*State updated: 2026-01-26 (17-02 complete)*
