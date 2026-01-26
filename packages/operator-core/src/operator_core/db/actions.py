@@ -24,6 +24,8 @@ from operator_core.actions.types import (
     ActionRecord,
     ActionStatus,
     ActionType,
+    WorkflowProposal,
+    WorkflowStatus,
 )
 from operator_core.db.schema import ACTIONS_SCHEMA_SQL, SCHEMA_SQL
 
@@ -104,6 +106,66 @@ class ActionDB:
         except Exception:
             pass  # Column already exists
 
+        # Migration: Add workflow/scheduling/retry columns if they don't exist
+        # Workflow columns (WRK-01)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN workflow_id INTEGER"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN execution_order INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN depends_on_proposal_id INTEGER"
+            )
+        except Exception:
+            pass
+
+        # Scheduling columns (WRK-02)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN scheduled_at TEXT"
+            )
+        except Exception:
+            pass
+
+        # Retry columns (WRK-03)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN retry_count INTEGER DEFAULT 0"
+            )
+        except Exception:
+            pass
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN max_retries INTEGER DEFAULT 3"
+            )
+        except Exception:
+            pass
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN next_retry_at TEXT"
+            )
+        except Exception:
+            pass
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN last_error TEXT"
+            )
+        except Exception:
+            pass
+
         await self._conn.commit()
 
     def _row_to_proposal(self, row: aiosqlite.Row) -> ActionProposal:
@@ -130,6 +192,16 @@ class ActionDB:
         # Parse parameters JSON
         parameters = json.loads(row["parameters"]) if row["parameters"] else {}
 
+        # Parse scheduling datetime (may be None)
+        scheduled_at = (
+            datetime.fromisoformat(row["scheduled_at"]) if row["scheduled_at"] else None
+        )
+
+        # Parse retry datetime (may be None)
+        next_retry_at = (
+            datetime.fromisoformat(row["next_retry_at"]) if row["next_retry_at"] else None
+        )
+
         return ActionProposal(
             id=row["id"],
             ticket_id=row["ticket_id"],
@@ -145,6 +217,14 @@ class ActionDB:
             rejected_at=rejected_at,
             rejected_by=row["rejected_by"],
             rejection_reason=row["rejection_reason"],
+            workflow_id=row["workflow_id"],
+            execution_order=row["execution_order"] or 0,
+            depends_on_proposal_id=row["depends_on_proposal_id"],
+            scheduled_at=scheduled_at,
+            retry_count=row["retry_count"] or 0,
+            max_retries=row["max_retries"] or 3,
+            next_retry_at=next_retry_at,
+            last_error=row["last_error"],
         )
 
     def _row_to_record(self, row: aiosqlite.Row) -> ActionRecord:

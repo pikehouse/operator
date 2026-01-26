@@ -73,6 +73,17 @@ CREATE TABLE IF NOT EXISTS action_proposals (
     rejected_at TEXT,                       -- ISO8601 timestamp when rejected
     rejected_by TEXT,                       -- Who rejected
     rejection_reason TEXT,                  -- Why the proposal was rejected
+    -- Workflow columns (WRK-01)
+    workflow_id INTEGER,                    -- Parent workflow ID if part of chain
+    execution_order INTEGER DEFAULT 0,      -- Order within workflow (0-indexed)
+    depends_on_proposal_id INTEGER,         -- Proposal that must complete first
+    -- Scheduling columns (WRK-02)
+    scheduled_at TEXT,                      -- Execute at this time (NULL = immediate)
+    -- Retry columns (WRK-03)
+    retry_count INTEGER DEFAULT 0,          -- Number of retry attempts so far
+    max_retries INTEGER DEFAULT 3,          -- Maximum retry attempts
+    next_retry_at TEXT,                     -- When to retry next
+    last_error TEXT,                        -- Error from last failed attempt
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)
