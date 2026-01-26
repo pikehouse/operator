@@ -51,7 +51,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 13-01-PLAN.md — PD API methods and TiKV action implementations
+- [x] 13-01-PLAN.md — PD API methods and TiKV action implementations
 
 **Requirements:**
 - ACT-02: Subject can define domain-specific actions
@@ -131,7 +131,7 @@ Archived in milestones/v1.1-ROADMAP.md
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
-| 13 | v2.0 | 0/1 | Planned | - |
+| 13 | v2.0 | 1/1 | Complete | 2026-01-26 |
 | 14 | v2.0 | 0/? | Pending | - |
 | 15 | v2.0 | 0/? | Pending | - |
 
@@ -141,3 +141,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *Phase 12 planned: 2026-01-26*
 *Phase 12 completed: 2026-01-26*
 *Phase 13 planned: 2026-01-26*
+*Phase 13 completed: 2026-01-26*

@@ -10,7 +10,7 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 ### Action Framework
 
 - [x] **ACT-01**: Action framework supports multiple action sources (subject-defined, tools, workflows)
-- [ ] **ACT-02**: Subject can define domain-specific actions (e.g., TiKV transfer-leader)
+- [x] **ACT-02**: Subject can define domain-specific actions (e.g., TiKV transfer-leader)
 - [ ] **ACT-03**: Agent can use general tools beyond subject-defined actions (with approval)
 - [x] **ACT-04**: Agent can request an action based on diagnosis (action proposal)
 - [x] **ACT-05**: Action parameters are validated before execution
@@ -35,9 +35,9 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 ### TiKV Subject Actions
 
-- [ ] **TKV-01**: TiKV subject defines transfer-leader action
-- [ ] **TKV-02**: TiKV subject defines transfer-peer action (move region replica)
-- [ ] **TKV-03**: TiKV subject defines drain-store action (evict all leaders from store)
+- [x] **TKV-01**: TiKV subject defines transfer-leader action
+- [x] **TKV-02**: TiKV subject defines transfer-peer action (move region replica)
+- [x] **TKV-03**: TiKV subject defines drain-store action (evict all leaders from store)
 
 ## Future Requirements
 
@@ -86,7 +86,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ACT-01 | Phase 12 | Complete |
-| ACT-02 | Phase 13 | Pending |
+| ACT-02 | Phase 13 | Complete |
 | ACT-03 | Phase 14 | Pending |
 | ACT-04 | Phase 12 | Complete |
 | ACT-05 | Phase 12 | Complete |
@@ -99,9 +99,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APR-02 | Phase 14 | Pending |
 | SAF-01 | Phase 12 | Complete |
 | SAF-02 | Phase 12 | Complete |
-| TKV-01 | Phase 13 | Pending |
-| TKV-02 | Phase 13 | Pending |
-| TKV-03 | Phase 13 | Pending |
+| TKV-01 | Phase 13 | Complete |
+| TKV-02 | Phase 13 | Complete |
+| TKV-03 | Phase 13 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 17 total
@@ -110,4 +110,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 (Phase 12 requirements complete)*
+*Last updated: 2026-01-26 (Phase 13 requirements complete)*

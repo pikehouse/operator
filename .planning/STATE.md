@@ -3,9 +3,9 @@
 ## Current Position
 
 **Milestone:** v2.0 Agent Actions
-**Phase:** 13 - TiKV Subject Actions (In progress)
+**Phase:** 13 - TiKV Subject Actions (COMPLETE)
 **Plan:** 1 of 1 in current phase
-**Status:** Plan 01 complete
+**Status:** Phase complete
 **Last activity:** 2026-01-26 - Completed 13-01-PLAN.md
 
 **Progress:** [█████████████████████] 100% (1/1 plans in Phase 13)
@@ -88,7 +88,7 @@ See: .planning/MILESTONES.md
 
 **Last session:** 2026-01-26
 **Stopped at:** Completed 13-01-PLAN.md (Phase 13 complete)
-**Resume with:** `/gsd:execute-phase 14` to start Phase 14 (Approval Workflow)
+**Resume with:** `/gsd:plan-phase 14` to start Phase 14 (Approval Workflow)
 
 ## Open Issues
 
