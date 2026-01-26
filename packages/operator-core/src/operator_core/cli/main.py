@@ -2,6 +2,7 @@
 
 import typer
 
+from operator_core.cli.actions import actions_app
 from operator_core.cli.agent import agent_app
 from operator_core.cli.demo import demo_app
 from operator_core.cli.deploy import deploy_app
@@ -15,6 +16,7 @@ app = typer.Typer(
 )
 
 # Add command groups
+app.add_typer(actions_app, name="actions")
 app.add_typer(agent_app, name="agent")
 app.add_typer(demo_app, name="demo")
 app.add_typer(deploy_app, name="deploy")

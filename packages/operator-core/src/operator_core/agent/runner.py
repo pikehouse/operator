@@ -7,6 +7,7 @@ This module implements the agent runner that:
 - Invokes Claude with structured output
 - Stores diagnosis and transitions ticket status
 - Handles graceful shutdown on SIGINT/SIGTERM
+- Optionally proposes actions based on diagnosis (v2.0)
 
 Per RESEARCH.md patterns:
 - Uses AsyncAnthropic for non-blocking API calls
@@ -14,10 +15,13 @@ Per RESEARCH.md patterns:
 - Handles API errors gracefully (log, skip, continue)
 """
 
+from __future__ import annotations
+
 import asyncio
 import functools
 import signal
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -28,6 +32,9 @@ from operator_core.agent.prompt import SYSTEM_PROMPT, build_diagnosis_prompt
 from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import Ticket, TicketStatus
 from operator_tikv.subject import TiKVSubject
+
+if TYPE_CHECKING:
+    from operator_core.actions.executor import ActionExecutor
 
 
 class AgentRunner:
@@ -56,6 +63,7 @@ class AgentRunner:
         anthropic_client: AsyncAnthropic | None = None,
         poll_interval: float = 10.0,
         model: str = "claude-sonnet-4-5",
+        executor: "ActionExecutor | None" = None,
     ) -> None:
         """
         Initialize agent runner.
@@ -66,17 +74,21 @@ class AgentRunner:
             anthropic_client: Optional AsyncAnthropic client (created if None)
             poll_interval: Seconds between polling cycles (default 10)
             model: Claude model to use for diagnosis (default claude-sonnet-4-5)
+            executor: Optional ActionExecutor for proposing actions from diagnosis.
+                      If None, agent operates in observe-only mode (v1 behavior).
         """
         self.subject = subject
         self.db_path = db_path
         self.client = anthropic_client or AsyncAnthropic()
         self.poll_interval = poll_interval
         self.model = model
+        self.executor = executor
         self._shutdown = asyncio.Event()
 
         # Stats for logging
         self._tickets_processed = 0
         self._tickets_diagnosed = 0
+        self._actions_proposed = 0
 
     async def run(self) -> None:
         """
@@ -189,6 +201,9 @@ class AgentRunner:
             self._tickets_diagnosed += 1
             print(f"Ticket {ticket.id} diagnosed (severity: {diagnosis_output.severity})")
 
+            # Propose actions if executor available and recommendations exist (v2.0)
+            await self._propose_actions_from_diagnosis(diagnosis_output, ticket.id)
+
         except anthropic.APIConnectionError as e:
             print(f"API connection error for ticket {ticket.id}: {e}")
             # Don't update ticket, will retry next cycle
@@ -208,3 +223,49 @@ class AgentRunner:
                 ticket.id,
                 f"# Diagnosis Error\n\n{type(e).__name__}: {e}",
             )
+
+    async def _propose_actions_from_diagnosis(
+        self,
+        diagnosis_output: DiagnosisOutput,
+        ticket_id: int,
+    ) -> None:
+        """
+        Propose actions from diagnosis recommendations.
+
+        If an executor is available and the diagnosis includes recommended
+        actions, this creates proposals for each recommendation.
+
+        Handles observe-only mode gracefully (skips proposals with message).
+
+        Args:
+            diagnosis_output: The diagnosis with potential recommendations
+            ticket_id: Ticket ID for traceability
+        """
+        if self.executor is None:
+            # No executor - operate in observe-only mode (v1 behavior)
+            return
+
+        if not diagnosis_output.recommended_actions:
+            # No actions recommended
+            return
+
+        # Import here to avoid circular import at module level
+        from operator_core.actions.safety import ObserveOnlyError
+        from operator_core.actions.validation import ValidationError
+
+        for rec in diagnosis_output.recommended_actions:
+            try:
+                proposal = await self.executor.propose_action(rec, ticket_id=ticket_id)
+                self._actions_proposed += 1
+                print(
+                    f"Proposed action: {proposal.action_name} "
+                    f"(id={proposal.id}, urgency={rec.urgency})"
+                )
+            except ObserveOnlyError:
+                # Expected when in observe mode - just skip
+                print(f"Skipping action proposal: observe-only mode active")
+                break  # Don't try other recommendations
+            except ValidationError as e:
+                print(f"Action proposal validation failed for {rec.action_name}: {e}")
+            except ValueError as e:
+                print(f"Action proposal failed for {rec.action_name}: {e}")

@@ -34,10 +34,10 @@ from operator_core.actions.types import (
     ActionType,
 )
 from operator_core.actions.validation import ValidationError, validate_action_params
-from operator_core.db.actions import ActionDB
 
 if TYPE_CHECKING:
     from operator_core.agent.diagnosis import ActionRecommendation
+    from operator_core.db.actions import ActionDB
     from operator_core.subject import Subject
 
 
@@ -136,7 +136,9 @@ class ActionExecutor:
             proposed_by="agent",
         )
 
-        # Store in database
+        # Store in database (lazy import to avoid circular import)
+        from operator_core.db.actions import ActionDB
+
         async with ActionDB(self.db_path) as db:
             created = await db.create_proposal(proposal)
 
@@ -162,6 +164,9 @@ class ActionExecutor:
             ValueError: If proposal not found or in wrong state
             ValidationError: If parameters fail validation
         """
+        # Lazy import to avoid circular import
+        from operator_core.db.actions import ActionDB
+
         async with ActionDB(self.db_path) as db:
             proposal = await db.get_proposal(proposal_id)
 
@@ -216,6 +221,9 @@ class ActionExecutor:
         """
         # Check safety - execution blocked in observe mode
         self._safety.check_can_execute()
+
+        # Lazy import to avoid circular import
+        from operator_core.db.actions import ActionDB
 
         async with ActionDB(self.db_path) as db:
             proposal = await db.get_proposal(proposal_id)
@@ -304,6 +312,9 @@ class ActionExecutor:
         Raises:
             ValueError: If proposal not found or already terminal
         """
+        # Lazy import to avoid circular import
+        from operator_core.db.actions import ActionDB
+
         async with ActionDB(self.db_path) as db:
             proposal = await db.get_proposal(proposal_id)
 
