@@ -7,7 +7,46 @@ section is the core value - shows AI is actually reasoning, not
 pattern matching.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+
+class ActionRecommendation(BaseModel):
+    """Structured action recommendation from diagnosis.
+
+    Enables the agent to produce machine-parseable action recommendations
+    alongside human-readable diagnosis. These can be automatically proposed
+    as ActionProposals when an executor is available.
+
+    Attributes:
+        action_name: Name matching a Subject action (e.g., "transfer_leader")
+        parameters: Typed parameters for the action
+        reason: Why this action is recommended (ties to diagnosis)
+        urgency: "immediate", "soon", "when_convenient"
+        expected_outcome: What should happen if action succeeds
+        risks: Potential negative outcomes
+    """
+
+    action_name: str = Field(
+        ..., description="Action name matching Subject method (e.g., 'transfer_leader')"
+    )
+    parameters: dict[str, Any] = Field(
+        default_factory=dict, description="Typed parameters for the action"
+    )
+    reason: str = Field(
+        ..., description="Why this action is recommended (ties to diagnosis)"
+    )
+    urgency: str = Field(
+        default="soon",
+        description="Urgency level: 'immediate', 'soon', 'when_convenient'"
+    )
+    expected_outcome: str = Field(
+        ..., description="What should happen if action succeeds"
+    )
+    risks: list[str] = Field(
+        default_factory=list, description="Potential negative outcomes"
+    )
 
 
 class Alternative(BaseModel):
@@ -66,6 +105,12 @@ class DiagnosisOutput(BaseModel):
     )
     severity: str = Field(description="Critical / Warning / Info")
     risks: list[str] = Field(description="Potential risks of recommended action")
+
+    # Structured action recommendations (v2.0 - for ActionExecutor integration)
+    recommended_actions: list[ActionRecommendation] = Field(
+        default_factory=list,
+        description="Specific actions the agent recommends taking (machine-parseable)"
+    )
 
 
 def format_diagnosis_markdown(diagnosis: DiagnosisOutput) -> str:
@@ -141,5 +186,23 @@ def format_diagnosis_markdown(diagnosis: DiagnosisOutput) -> str:
         for risk in diagnosis.risks:
             lines.append(f"- {risk}")
         lines.append("")
+
+    # Recommended Actions (structured, v2.0)
+    if diagnosis.recommended_actions:
+        lines.append("### Recommended Actions")
+        lines.append("")
+        for i, action in enumerate(diagnosis.recommended_actions, 1):
+            lines.append(f"**{i}. {action.action_name}** (urgency: {action.urgency})")
+            if action.parameters:
+                params_str = ", ".join(
+                    f"{k}={v}" for k, v in action.parameters.items()
+                )
+                lines.append(f"- Parameters: {params_str}")
+            lines.append(f"- Reason: {action.reason}")
+            lines.append(f"- Expected: {action.expected_outcome}")
+            if action.risks:
+                risks_str = ", ".join(action.risks)
+                lines.append(f"- Risks: {risks_str}")
+            lines.append("")
 
     return "\n".join(lines)
