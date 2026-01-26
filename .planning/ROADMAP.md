@@ -48,6 +48,11 @@ Plans:
 
 **Dependencies:** Phase 12 (action foundation must exist)
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 13-01-PLAN.md — PD API methods and TiKV action implementations
+
 **Requirements:**
 - ACT-02: Subject can define domain-specific actions
 - TKV-01: TiKV subject defines transfer-leader action
@@ -126,7 +131,7 @@ Archived in milestones/v1.1-ROADMAP.md
 | 1-6 | v1.0 | 22/22 | Complete | 2026-01-25 |
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
-| 13 | v2.0 | 0/? | Pending | - |
+| 13 | v2.0 | 0/1 | Planned | - |
 | 14 | v2.0 | 0/? | Pending | - |
 | 15 | v2.0 | 0/? | Pending | - |
 
@@ -135,3 +140,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *v2.0 roadmap added: 2026-01-26*
 *Phase 12 planned: 2026-01-26*
 *Phase 12 completed: 2026-01-26*
+*Phase 13 planned: 2026-01-26*
