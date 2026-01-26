@@ -281,12 +281,22 @@ class ActionDB:
         """
         parameters_json = json.dumps(proposal.parameters)
 
+        # Convert datetime fields to ISO format strings
+        scheduled_at = (
+            proposal.scheduled_at.isoformat() if proposal.scheduled_at else None
+        )
+        next_retry_at = (
+            proposal.next_retry_at.isoformat() if proposal.next_retry_at else None
+        )
+
         cursor = await self._conn.execute(
             """
             INSERT INTO action_proposals (
                 ticket_id, action_name, action_type, parameters, reason,
-                status, proposed_at, proposed_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                status, proposed_at, proposed_by,
+                workflow_id, execution_order, depends_on_proposal_id,
+                scheduled_at, retry_count, max_retries, next_retry_at, last_error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal.ticket_id,
@@ -297,6 +307,14 @@ class ActionDB:
                 proposal.status.value,
                 proposal.proposed_at.isoformat(),
                 proposal.proposed_by,
+                proposal.workflow_id,
+                proposal.execution_order,
+                proposal.depends_on_proposal_id,
+                scheduled_at,
+                proposal.retry_count,
+                proposal.max_retries,
+                next_retry_at,
+                proposal.last_error,
             ),
         )
         await self._conn.commit()
