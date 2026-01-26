@@ -4,7 +4,7 @@
 
 - [x] **v1.0 MVP** - Phases 1-6 (shipped 2026-01-25)
 - [x] **v1.1 TUI Demo** - Phases 7-11 (shipped 2026-01-25)
-- [ ] **v2.0 Agent Actions** - Phases 12-15 (in progress)
+- [x] **v2.0 Agent Actions** - Phases 12-15 (complete)
 
 ## v2.0 Agent Actions
 
@@ -100,11 +100,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Schema and types for workflows, scheduling, retry
-- [ ] 15-02-PLAN.md — ActionDB workflow and scheduling methods
-- [ ] 15-03-PLAN.md — Retry configuration and executor workflow methods
-- [ ] 15-04-PLAN.md — Agent runner integration for scheduled/retry actions
-- [ ] 15-05-PLAN.md — General tools (wait, log_message) for ACT-03
+- [x] 15-01-PLAN.md — Schema and types for workflows, scheduling, retry
+- [x] 15-02-PLAN.md — ActionDB workflow and scheduling methods
+- [x] 15-03-PLAN.md — Retry configuration and executor workflow methods
+- [x] 15-04-PLAN.md — Agent runner integration for scheduled/retry actions
+- [x] 15-05-PLAN.md — General tools (wait, log_message) for ACT-03
 
 **Requirements:**
 - ACT-03: Agent can use general tools beyond subject-defined actions
@@ -148,7 +148,7 @@ Archived in milestones/v1.1-ROADMAP.md
 | 12 | v2.0 | 4/4 | Complete | 2026-01-26 |
 | 13 | v2.0 | 1/1 | Complete | 2026-01-26 |
 | 14 | v2.0 | 2/2 | Complete | 2026-01-26 |
-| 15 | v2.0 | 0/5 | Planned | - |
+| 15 | v2.0 | 5/5 | Complete | 2026-01-26 |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -160,3 +160,4 @@ Archived in milestones/v1.1-ROADMAP.md
 *Phase 14 planned: 2026-01-26*
 *Phase 14 completed: 2026-01-26*
 *Phase 15 planned: 2026-01-26*
+*Phase 15 completed: 2026-01-26*

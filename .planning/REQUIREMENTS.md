@@ -11,7 +11,7 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 - [x] **ACT-01**: Action framework supports multiple action sources (subject-defined, tools, workflows)
 - [x] **ACT-02**: Subject can define domain-specific actions (e.g., TiKV transfer-leader)
-- [ ] **ACT-03**: Agent can use general tools beyond subject-defined actions (with approval)
+- [x] **ACT-03**: Agent can use general tools beyond subject-defined actions (with approval)
 - [x] **ACT-04**: Agent can request an action based on diagnosis (action proposal)
 - [x] **ACT-05**: Action parameters are validated before execution
 - [x] **ACT-06**: Action execution result is tracked (success/failure, timing, error details)
@@ -19,9 +19,9 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 ### Workflow Actions
 
-- [ ] **WRK-01**: Agent can chain multiple actions into a workflow
-- [ ] **WRK-02**: Agent can schedule follow-up actions (e.g., "check again in 5 minutes")
-- [ ] **WRK-03**: Agent can retry failed actions with backoff
+- [x] **WRK-01**: Agent can chain multiple actions into a workflow
+- [x] **WRK-02**: Agent can schedule follow-up actions (e.g., "check again in 5 minutes")
+- [x] **WRK-03**: Agent can retry failed actions with backoff
 
 ### Approval Workflow
 
@@ -87,14 +87,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | ACT-01 | Phase 12 | Complete |
 | ACT-02 | Phase 13 | Complete |
-| ACT-03 | Phase 15 | Pending |
+| ACT-03 | Phase 15 | Complete |
 | ACT-04 | Phase 12 | Complete |
 | ACT-05 | Phase 12 | Complete |
 | ACT-06 | Phase 12 | Complete |
 | ACT-07 | Phase 12 | Complete |
-| WRK-01 | Phase 15 | Pending |
-| WRK-02 | Phase 15 | Pending |
-| WRK-03 | Phase 15 | Pending |
+| WRK-01 | Phase 15 | Complete |
+| WRK-02 | Phase 15 | Complete |
+| WRK-03 | Phase 15 | Complete |
 | APR-01 | Phase 14 | Complete |
 | APR-02 | Phase 14 | Complete |
 | SAF-01 | Phase 12 | Complete |
@@ -110,4 +110,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 (Phase 14 requirements complete)*
+*Last updated: 2026-01-26 (Phase 15 requirements complete - v2.0 milestone complete)*
