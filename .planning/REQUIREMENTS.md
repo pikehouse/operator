@@ -25,8 +25,8 @@ Requirements for action execution milestone. Each maps to roadmap phases.
 
 ### Approval Workflow
 
-- [ ] **APR-01**: Action approval is configurable (on/off, default off — agent executes autonomously)
-- [ ] **APR-02**: When approval enabled, user can approve/reject pending actions via CLI
+- [x] **APR-01**: Action approval is configurable (on/off, default off — agent executes autonomously)
+- [x] **APR-02**: When approval enabled, user can approve/reject pending actions via CLI
 
 ### Safety
 
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WRK-01 | Phase 15 | Pending |
 | WRK-02 | Phase 15 | Pending |
 | WRK-03 | Phase 15 | Pending |
-| APR-01 | Phase 14 | Pending |
-| APR-02 | Phase 14 | Pending |
+| APR-01 | Phase 14 | Complete |
+| APR-02 | Phase 14 | Complete |
 | SAF-01 | Phase 12 | Complete |
 | SAF-02 | Phase 12 | Complete |
 | TKV-01 | Phase 13 | Complete |
@@ -110,4 +110,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 (Phase 13 requirements complete)*
+*Last updated: 2026-01-26 (Phase 14 requirements complete)*
