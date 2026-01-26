@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ActionStatus(str, Enum):
@@ -82,6 +82,11 @@ class ActionProposal(BaseModel):
         status: Current lifecycle state
         proposed_at: When created
         proposed_by: "agent" or "user" (for future approval workflows)
+        approved_at: When the proposal was approved (None if not approved)
+        approved_by: Who approved the proposal (typically "user")
+        rejected_at: When the proposal was rejected (None if not rejected)
+        rejected_by: Who rejected the proposal
+        rejection_reason: Why the proposal was rejected
     """
 
     id: int | None = Field(default=None, description="Database ID (None before insert)")
@@ -109,6 +114,27 @@ class ActionProposal(BaseModel):
     proposed_by: str = Field(
         default="agent", description="Who proposed: 'agent' or 'user'"
     )
+    approved_at: datetime | None = Field(
+        default=None, description="When the proposal was approved"
+    )
+    approved_by: str | None = Field(
+        default=None, description="Who approved: 'user' typically"
+    )
+    rejected_at: datetime | None = Field(
+        default=None, description="When the proposal was rejected"
+    )
+    rejected_by: str | None = Field(
+        default=None, description="Who rejected the proposal"
+    )
+    rejection_reason: str | None = Field(
+        default=None, description="Why the proposal was rejected"
+    )
+
+    @computed_field
+    @property
+    def is_approved(self) -> bool:
+        """Return True if the proposal has been approved."""
+        return self.approved_at is not None
 
     class Config:
         """Pydantic configuration."""
