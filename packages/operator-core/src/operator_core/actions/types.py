@@ -4,7 +4,9 @@ Action types for the agent execution framework.
 This module defines the core data structures for action management:
 - ActionStatus: Enum for action lifecycle states
 - ActionType: Enum for action source types
+- WorkflowStatus: Enum for workflow lifecycle states
 - ActionProposal: Proposed action awaiting validation/approval
+- WorkflowProposal: Group of related actions to execute as a workflow
 - ActionRecord: Execution record for completed actions
 
 Per project patterns:
@@ -64,6 +66,30 @@ class ActionType(str, Enum):
     """Multi-step workflow action (future use)."""
 
 
+class WorkflowStatus(str, Enum):
+    """
+    Valid workflow lifecycle states.
+
+    Workflows flow through these states:
+        pending -> in_progress -> completed/failed/cancelled
+    """
+
+    PENDING = "pending"
+    """Workflow created, no actions started yet."""
+
+    IN_PROGRESS = "in_progress"
+    """At least one action is executing."""
+
+    COMPLETED = "completed"
+    """All actions completed successfully."""
+
+    FAILED = "failed"
+    """At least one action failed."""
+
+    CANCELLED = "cancelled"
+    """Workflow was cancelled."""
+
+
 class ActionProposal(BaseModel):
     """
     Proposed action awaiting validation and execution.
@@ -87,6 +113,14 @@ class ActionProposal(BaseModel):
         rejected_at: When the proposal was rejected (None if not rejected)
         rejected_by: Who rejected the proposal
         rejection_reason: Why the proposal was rejected
+        workflow_id: Parent workflow ID if part of a chain (WRK-01)
+        execution_order: Order within workflow, 0-indexed (WRK-01)
+        depends_on_proposal_id: Proposal ID that must complete first (WRK-01)
+        scheduled_at: Execute at this time, None for immediate (WRK-02)
+        retry_count: Number of retry attempts so far (WRK-03)
+        max_retries: Maximum retry attempts (WRK-03)
+        next_retry_at: When to retry next, None if not scheduled (WRK-03)
+        last_error: Error message from last failed attempt (WRK-03)
     """
 
     id: int | None = Field(default=None, description="Database ID (None before insert)")
@@ -130,6 +164,32 @@ class ActionProposal(BaseModel):
         default=None, description="Why the proposal was rejected"
     )
 
+    # Workflow fields (WRK-01)
+    workflow_id: int | None = Field(
+        default=None, description="Parent workflow ID if part of a chain"
+    )
+    execution_order: int = Field(
+        default=0, description="Order within workflow (0-indexed)"
+    )
+    depends_on_proposal_id: int | None = Field(
+        default=None, description="Proposal ID that must complete before this runs"
+    )
+
+    # Scheduling fields (WRK-02)
+    scheduled_at: datetime | None = Field(
+        default=None, description="Execute at this time (None = immediate)"
+    )
+
+    # Retry fields (WRK-03)
+    retry_count: int = Field(default=0, description="Number of retry attempts so far")
+    max_retries: int = Field(default=3, description="Maximum retry attempts")
+    next_retry_at: datetime | None = Field(
+        default=None, description="When to retry next (None = not scheduled)"
+    )
+    last_error: str | None = Field(
+        default=None, description="Error message from last failed attempt"
+    )
+
     @computed_field
     @property
     def is_approved(self) -> bool:
@@ -140,6 +200,41 @@ class ActionProposal(BaseModel):
         """Pydantic configuration."""
 
         use_enum_values = False  # Keep enum instances for type safety
+
+
+class WorkflowProposal(BaseModel):
+    """
+    Group of related actions to execute as a workflow.
+
+    A workflow is a sequence of ActionProposals that execute in order.
+    Approval can happen at the workflow level (approve once, execute all).
+
+    Attributes:
+        id: Database ID (None before insert)
+        name: Workflow name (e.g., "drain_and_verify")
+        description: What this workflow accomplishes
+        ticket_id: Associated ticket (optional, for traceability)
+        status: Current lifecycle state
+        created_at: When created
+    """
+
+    id: int | None = Field(default=None, description="Database ID")
+    name: str = Field(..., description="Workflow name")
+    description: str = Field(..., description="What this workflow accomplishes")
+    ticket_id: int | None = Field(
+        default=None, description="Associated ticket ID for traceability"
+    )
+    status: WorkflowStatus = Field(
+        default=WorkflowStatus.PENDING, description="Current lifecycle state"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now, description="When the workflow was created"
+    )
+
+    class Config:
+        """Pydantic configuration."""
+
+        use_enum_values = False
 
 
 class ActionRecord(BaseModel):
