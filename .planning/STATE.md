@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 19 of 20 (operator-ratelimiter Package)
-**Plan:** 03 of 05 completed
+**Plan:** 04 of 05 completed
 **Status:** In progress
-**Last activity:** 2026-01-27 - Completed 19-03-PLAN.md (Management API actions)
+**Last activity:** 2026-01-27 - Completed 19-04-PLAN.md (Factory function and CLI integration)
 
-Progress: [########..] 82% (4.4/5 phases complete)
+Progress: [########..] 84% (4.6/5 phases complete)
 
 ## Project Reference
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
-| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (3/5) |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (4/5) |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
 ## Archives
@@ -122,6 +122,12 @@ See: .planning/MILESTONES.md
 - Hash structure stores both limit and window_ms together
 - RateLimiter.get_limit() returns None if no custom limit exists
 
+**Key decisions from v2.1 (Phase 19-04):**
+- Factory returns tuple[Subject, Checker] for convenience (CLI needs both)
+- decode_responses=True in factory for Redis client (string returns vs bytes)
+- Lazy import in subject_factory.py prevents loading operator-ratelimiter unless --subject ratelimiter used
+- AVAILABLE_SUBJECTS list now includes both "tikv" and "ratelimiter"
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
@@ -129,8 +135,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 19-03-PLAN.md (Management API actions) - Phase 19 plan 3/5 complete
-**Resume with:** 19-02-PLAN.md (RateLimiterSubject implementation) or 19-04-PLAN.md (next in sequence)
+**Stopped at:** Completed 19-04-PLAN.md (Factory function and CLI integration) - Phase 19 plan 4/5 complete
+**Resume with:** 19-05-PLAN.md (Testing)
 
 ## Phase 16 Completion Summary
 
@@ -171,10 +177,11 @@ Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). 
 
 ## Phase 19 Progress
 
-Plans 01-03 of 05 completed:
+Plans 01-04 of 05 completed:
 - 19-01: Created operator-ratelimiter package foundation (HTTP, Redis, Prometheus clients)
 - 19-02: Implemented RateLimiterSubject and RateLimiterInvariantChecker with 5 invariant types
 - 19-03: Added management API actions (reset_counter, update_limit)
+- 19-04: Factory function and CLI integration (--subject ratelimiter)
 
 Files created:
 - packages/operator-ratelimiter/pyproject.toml
@@ -185,13 +192,14 @@ Files created:
 - packages/operator-ratelimiter/src/operator_ratelimiter/prom_client.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/subject.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/invariants.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/factory.py
 - packages/ratelimiter-service/tests/test_management_api.py
 
-Next: 19-04 (CLI integration) or 19-05 (Testing)
+Next: 19-05 (Testing)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-27 (Phase 19 plans 01-03 complete)*
+*State updated: 2026-01-27 (Phase 19 plans 01-04 complete)*
