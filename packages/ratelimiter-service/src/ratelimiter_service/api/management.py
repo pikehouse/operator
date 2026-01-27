@@ -65,6 +65,13 @@ class BlocksResponse(BaseModel):
     blocked: list[BlockedKeyInfo]
 
 
+class ResetResponse(BaseModel):
+    """Response from POST /api/counters/{key}/reset."""
+
+    key: str
+    reset: bool
+
+
 async def get_limiter(redis_client: redis.Redis = Depends(get_redis)) -> RateLimiter:
     """Dependency to get RateLimiter instance."""
     return RateLimiter(redis_client)
@@ -145,3 +152,10 @@ async def get_blocks(
             )
 
     return BlocksResponse(blocked=blocked)
+
+
+@management_router.post("/counters/{key}/reset", response_model=ResetResponse)
+async def reset_counter(key: str, limiter: RateLimiter = Depends(get_limiter)) -> ResetResponse:
+    """Reset rate limit counter for a key."""
+    reset = await limiter.reset_counter(key)
+    return ResetResponse(key=key, reset=reset)
