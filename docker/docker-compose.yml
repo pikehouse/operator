@@ -1,0 +1,117 @@
+configs:
+  prometheus_config:
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+      scrape_configs:
+        - job_name: 'ratelimiter'
+          static_configs:
+            - targets:
+              - ratelimiter-1:8000
+              - ratelimiter-2:8000
+              - ratelimiter-3:8000
+
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - ratelimiter
+
+  ratelimiter-1:
+    build:
+      context: ../packages/ratelimiter-service
+    environment:
+      - RATELIMITER_REDIS_URL=redis://redis:6379
+      - RATELIMITER_NODE_ID=node-1
+      - RATELIMITER_NODE_HOST=ratelimiter-1
+      - RATELIMITER_NODE_PORT=8000
+    ports:
+      - "${RATELIMITER_1_PORT:-8001}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: "no"
+    networks:
+      - ratelimiter
+
+  ratelimiter-2:
+    build:
+      context: ../packages/ratelimiter-service
+    environment:
+      - RATELIMITER_REDIS_URL=redis://redis:6379
+      - RATELIMITER_NODE_ID=node-2
+      - RATELIMITER_NODE_HOST=ratelimiter-2
+      - RATELIMITER_NODE_PORT=8000
+    ports:
+      - "${RATELIMITER_2_PORT:-8002}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: "no"
+    networks:
+      - ratelimiter
+
+  ratelimiter-3:
+    build:
+      context: ../packages/ratelimiter-service
+    environment:
+      - RATELIMITER_REDIS_URL=redis://redis:6379
+      - RATELIMITER_NODE_ID=node-3
+      - RATELIMITER_NODE_HOST=ratelimiter-3
+      - RATELIMITER_NODE_PORT=8000
+    ports:
+      - "${RATELIMITER_3_PORT:-8003}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: "no"
+    networks:
+      - ratelimiter
+
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    configs:
+      - source: prometheus_config
+        target: /etc/prometheus/prometheus.yml
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      ratelimiter-1:
+        condition: service_healthy
+      ratelimiter-2:
+        condition: service_healthy
+      ratelimiter-3:
+        condition: service_healthy
+    networks:
+      - ratelimiter
+
+networks:
+  ratelimiter:
+    driver: bridge
