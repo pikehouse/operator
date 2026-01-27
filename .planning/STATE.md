@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
-**Phase:** 18 of 20 (Docker Compose Environment)
-**Plan:** 02 of 02 completed
-**Status:** Phase complete
-**Last activity:** 2026-01-26 - Completed 18-02-PLAN.md (Load generator)
+**Phase:** 19 of 20 (operator-ratelimiter Package)
+**Plan:** 01 of 05 completed
+**Status:** In progress
+**Last activity:** 2026-01-27 - Completed 19-01-PLAN.md (Package foundation)
 
-Progress: [########..] 80% (4/5 phases complete)
+Progress: [########..] 81% (4.2/5 phases complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 18 complete - Ready for Phase 19 (operator-ratelimiter package)
+**Current focus:** Phase 19 started - Building operator-ratelimiter package (1/5 plans complete)
 
 ## Milestones
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
-| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (1/5) |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
 ## Archives
@@ -102,15 +102,22 @@ See: .planning/MILESTONES.md
 - asyncio.Semaphore(100) for concurrent request limiting in load generator
 - itertools.cycle for stateless round-robin target distribution
 
+**Key decisions from v2.1 (Phase 19-01):**
+- Pydantic model_validate() for response parsing (not **response.json())
+- Redis client returns raw ZCARD count (not cleaned - use RateLimiterClient for accurate counts)
+- Prometheus string-to-float conversion handled in get_metric_value()
+- Fire-and-forget reset_counter operation
+- Graceful fallback for missing Prometheus metrics (return 0/None)
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
 
 ## Session Continuity
 
-**Last session:** 2026-01-26
-**Stopped at:** Completed 18-02-PLAN.md (Load generator) - Phase 18 complete
-**Resume with:** 19-01-PLAN.md (operator-ratelimiter package)
+**Last session:** 2026-01-27
+**Stopped at:** Completed 19-01-PLAN.md (Package foundation) - Phase 19 plan 1/5 complete
+**Resume with:** 19-02-PLAN.md (RateLimiterSubject implementation)
 
 ## Phase 16 Completion Summary
 
@@ -149,9 +156,24 @@ Files created:
 
 Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). Load generator produces ~10 RPS with burst spikes.
 
+## Phase 19 Progress
+
+Plan 01 of 05 completed:
+- 19-01: Created operator-ratelimiter package foundation (HTTP, Redis, Prometheus clients)
+
+Files created:
+- packages/operator-ratelimiter/pyproject.toml
+- packages/operator-ratelimiter/src/operator_ratelimiter/__init__.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/types.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/ratelimiter_client.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/redis_client.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/prom_client.py
+
+Next: 19-02 (RateLimiterSubject implementation)
+
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 18 complete)*
+*State updated: 2026-01-27 (Phase 19 plan 01 complete)*
