@@ -110,8 +110,8 @@ class RateLimiterHealthPoller:
         # Try endpoints until one works
         for endpoint in self.endpoints:
             try:
-                # Query nodes list
-                nodes_response = await self._client.get(f"{endpoint}/nodes")
+                # Query nodes list (under /api prefix)
+                nodes_response = await self._client.get(f"{endpoint}/api/nodes")
                 nodes_response.raise_for_status()
                 nodes_data = nodes_response.json()
 
@@ -122,7 +122,8 @@ class RateLimiterHealthPoller:
 
                 # Parse health snapshot
                 nodes = nodes_data.get("nodes", [])
-                redis_connected = health_data.get("redis_connected", False)
+                # Redis is connected if service is healthy (status="healthy")
+                redis_connected = health_data.get("status") == "healthy"
 
                 # Check for issues
                 has_issues = not redis_connected or any(
