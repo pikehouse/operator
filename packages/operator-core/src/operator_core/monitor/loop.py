@@ -156,7 +156,9 @@ class MonitorLoop:
         if violations:
             batch_key = f"batch-{datetime.now().isoformat()}"
             for v in violations:
-                await db.create_or_update_ticket(v, batch_key=batch_key)
+                ticket = await db.create_or_update_ticket(v, batch_key=batch_key)
+                if ticket.occurrence_count == 1:
+                    print(f"Created ticket {ticket.id}: {ticket.invariant_name}")
 
         # Auto-resolve cleared violations (per CONTEXT.md)
         current_keys = {make_violation_key(v) for v in violations}
