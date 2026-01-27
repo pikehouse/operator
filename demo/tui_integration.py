@@ -365,18 +365,27 @@ class TUIDemoController:
         # Update narration panel (includes status from chaos callbacks)
         self._update_narration()
 
-        # Update monitor panel (show last 12 lines to fit typical terminal)
+        # Calculate available lines based on terminal height
+        # Layout uses ratios: narration(2) + monitor(3) + agent(3) + workload(2) = 10 parts
+        # Monitor and agent each get 3/10 of terminal height
+        # Panel border uses 2 lines
+        term_height = self.console.size.height
+        panel_rows = (term_height * 3) // 10  # 3/10 of height for monitor/agent
+        panel_content_lines = panel_rows - 2  # minus border
+        panel_content_lines = max(panel_content_lines, 5)  # minimum 5 lines
+
+        # Update monitor panel
         monitor_buf = self._subprocess_mgr.get_buffer("monitor")
         if monitor_buf:
             self._layout["main"]["monitor"].update(
-                make_panel(monitor_buf.get_text(n=12), "Monitor", "blue")
+                make_panel(monitor_buf.get_text(n=panel_content_lines), "Monitor", "blue")
             )
 
-        # Update agent panel (show last 12 lines to fit typical terminal)
+        # Update agent panel
         agent_buf = self._subprocess_mgr.get_buffer("agent")
         if agent_buf:
             self._layout["main"]["agent"].update(
-                make_panel(agent_buf.get_text(n=12), "Agent", "green")
+                make_panel(agent_buf.get_text(n=panel_content_lines), "Agent", "green")
             )
 
         # Update cluster panel with health status
