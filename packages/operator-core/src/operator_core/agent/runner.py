@@ -281,6 +281,7 @@ class AgentRunner:
         from operator_core.actions.validation import ValidationError
 
         for rec in diagnosis_output.recommended_actions:
+            print(f"  → {rec.action_name} params={rec.parameters}")
             try:
                 # 1. Propose action (validates params, creates proposal)
                 proposal = await self.executor.propose_action(rec, ticket_id=ticket_id)
