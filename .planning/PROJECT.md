@@ -8,20 +8,9 @@ An AI-powered operator for distributed systems that monitors clusters, diagnoses
 
 AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
 
-## Current Milestone: v2.2 Agentic Remediations Demo
-
-**Goal:** Demos for both TiKV and rate limiter show complete agentic loop: fault injection → AI detection → diagnosis → auto-execute action → verify fix resolved
-
-**Target features:**
-- Switch demos from OBSERVE mode to EXECUTE mode
-- Agent auto-executes recommended actions (no human approval during demo)
-- Agent verifies fix after action completes (full agentic loop)
-- Chapter narratives updated to describe agentic remediation flow
-- Both TiKV and rate limiter demos upgraded
-
 ## Current State
 
-**Shipped:** v2.1 (2026-01-27)
+**Shipped:** v2.2 (2026-01-27)
 **Code:** ~30,000 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
 **Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Redis, FastAPI, Rich TUI, Pydantic
 
@@ -36,6 +25,14 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - 6-node TiKV/PD cluster with Prometheus + Grafana in Docker
 - 3-node rate limiter cluster with Redis and Prometheus in Docker
 - go-ycsb and Python load generators for traffic simulation
+
+### v2.2 Capabilities
+
+- **Complete Agentic Loop**: Detect → diagnose → propose → validate → execute → verify
+- **Parameter Inference**: Fallback when Claude returns empty params (drain_store, reset_counter)
+- **EXECUTE Mode**: Demos run autonomously without approval workflow
+- **Updated Narratives**: Demo chapters describe agentic remediation flow
+- **Prompt Optimization**: Biased toward immediate action for demo responsiveness
 
 ### v2.1 Capabilities
 
@@ -104,6 +101,14 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Multi-subject CLI with --subject flag — v2.1
 - Unified demo framework for both subjects — v2.1
 - AI diagnosis for out-of-distribution system (validated) — v2.1
+
+**v2.2:**
+- Complete agentic loop (detect → diagnose → act → verify) — v2.2
+- Agent executes actions immediately after diagnosis — v2.2
+- Agent verifies fix after 5s delay — v2.2
+- EXECUTE mode for autonomous demo execution — v2.2
+- Parameter inference fallback for TiKV/rate limiter actions — v2.2
+- Updated demo narratives for agentic flow — v2.2
 
 ### Future
 
@@ -179,4 +184,4 @@ The goal is proving the operator works on systems Claude hasn't seen in training
 | Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
 
 ---
-*Last updated: 2026-01-27 after starting v2.2 milestone*
+*Last updated: 2026-01-27 after v2.2 milestone*

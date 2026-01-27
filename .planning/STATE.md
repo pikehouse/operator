@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** v2.2 Agentic Remediations Demo
-**Phase:** 22 - Demo Integration
-**Plan:** Complete
-**Status:** Phase 22 complete, milestone complete
-**Last activity:** 2026-01-27 - Phase 22 executed and verified
+**Milestone:** Between milestones
+**Phase:** —
+**Plan:** —
+**Status:** v2.2 shipped, planning next milestone
+**Last activity:** 2026-01-27 - v2.2 milestone completed
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% (v2.2 complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now complete agentic loop with auto-remediation.
 
-**Current focus:** v2.2 milestone complete — both demos show complete agentic loop (detect -> diagnose -> act -> verify).
+**Current focus:** v2.2 shipped — ready for next milestone.
 
 ## Milestones
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 | v1.1 | SHIPPED | 2026-01-25 |
 | v2.0 | SHIPPED | 2026-01-26 |
 | v2.1 | SHIPPED | 2026-01-27 |
-| v2.2 | COMPLETE | 2026-01-27 |
+| v2.2 | SHIPPED | 2026-01-27 |
 
 See: .planning/MILESTONES.md
 
@@ -88,8 +88,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** v2.2 milestone complete
-**Resume with:** `/gsd:audit-milestone` or `/gsd:complete-milestone`
+**Stopped at:** v2.2 shipped
+**Resume with:** `/gsd:new-milestone`
 
 ## Open Issues
 
@@ -102,4 +102,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (v2.2 milestone complete)*
+*State updated: 2026-01-27 (v2.2 shipped)*

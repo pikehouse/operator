@@ -1,5 +1,31 @@
 # Project Milestones: Operator
 
+## v2.2 Agentic Remediations Demo (Shipped: 2026-01-27)
+
+**Delivered:** Complete agentic loop in both demos — fault injection leads to AI detection, diagnosis, auto-execute remediation action, and verification that the fix resolved the issue.
+
+**Phases completed:** 21-22 (3 plans total)
+
+**Key accomplishments:**
+- Complete agentic loop: diagnose → propose → validate → execute → verify
+- Parameter inference when Claude returns empty params (TiKV drain_store, rate limiter reset_counter)
+- EXECUTE mode environment configuration for demos
+- Updated demo narratives for agentic remediation flow
+- Prompt biased toward immediate action for demo responsiveness
+
+**Stats:**
+- 8 files modified
+- ~400 lines added
+- 2 phases, 3 plans
+- 25 commits
+- 1 day from v2.1 to ship
+
+**Git range:** `23e3d72` (fix(21): revise plan) → `2a06043` (fix(agent): bias prompt toward immediate action)
+
+**What's next:** Additional subjects, production hardening, or v2.3 with extended verification
+
+---
+
 ## v2.1 Multi-Subject Support (Shipped: 2026-01-27)
 
 **Delivered:** Protocol-based abstractions enabling any Subject to be monitored by the same operator-core. Second subject (custom distributed rate limiter) proves the AI can diagnose novel systems without system-specific prompts.
