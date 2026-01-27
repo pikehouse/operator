@@ -156,6 +156,10 @@ class TUIDemoController:
                 "5",
             ],
             buffer_size=50,
+            env={
+                "OPERATOR_SAFETY_MODE": "execute",
+                "OPERATOR_APPROVAL_MODE": "false",
+            },
         )
 
         # Initialize keyboard handler
