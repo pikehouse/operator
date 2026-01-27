@@ -1,15 +1,12 @@
 """
-Rate limiter chaos demo entry point.
+Rate limiter demo chapters and chaos injection callbacks.
 
-This demo showcases the operator's ability to diagnose rate limiter
-anomalies using the same generic infrastructure as the TiKV demo.
-
-The demo demonstrates TWO distinct anomaly types:
+This module provides rate limiter-specific demo chapters and callbacks
+for the TUI demo controller. It demonstrates TWO distinct anomaly types:
 1. Counter Drift: Redis PAUSE causes distributed counter to drift
 2. Ghost Allowing: Burst traffic triggers allowing with limit=0
 
-Each anomaly is injected via chaos, detected by invariant checking,
-and diagnosed by AI reasoning - all without system-specific prompts.
+Run via: python -m demo ratelimiter
 """
 
 import asyncio
@@ -22,8 +19,6 @@ from demo.ratelimiter_chaos import (
     inject_redis_pause,
     setup_rate_limit,
 )
-from demo.ratelimiter_health import RateLimiterHealthPoller
-from demo.runner import DemoRunner
 from demo.status import demo_status
 from demo.types import Chapter
 
@@ -232,28 +227,3 @@ No rate-limiter-specific prompts needed.
 ]
 
 
-async def main() -> None:
-    """
-    Run the rate limiter chaos demo.
-
-    Creates health poller, defines chapters, and starts the demo runner.
-    """
-    # Create health poller
-    health_poller = RateLimiterHealthPoller(
-        endpoints=TARGET_URLS,
-        poll_interval=2.0,
-    )
-
-    # Create demo runner
-    runner = DemoRunner(
-        subject_name="Rate Limiter",
-        chapters=RATELIMITER_CHAPTERS,
-        health_poller=health_poller,
-    )
-
-    # Run demo
-    await runner.run()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

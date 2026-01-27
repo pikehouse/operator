@@ -1,20 +1,17 @@
 """
-TiKV demo entry point with chapter-based chaos demonstration.
+TiKV demo chapters and chaos injection callbacks.
 
-This module provides the TiKV-specific demo entry point using the shared
-demo framework. It defines chapters matching the existing TUI flow and
+This module provides TiKV-specific demo chapters and callbacks for the
+TUI demo controller. It defines chapters matching the TUI flow and
 wires in TiKV-specific health polling and chaos injection.
 
-Usage:
-    python -m demo.tikv
+Run via: python -m demo tikv
 """
 
 import asyncio
 from pathlib import Path
 
-from demo.runner import DemoRunner
 from demo.tikv_chaos import kill_random_tikv, restart_container, start_ycsb_load
-from demo.tikv_health import TiKVHealthPoller
 from demo.types import Chapter
 
 
@@ -188,40 +185,3 @@ TIKV_CHAPTERS = [
 ]
 
 
-async def main() -> None:
-    """
-    Run the TiKV demo.
-
-    Creates health poller, assembles chapters (including fault/recovery),
-    and runs the demo using DemoRunner.
-    """
-    # Create health poller
-    health_poller = TiKVHealthPoller(
-        pd_endpoint="http://localhost:2379",
-        poll_interval=2.0,
-    )
-
-    # Assemble chapters with load, fault, and recovery
-    chapters = [
-        TIKV_CHAPTERS[0],  # Welcome
-        TIKV_CHAPTERS[1],  # Cluster Health
-        create_load_chapter(COMPOSE_FILE),  # Load Generation (starts YCSB)
-        create_fault_chapter(COMPOSE_FILE),  # Fault Injection (kills node)
-        TIKV_CHAPTERS[2],  # Detection
-        TIKV_CHAPTERS[3],  # AI Diagnosis
-        create_recovery_chapter(COMPOSE_FILE),  # Recovery (restarts node)
-        TIKV_CHAPTERS[4],  # Complete
-    ]
-
-    # Create and run demo
-    runner = DemoRunner(
-        subject_name="TiKV",
-        chapters=chapters,
-        health_poller=health_poller,
-    )
-
-    await runner.run()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

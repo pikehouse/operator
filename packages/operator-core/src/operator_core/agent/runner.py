@@ -21,7 +21,7 @@ import asyncio
 import functools
 import signal
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import anthropic
 from anthropic import AsyncAnthropic
@@ -280,7 +280,19 @@ class AgentRunner:
         from operator_core.actions.safety import ObserveOnlyError
         from operator_core.actions.validation import ValidationError
 
+        # Get current observation for parameter inference fallback
+        try:
+            observation = await self.subject.observe()
+        except Exception:
+            observation = {}
+
         for rec in diagnosis_output.recommended_actions:
+            # Fallback: infer parameters from context if Claude returned empty
+            if not rec.parameters:
+                inferred = self._infer_action_parameters(rec.action_name, observation)
+                if inferred:
+                    print(f"  (inferred params: {inferred})", flush=True)
+                    rec.parameters = inferred
             print(f"  → {rec.action_name} params={rec.parameters}", flush=True)
             try:
                 # 1. Propose action (validates params, creates proposal)
@@ -481,6 +493,38 @@ class AgentRunner:
                 print(f"Action {proposal_id} exhausted all retries")
         except Exception as e:
             print(f"Error scheduling retry for action {proposal_id}: {e}")
+
+    def _infer_action_parameters(
+        self,
+        action_name: str,
+        observation: dict,
+    ) -> dict[str, Any] | None:
+        """
+        Infer action parameters from observation when Claude returns empty params.
+
+        This is a fallback for when the LLM doesn't fill in parameters despite
+        prompting. We extract reasonable defaults from the current state.
+
+        Args:
+            action_name: Name of the action needing parameters
+            observation: Current cluster observation
+
+        Returns:
+            Dict of inferred parameters, or None if inference not possible
+        """
+        if action_name == "reset_counter":
+            # Find the counter that's over limit
+            counters = observation.get("counters", [])
+            for counter in counters:
+                count = counter.get("count", 0)
+                limit = counter.get("limit", 0)
+                if count > limit:
+                    return {"key": counter.get("key")}
+            # No over-limit counter found
+            return None
+
+        # Add more action-specific inference as needed
+        return None
 
     def _print_diagnosis_summary(self, diagnosis: DiagnosisOutput, ticket_id: int) -> None:
         """
