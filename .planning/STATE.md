@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
-**Phase:** Complete
+**Milestone:** v2.2 Agentic Remediations Demo
+**Phase:** Not started (defining requirements)
 **Plan:** —
-**Status:** SHIPPED
-**Last activity:** 2026-01-27 - Milestone v2.1 archived
+**Status:** Defining requirements
+**Last activity:** 2026-01-27 — Milestone v2.2 started
 
-Progress: [##########] 100% (21/21 plans complete)
+Progress: [░░░░░░░░░░] 0%
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 20 (4/5 complete) - TUI integration complete. Final human verification remaining.
+**Current focus:** v2.2 milestone — upgrading demos to show complete agentic loop (detect → diagnose → act → verify).
 
 ## Milestones
 

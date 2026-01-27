@@ -8,6 +8,17 @@ An AI-powered operator for distributed systems that monitors clusters, diagnoses
 
 AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
 
+## Current Milestone: v2.2 Agentic Remediations Demo
+
+**Goal:** Demos for both TiKV and rate limiter show complete agentic loop: fault injection → AI detection → diagnosis → auto-execute action → verify fix resolved
+
+**Target features:**
+- Switch demos from OBSERVE mode to EXECUTE mode
+- Agent auto-executes recommended actions (no human approval during demo)
+- Agent verifies fix after action completes (full agentic loop)
+- Chapter narratives updated to describe agentic remediation flow
+- Both TiKV and rate limiter demos upgraded
+
 ## Current State
 
 **Shipped:** v2.1 (2026-01-27)
@@ -168,4 +179,4 @@ The goal is proving the operator works on systems Claude hasn't seen in training
 | Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
 
 ---
-*Last updated: 2026-01-27 after shipping v2.1 milestone*
+*Last updated: 2026-01-27 after starting v2.2 milestone*
