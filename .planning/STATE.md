@@ -260,5 +260,11 @@ Files created:
 
 *None*
 
+## Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
+
 ---
-*State updated: 2026-01-27 (Phase 20 IN PROGRESS - 2/3 plans done)*
+*State updated: 2026-01-27 (Milestone v2.1 COMPLETE)*
