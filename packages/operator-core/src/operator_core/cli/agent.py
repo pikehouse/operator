@@ -149,7 +149,7 @@ def start_agent(
             if safety_mode == SafetyMode.EXECUTE:
                 # Set up action execution infrastructure
                 auditor = ActionAuditor(db_path)
-                registry = ActionRegistry.from_subject(subject_instance)
+                registry = ActionRegistry(subject_instance)
                 safety = SafetyController(db_path, auditor, mode=safety_mode)
                 executor = ActionExecutor(
                     db_path=db_path,
