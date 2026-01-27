@@ -4,11 +4,11 @@
 
 **Milestone:** v2.2 Agentic Remediations Demo
 **Phase:** 21 - Agent Agentic Loop
-**Plan:** 01 of 1 complete
+**Plan:** 02 of 2 complete
 **Status:** Phase complete
-**Last activity:** 2026-01-27 - Completed 21-01-PLAN.md
+**Last activity:** 2026-01-27 - Completed 21-02-PLAN.md
 
-Progress: [█████░░░░░] 50%
+Progress: [██████████] 100% (Phase 21)
 
 ## Project Reference
 
@@ -77,16 +77,18 @@ See: .planning/MILESTONES.md
 - Fixed 5s delay for verification (not adaptive polling) - sufficient for demo
 - Simplified verification logs success if metrics observed (full invariant re-check is future work)
 - Propose -> Validate -> Execute -> Verify agentic flow in AgentRunner
+- Environment variables for mode configuration (OPERATOR_SAFETY_MODE, OPERATOR_APPROVAL_MODE)
+- SubprocessManager.spawn() accepts env dict, merges with os.environ
 
 **Relevant for Phase 22:**
-- AgentRunner now implements complete agentic loop
-- Need to configure demos with EXECUTE mode and approval_mode=False
+- AgentRunner implements complete agentic loop
+- Demo configured with EXECUTE mode and approval_mode=False
 - Both demos already have chaos injection - ready for full E2E
 
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 21-01-PLAN.md
+**Stopped at:** Completed 21-02-PLAN.md (Phase 21 complete)
 **Resume with:** `/gsd:execute-phase 22`
 
 ## Open Issues
@@ -100,4 +102,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (Completed 21-01-PLAN.md)*
+*State updated: 2026-01-27 (Completed 21-02-PLAN.md)*
