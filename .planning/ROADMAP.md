@@ -50,6 +50,11 @@ Plans:
 - RLIM-02: Counter drift -> reset_counter -> verify counters aligned
 - RLIM-03: Rate limiter demo shows complete loop in agent panel
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 22-01-PLAN.md — Update demo chapter narratives for agentic remediation flow
+
 **Success Criteria:**
 1. TiKV demo chapter narratives describe agentic remediation (not just observation)
 2. TiKV demo: after node kill, agent executes transfer-leader and verifies region rebalance
@@ -104,7 +109,7 @@ Archived in milestones/v2.1-ROADMAP.md
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
 | 21 | v2.2 | 2/2 | Complete | 2026-01-27 |
-| 22 | v2.2 | 0/? | Pending | — |
+| 22 | v2.2 | 0/1 | Pending | — |
 
 ---
 *Roadmap created: 2026-01-25*
