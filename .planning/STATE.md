@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 18 of 20 (Docker Compose Environment)
-**Plan:** 01 of 02 completed
-**Status:** In progress
-**Last activity:** 2026-01-26 - Completed 18-01-PLAN.md (Docker Compose environment)
+**Plan:** 02 of 02 completed
+**Status:** Phase complete
+**Last activity:** 2026-01-26 - Completed 18-02-PLAN.md (Load generator)
 
-Progress: [######....] 62% (3.5/5 phases complete)
+Progress: [########..] 80% (4/5 phases complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 18 in progress - Docker Compose environment for rate limiter cluster
+**Current focus:** Phase 18 complete - Ready for Phase 19 (operator-ratelimiter package)
 
 ## Milestones
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 |-------|------|--------------|--------|
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
-| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | IN PROGRESS (1/2) |
+| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
@@ -98,6 +98,9 @@ See: .planning/MILESTONES.md
 - Copy src/ before pip install in Dockerfile (hatch build requires source at install time)
 - restart: "no" for dev environment (show failures instead of hiding them)
 - depends_on with condition: service_healthy for proper startup ordering
+- Both 200 and 429 responses count as success for load generator (rate limiter working correctly)
+- asyncio.Semaphore(100) for concurrent request limiting in load generator
+- itertools.cycle for stateless round-robin target distribution
 
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
@@ -106,8 +109,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 18-01-PLAN.md (Docker Compose environment)
-**Resume with:** 18-02-PLAN.md (Load generator)
+**Stopped at:** Completed 18-02-PLAN.md (Load generator) - Phase 18 complete
+**Resume with:** 19-01-PLAN.md (operator-ratelimiter package)
 
 ## Phase 16 Completion Summary
 
@@ -131,21 +134,24 @@ All 4 plans of Phase 17 completed:
 
 Rate limiter service is fully instrumented and ready for deployment (Phase 18).
 
-## Phase 18 Progress
+## Phase 18 Completion Summary
 
-Plan 01 of Phase 18 completed:
+All 2 plans of Phase 18 completed:
 - 18-01: Docker Compose environment with Redis, 3 rate limiter nodes, and Prometheus
+- 18-02: Load generator with round-robin targeting and burst traffic patterns
 
 Files created:
 - packages/ratelimiter-service/Dockerfile
 - docker/docker-compose.yml
 - docker/.env.example
+- docker/loadgen/loadgen.py
+- docker/loadgen/Dockerfile
 
-Verified: All services start healthy, Prometheus scrapes all 3 ratelimiter targets.
+Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). Load generator produces ~10 RPS with burst spikes.
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 18 plan 01 complete)*
+*State updated: 2026-01-26 (Phase 18 complete)*
