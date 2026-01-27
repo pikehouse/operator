@@ -20,15 +20,15 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 
 ### TiKV Demo Chapters
 
-- [ ] **TIKV-01**: Chapter narratives updated to describe agentic remediation flow
-- [ ] **TIKV-02**: Node kill chaos -> transfer-leader action -> verify regions rebalanced
-- [ ] **TIKV-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
+- [x] **TIKV-01**: Chapter narratives updated to describe agentic remediation flow
+- [x] **TIKV-02**: Node kill chaos -> transfer-leader action -> verify regions rebalanced
+- [x] **TIKV-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
 
 ### Rate Limiter Demo Chapters
 
-- [ ] **RLIM-01**: Chapter narratives updated to describe agentic remediation flow
-- [ ] **RLIM-02**: Counter drift chaos -> reset_counter action -> verify counters aligned
-- [ ] **RLIM-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
+- [x] **RLIM-01**: Chapter narratives updated to describe agentic remediation flow
+- [x] **RLIM-02**: Counter drift chaos -> reset_counter action -> verify counters aligned
+- [x] **RLIM-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
 
 ## Future Requirements
 
@@ -62,12 +62,12 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 | AGENT-02 | 21 | Complete |
 | AGENT-03 | 21 | Complete |
 | AGENT-04 | 21 | Complete |
-| TIKV-01 | 22 | Pending |
-| TIKV-02 | 22 | Pending |
-| TIKV-03 | 22 | Pending |
-| RLIM-01 | 22 | Pending |
-| RLIM-02 | 22 | Pending |
-| RLIM-03 | 22 | Pending |
+| TIKV-01 | 22 | Complete |
+| TIKV-02 | 22 | Complete |
+| TIKV-03 | 22 | Complete |
+| RLIM-01 | 22 | Complete |
+| RLIM-02 | 22 | Complete |
+| RLIM-03 | 22 | Complete |
 
 **Coverage:**
 - v2.2 requirements: 11 total

@@ -4,11 +4,11 @@
 
 **Milestone:** v2.2 Agentic Remediations Demo
 **Phase:** 22 - Demo Integration
-**Plan:** 01 complete
-**Status:** In progress
-**Last activity:** 2026-01-27 - Completed 22-01-PLAN.md
+**Plan:** Complete
+**Status:** Phase 22 complete, milestone complete
+**Last activity:** 2026-01-27 - Phase 22 executed and verified
 
-Progress: [██████████] 100% (Phase 21) | [█░░░░░░░░░] 10% (Phase 22)
+Progress: [██████████] 100%
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now complete agentic loop with auto-remediation.
 
-**Current focus:** v2.2 milestone — upgrading demos to show complete agentic loop (detect -> diagnose -> act -> verify).
+**Current focus:** v2.2 milestone complete — both demos show complete agentic loop (detect -> diagnose -> act -> verify).
 
 ## Milestones
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 | v1.1 | SHIPPED | 2026-01-25 |
 | v2.0 | SHIPPED | 2026-01-26 |
 | v2.1 | SHIPPED | 2026-01-27 |
-| v2.2 | IN PROGRESS | — |
+| v2.2 | COMPLETE | 2026-01-27 |
 
 See: .planning/MILESTONES.md
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 21 | Agent Agentic Loop | DEMO-01, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (5) | Complete |
-| 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | In Progress (01 complete) |
+| 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | Complete |
 
 ## Archives
 
@@ -88,8 +88,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 22-01-PLAN.md
-**Resume with:** Next plan in Phase 22 or `/gsd:plan-phase 22` for remaining plans
+**Stopped at:** v2.2 milestone complete
+**Resume with:** `/gsd:audit-milestone` or `/gsd:complete-milestone`
 
 ## Open Issues
 
@@ -102,4 +102,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (Completed 22-01-PLAN.md)*
+*State updated: 2026-01-27 (v2.2 milestone complete)*

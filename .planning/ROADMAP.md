@@ -53,7 +53,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 22-01-PLAN.md — Update demo chapter narratives for agentic remediation flow
+- [x] 22-01-PLAN.md — Update demo chapter narratives for agentic remediation flow
 
 **Success Criteria:**
 1. TiKV demo chapter narratives describe agentic remediation (not just observation)
@@ -109,7 +109,7 @@ Archived in milestones/v2.1-ROADMAP.md
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
 | 21 | v2.2 | 2/2 | Complete | 2026-01-27 |
-| 22 | v2.2 | 0/1 | Pending | — |
+| 22 | v2.2 | 1/1 | Complete | 2026-01-27 |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -120,3 +120,5 @@ Archived in milestones/v2.1-ROADMAP.md
 *v2.2 phases added: 2026-01-27*
 *Phase 21 planned: 2026-01-27*
 *Phase 21 completed: 2026-01-27*
+*Phase 22 planned: 2026-01-27*
+*Phase 22 completed: 2026-01-27*
