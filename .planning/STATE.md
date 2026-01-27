@@ -4,9 +4,9 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 20 of 20 (E2E Demo & Chaos)
-**Plan:** 04 of 05 completed
-**Status:** In progress
-**Last activity:** 2026-01-27 - Completed 20-04-PLAN.md (TUI Integration)
+**Plan:** 05 of 05 completed
+**Status:** MILESTONE COMPLETE
+**Last activity:** 2026-01-27 - Completed 20-05-PLAN.md (E2E Validation - Human Verified)
 
 Progress: [##########] 100% (5/5 phases complete)
 
@@ -37,7 +37,7 @@ See: .planning/MILESTONES.md
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | COMPLETE (5/5) |
-| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | IN PROGRESS (4/5) |
+| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | COMPLETE (5/5) |
 
 ## Archives
 
@@ -167,8 +167,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 20-04-PLAN.md (TUI Integration)
-**Resume with:** Plan 20-05 - Human verification of both demos
+**Stopped at:** Milestone v2.1 complete
+**Resume with:** `/gsd:complete-milestone` to archive v2.1
 
 ## Phase 16 Completion Summary
 
@@ -233,14 +233,14 @@ Files created:
 
 Total tests: 65 (11 subject + 35 invariants + 19 protocol compliance)
 
-## Phase 20 Completion Status
+## Phase 20 Completion Summary
 
-Progress: 4 of 5 plans completed - IN PROGRESS
+All 5 plans of Phase 20 completed:
 - 20-01: Created shared demo infrastructure (Chapter, ChaosConfig, DemoRunner, HealthPollerProtocol)
 - 20-02: TiKV demo integration (TiKVHealthPoller, tikv_chaos, 8-chapter demo entry point)
 - 20-03: Rate limiter demo integration (RateLimiterHealthPoller, ratelimiter_chaos, 11-chapter demo entry point)
 - 20-04: TUI integration (TUIDemoController, run-demo.sh, demo/__main__.py)
-- 20-05: Human verification (REMAINING)
+- 20-05: E2E validation (human verified - both demos work, AI diagnosis quality approved)
 
 Files created:
 - demo/__init__.py
