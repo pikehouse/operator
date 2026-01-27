@@ -191,16 +191,17 @@ class RateLimiterSubject:
         """
         Update the rate limit for a key.
 
+        Fire-and-forget: returns when management API accepts the request.
+        Does not wait for actual limit update confirmation.
+
         Args:
             key: The counter key to update.
             new_limit: New rate limit value.
 
         Raises:
             httpx.HTTPStatusError: On API errors (4xx, 5xx).
-            NotImplementedError: Always - update_limit not yet implemented in service.
 
         Note:
-            This action is defined but not yet implemented in the rate limiter
-            service API. Will be added in future phase.
+            Window size is not specified, so service default is used.
         """
-        raise NotImplementedError("update_limit action deferred to future phase")
+        await self.ratelimiter.update_limit(key, new_limit)
