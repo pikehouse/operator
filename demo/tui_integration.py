@@ -187,9 +187,10 @@ class TUIDemoController:
             except* Exception:
                 pass  # TaskGroup handles cancellation
 
-        # 6. Clean shutdown - terminate subprocesses
+        # 6. Clean shutdown - terminate subprocesses and load generators
         if self._subprocess_mgr:
             await self._subprocess_mgr.terminate_all()
+        await self._cleanup_load_generators()
         self.console.print("[green]Demo shutdown complete[/green]")
 
     def _handle_signal(self, sig: signal.Signals) -> None:
@@ -617,3 +618,38 @@ class TUIDemoController:
         lines.append(f"Current: [bold]{ops_per_sec:.0f}[/bold] ops/sec")
 
         return "\n".join(lines)
+
+    async def _cleanup_load_generators(self) -> None:
+        """
+        Stop any running load generators on demo exit.
+
+        For TiKV: Stops YCSB container (ycsb-run)
+        For rate limiter: Stops loadgen service (if running)
+        """
+        if self.compose_file is None:
+            return
+
+        try:
+            from python_on_whales import DockerClient
+
+            docker = DockerClient(compose_files=[self.compose_file])
+
+            if self.subject_name == "tikv":
+                # Stop YCSB container by name
+                try:
+                    docker.stop("ycsb-run", time=2)
+                    docker.remove("ycsb-run", force=True)
+                    print("[TUI] Stopped YCSB load generator")
+                except Exception:
+                    pass  # Container may not exist
+
+            elif self.subject_name == "ratelimiter":
+                # Stop loadgen service
+                try:
+                    docker.compose.stop(["loadgen"])
+                    print("[TUI] Stopped loadgen service")
+                except Exception:
+                    pass  # Service may not be running
+
+        except Exception as e:
+            print(f"[TUI] Warning: Could not stop load generators: {e}")

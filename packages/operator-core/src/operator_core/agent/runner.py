@@ -209,7 +209,12 @@ class AgentRunner:
             await db.update_diagnosis(ticket.id, diagnosis_md)
 
             self._tickets_diagnosed += 1
-            print(f"Ticket {ticket.id} diagnosed (severity: {diagnosis_output.severity})")
+
+            # Print diagnosis summary for TUI agent panel
+            self._print_diagnosis_summary(diagnosis_output, ticket.id)
+
+            # Save full diagnosis to file
+            diagnosis_file = self._save_diagnosis_file(diagnosis_md, ticket)
 
             # Propose actions if executor available and recommendations exist (v2.0)
             await self._propose_actions_from_diagnosis(diagnosis_output, ticket.id)
@@ -406,3 +411,75 @@ class AgentRunner:
                 print(f"Action {proposal_id} exhausted all retries")
         except Exception as e:
             print(f"Error scheduling retry for action {proposal_id}: {e}")
+
+    def _print_diagnosis_summary(self, diagnosis: DiagnosisOutput, ticket_id: int) -> None:
+        """
+        Print a concise diagnosis summary for the TUI agent panel.
+
+        Shows severity, root cause, and recommended action in a readable format.
+
+        Args:
+            diagnosis: The structured diagnosis output
+            ticket_id: Ticket ID for reference
+        """
+        # Severity with visual indicator
+        severity_icons = {
+            "Critical": "🔴",
+            "Warning": "🟡",
+            "Info": "🟢",
+        }
+        icon = severity_icons.get(diagnosis.severity, "⚪")
+
+        print("")
+        print(f"━━━ Ticket {ticket_id} Diagnosis ━━━")
+        print(f"{icon} Severity: {diagnosis.severity}")
+        print("")
+
+        # Truncate primary diagnosis if too long (keep under 120 chars per line)
+        root_cause = diagnosis.primary_diagnosis
+        if len(root_cause) > 200:
+            root_cause = root_cause[:197] + "..."
+        print(f"Root Cause: {root_cause}")
+        print("")
+
+        # Show recommended action (truncated)
+        action = diagnosis.recommended_action
+        if len(action) > 200:
+            action = action[:197] + "..."
+        print(f"Recommended: {action}")
+        print("")
+
+    def _save_diagnosis_file(self, diagnosis_md: str, ticket: Ticket) -> Path:
+        """
+        Save full diagnosis markdown to /tmp for detailed review.
+
+        Args:
+            diagnosis_md: The formatted markdown diagnosis
+            ticket: The ticket being diagnosed
+
+        Returns:
+            Path to the saved diagnosis file
+        """
+        import datetime
+
+        # Create diagnosis file in /tmp
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        filename = f"diagnosis-{ticket.id}-{ticket.invariant_name}-{timestamp}.md"
+        filepath = Path("/tmp") / filename
+
+        # Add header with ticket context
+        header = f"""# Diagnosis Report
+
+**Ticket ID:** {ticket.id}
+**Invariant:** {ticket.invariant_name}
+**Generated:** {datetime.datetime.now().isoformat()}
+
+---
+
+"""
+        filepath.write_text(header + diagnosis_md)
+
+        print(f"📄 Full diagnosis: {filepath}")
+        print("")
+
+        return filepath

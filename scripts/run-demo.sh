@@ -63,12 +63,9 @@ if [[ "$SUBJECT" == "tikv" ]]; then
     echo "Compose file: $COMPOSE_FILE"
     echo ""
 
-    # Stop rate limiter cluster if running (port conflicts)
-    if docker compose -f "$OTHER_COMPOSE_FILE" ps 2>/dev/null | grep -qE "ratelimiter|redis|prometheus"; then
-        echo "Stopping rate limiter cluster (port conflict)..."
-        docker compose -f "$OTHER_COMPOSE_FILE" down >/dev/null 2>&1 || true
-        echo ""
-    fi
+    # Stop rate limiter cluster if running (port 9090 conflict)
+    echo "Stopping rate limiter cluster (if running)..."
+    docker compose -f "$OTHER_COMPOSE_FILE" down 2>/dev/null || true
 
     # Ensure TiKV cluster is running
     echo "Checking cluster status..."
@@ -99,12 +96,9 @@ elif [[ "$SUBJECT" == "ratelimiter" ]]; then
     echo "Compose file: $COMPOSE_FILE"
     echo ""
 
-    # Stop TiKV cluster if running (port conflicts)
-    if docker compose -f "$OTHER_COMPOSE_FILE" ps 2>/dev/null | grep -qE "tikv|pd|prometheus"; then
-        echo "Stopping TiKV cluster (port conflict)..."
-        docker compose -f "$OTHER_COMPOSE_FILE" down >/dev/null 2>&1 || true
-        echo ""
-    fi
+    # Stop TiKV cluster if running (port 9090 conflict)
+    echo "Stopping TiKV cluster (if running)..."
+    docker compose -f "$OTHER_COMPOSE_FILE" down 2>/dev/null || true
 
     # Ensure rate limiter cluster is running (but NOT loadgen for demos)
     echo "Checking cluster status..."
