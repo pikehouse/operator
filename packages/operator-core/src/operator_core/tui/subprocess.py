@@ -64,6 +64,7 @@ class SubprocessManager:
         name: str,
         command: list[str],
         buffer_size: int = 50,
+        env: dict[str, str] | None = None,
     ) -> ManagedProcess:
         """
         Spawn a subprocess with output capture.
@@ -75,19 +76,25 @@ class SubprocessManager:
             name: Identifier for this process (e.g., "monitor", "agent")
             command: CLI arguments (passed to Python -c or as module args)
             buffer_size: Maximum lines in output buffer
+            env: Optional environment variables to add (merged with current env)
 
         Returns:
             ManagedProcess with process handle and output buffer
         """
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
+        # Start with current environment (preserves PATH, HOME, etc.)
+        subprocess_env = os.environ.copy()
+        subprocess_env["PYTHONUNBUFFERED"] = "1"
+
+        # Merge caller-provided environment variables
+        if env:
+            subprocess_env.update(env)
 
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
             *command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
-            env=env,
+            env=subprocess_env,
             start_new_session=True,
         )
 
