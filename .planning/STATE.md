@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.2 Agentic Remediations Demo
-**Phase:** 21 - Agent Agentic Loop
-**Plan:** 02 of 2 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-27 - Completed 21-02-PLAN.md
+**Phase:** 22 - Demo Integration
+**Plan:** 01 complete
+**Status:** In progress
+**Last activity:** 2026-01-27 - Completed 22-01-PLAN.md
 
-Progress: [██████████] 100% (Phase 21)
+Progress: [██████████] 100% (Phase 21) | [█░░░░░░░░░] 10% (Phase 22)
 
 ## Project Reference
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 21 | Agent Agentic Loop | DEMO-01, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (5) | Complete |
-| 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | Pending |
+| 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | In Progress (01 complete) |
 
 ## Archives
 
@@ -80,16 +80,16 @@ See: .planning/MILESTONES.md
 - Environment variables for mode configuration (OPERATOR_SAFETY_MODE, OPERATOR_APPROVAL_MODE)
 - SubprocessManager.spawn() accepts env dict, merges with os.environ
 
-**Relevant for Phase 22:**
-- AgentRunner implements complete agentic loop
-- Demo configured with EXECUTE mode and approval_mode=False
-- Both demos already have chaos injection - ready for full E2E
+**Key decisions from v2.2 (Phase 22):**
+- Renamed "AI Diagnosis" stages to "AI Remediation" to reflect full agentic loop
+- Explicit action names in narratives (transfer_leader, reset_counter) for viewer understanding
+- Consistent narration pattern: "Watch Agent panel for complete agentic loop" + numbered steps
 
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 21-02-PLAN.md (Phase 21 complete)
-**Resume with:** `/gsd:plan-phase 22`
+**Stopped at:** Completed 22-01-PLAN.md
+**Resume with:** Next plan in Phase 22 or `/gsd:plan-phase 22` for remaining plans
 
 ## Open Issues
 
@@ -102,4 +102,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (Completed 21-02-PLAN.md)*
+*State updated: 2026-01-27 (Completed 22-01-PLAN.md)*
