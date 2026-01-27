@@ -297,13 +297,16 @@ class TUIDemoController:
 
     async def _execute_chapter_callback(self, chapter: Chapter) -> None:
         """
-        Execute chapter's on_enter callback.
+        Execute chapter's on_enter callback and handle auto-advance.
 
         Handles async callback execution and auto-advance if configured.
+        IMPORTANT: If this chapter auto-advances, also trigger the next
+        chapter's on_enter callback (recursively if needed).
 
         Args:
             chapter: Chapter whose callback to execute
         """
+        # Execute callback if present
         if chapter.on_enter is not None:
             try:
                 print(f"[TUI] Executing callback for: {chapter.title}")
@@ -313,13 +316,19 @@ class TUIDemoController:
                 print(f"[TUI] ERROR in callback for {chapter.title}: {e}")
                 import traceback
                 traceback.print_exc()
-            finally:
-                self._current_task = None
 
-            # Auto-advance if configured
-            if chapter.auto_advance and self._demo_state is not None:
-                self._demo_state.advance()
-                self._update_narration()
+        # Clear current task since this callback is done
+        self._current_task = None
+
+        # Auto-advance if configured
+        if chapter.auto_advance and self._demo_state is not None:
+            self._demo_state.advance()
+            self._update_narration()
+
+            # CRITICAL: Trigger the next chapter's callback (if any)
+            # This ensures auto-advance chains work correctly
+            next_chapter = self._demo_state.get_current()
+            await self._execute_chapter_callback(next_chapter)
 
     async def _update_loop(self, live: Live) -> None:
         """
