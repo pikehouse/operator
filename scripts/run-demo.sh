@@ -129,6 +129,14 @@ fi
 
 export COMPOSE_FILE
 
+# Clear ticket database for clean demo state
+TICKET_DB="$HOME/.operator/tickets.db"
+if [ -f "$TICKET_DB" ]; then
+    echo "Clearing ticket database..."
+    rm -f "$TICKET_DB"
+    echo ""
+fi
+
 # Run the demo via python -m demo
 echo "Starting demo..."
 echo ""
