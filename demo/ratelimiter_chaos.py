@@ -136,6 +136,49 @@ async def inject_burst_traffic(
     return {"allowed": over_limit_count, "denied": 0}
 
 
+async def create_baseline_traffic(
+    keys: list[str],
+    count_per_key: int = 5,
+    limit: int = 10,
+) -> None:
+    """
+    Create baseline counter entries to show normal workload.
+
+    Creates counters at healthy levels (below limit) so the demo
+    shows normal operation before chaos is injected.
+
+    Args:
+        keys: List of rate limit keys to create
+        count_per_key: Number of entries per key (should be < limit)
+        limit: The limit for display purposes
+    """
+    import time
+
+    print(f"[BASELINE] Creating {len(keys)} counters with {count_per_key} entries each...")
+
+    r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
+    try:
+        now_ms = int(time.time() * 1000)
+
+        for key in keys:
+            redis_key = f"ratelimit:{key}"
+            await r.delete(redis_key)
+
+            # Add entries spread across 50 seconds into the future
+            for i in range(count_per_key):
+                offset_ms = int((i / max(count_per_key - 1, 1)) * 50000) if i > 0 else 0
+                timestamp = now_ms + offset_ms
+                member = f"{timestamp}:baseline-{i}"
+                await r.zadd(redis_key, {member: timestamp})
+
+            await r.expire(redis_key, 120)
+
+        print(f"[BASELINE] Created {len(keys)} healthy counters ({count_per_key}/{limit} each)")
+
+    finally:
+        await r.aclose()
+
+
 async def setup_rate_limit(
     target_url: str,
     key: str,

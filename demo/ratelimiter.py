@@ -17,12 +17,14 @@ import asyncio
 from demo.ratelimiter_chaos import (
     COUNTER_DRIFT_CONFIG,
     GHOST_ALLOWING_CONFIG,
+    create_baseline_traffic,
     inject_burst_traffic,
     inject_redis_pause,
     setup_rate_limit,
 )
 from demo.ratelimiter_health import RateLimiterHealthPoller
 from demo.runner import DemoRunner
+from demo.status import demo_status
 from demo.types import Chapter
 
 
@@ -39,7 +41,7 @@ TARGET_URLS = [
 
 def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
     """
-    Create setup chapter that configures rate limit.
+    Create setup chapter that configures rate limit and baseline traffic.
 
     Args:
         key: Rate limit key to configure
@@ -51,17 +53,29 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
     """
 
     async def setup() -> None:
-        """Configure rate limit via management API."""
+        """Configure rate limit and create baseline traffic."""
+        # Configure the rate limit
         await setup_rate_limit(
             target_url=TARGET_URLS[0],
             key=key,
             limit=limit,
             window_sec=window_sec,
         )
+        # Create baseline traffic so workload panel shows healthy counters
+        await create_baseline_traffic(
+            keys=["api-users", "api-orders", "api-products"],
+            count_per_key=5,
+            limit=limit,
+        )
 
     return Chapter(
         title="Stage 2: Setup",
-        narration=f"Configuring rate limit for key '{key}' with limit {limit} requests per {window_sec}s.",
+        narration=f"""Setting up rate limiter demo...
+
+- Configuring rate limit: {limit} requests per {window_sec}s
+- Creating baseline traffic for workload display
+
+[dim]Watch the Workload panel for healthy counters...[/dim]""",
         on_enter=setup,
         auto_advance=True,
     )
@@ -82,11 +96,12 @@ def create_counter_drift_chapter() -> Chapter:
         """Countdown and inject Redis PAUSE chaos."""
         # Countdown before chaos
         for i in range(3, 0, -1):
-            print(f"Injecting chaos in {i}...")
+            demo_status.set(f"[yellow]Injecting chaos in {i}...[/yellow]")
             await asyncio.sleep(1.0)
 
-        print("INJECTING REDIS PAUSE!")
+        demo_status.set("[bold red]INJECTING REDIS PAUSE![/bold red]")
         await inject_redis_pause(duration_sec=COUNTER_DRIFT_CONFIG.duration_sec)
+        demo_status.set("[green]Redis pause complete[/green]")
 
     return Chapter(
         title="Stage 3: Counter Drift Chaos",
@@ -126,19 +141,18 @@ def create_ghost_allowing_chapter(key: str, limit: int) -> Chapter:
         """Countdown and inject burst traffic chaos."""
         # Countdown before chaos
         for i in range(3, 0, -1):
-            print(f"Injecting chaos in {i}...")
+            demo_status.set(f"[yellow]Injecting chaos in {i}...[/yellow]")
             await asyncio.sleep(1.0)
 
-        print("INJECTING BURST TRAFFIC!")
-        burst_count = limit * GHOST_ALLOWING_CONFIG.burst_multiplier
+        demo_status.set("[bold red]INJECTING BURST TRAFFIC![/bold red]")
         result = await inject_burst_traffic(
             target_urls=TARGET_URLS,
             key=key,
             limit=limit,
             multiplier=GHOST_ALLOWING_CONFIG.burst_multiplier,
         )
-        print(
-            f"Burst complete: {result['allowed']} allowed, {result['denied']} denied (expected {limit} allowed)"
+        demo_status.set(
+            f"[green]Burst complete: {result['allowed']} allowed, {result['denied']} denied (expected {limit} allowed)[/green]"
         )
 
     return Chapter(
