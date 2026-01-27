@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 20 of 20 (E2E Demo & Chaos)
-**Plan:** 02 of 03 completed
-**Status:** In progress
-**Last activity:** 2026-01-27 - Completed 20-02-PLAN.md (TiKV Demo Integration)
+**Plan:** 03 of 03 completed
+**Status:** Phase complete
+**Last activity:** 2026-01-27 - Completed 20-03-PLAN.md (Rate Limiter Demo Integration)
 
-Progress: [#########.] 94% (4.93/5 phases complete)
+Progress: [##########] 100% (5/5 phases complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 20 (2/3 complete) - TiKV demo integration complete. Rate limiter demo next.
+**Current focus:** Phase 20 (3/3 complete) - All demos complete. v2.1 milestone ready for release.
 
 ## Milestones
 
@@ -37,7 +37,7 @@ See: .planning/MILESTONES.md
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | COMPLETE (5/5) |
-| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | IN PROGRESS (2/3) |
+| 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | COMPLETE (3/3) |
 
 ## Archives
 
@@ -146,6 +146,13 @@ See: .planning/MILESTONES.md
 - Global _killed_container variable for recovery chapter callback
 - Countdown uses asyncio.sleep instead of Rich Live display
 
+**Key decisions from v2.1 (Phase 20-03):**
+- CLIENT PAUSE WRITE mode (not ALL) to allow read-based health checks during chaos
+- Round-robin burst traffic across all three rate limiter nodes
+- Auto-advance setup chapter after rate limit configuration
+- Block advance during chaos injection with countdown feedback
+- 11 chapters covering two chaos scenarios (counter drift and ghost allowing)
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
@@ -153,8 +160,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 20-02-PLAN.md (TiKV Demo Integration)
-**Resume with:** 20-03-PLAN.md (Rate Limiter Demo Integration)
+**Stopped at:** Completed 20-03-PLAN.md (Rate Limiter Demo Integration)
+**Resume with:** Phase 20 complete - v2.1 milestone ready for release
 
 ## Phase 16 Completion Summary
 
@@ -221,10 +228,10 @@ Total tests: 65 (11 subject + 35 invariants + 19 protocol compliance)
 
 ## Phase 20 Completion Status
 
-Progress: 2 of 3 plans completed
+Progress: 3 of 3 plans completed - PHASE COMPLETE
 - 20-01: Created shared demo infrastructure (Chapter, ChaosConfig, DemoRunner, HealthPollerProtocol)
 - 20-02: TiKV demo integration (TiKVHealthPoller, tikv_chaos, 8-chapter demo entry point)
-- 20-03: Rate limiter demo integration (pending)
+- 20-03: Rate limiter demo integration (RateLimiterHealthPoller, ratelimiter_chaos, 11-chapter demo entry point)
 
 Files created:
 - demo/__init__.py
@@ -232,6 +239,10 @@ Files created:
 - demo/runner.py
 - demo/tikv_health.py
 - demo/tikv_chaos.py
+- demo/tikv.py
+- demo/ratelimiter_health.py
+- demo/ratelimiter_chaos.py
+- demo/ratelimiter.py
 - demo/tikv.py
 
 ## Open Issues
