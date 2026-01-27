@@ -9,9 +9,7 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 
 ### Demo Configuration
 
-- [ ] **DEMO-01**: Demo runs in EXECUTE mode by default (not OBSERVE)
-- [ ] **DEMO-02**: Approval workflow disabled during demo (autonomous execution)
-- [ ] **DEMO-03**: Demo script supports --observe flag to fall back to observe-only mode
+- [ ] **DEMO-01**: Demo runs in EXECUTE mode (autonomous execution, no approval workflow)
 
 ### Agent Agentic Loop
 
@@ -23,13 +21,13 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 ### TiKV Demo Chapters
 
 - [ ] **TIKV-01**: Chapter narratives updated to describe agentic remediation flow
-- [ ] **TIKV-02**: Node kill chaos → transfer-leader action → verify regions rebalanced
+- [ ] **TIKV-02**: Node kill chaos -> transfer-leader action -> verify regions rebalanced
 - [ ] **TIKV-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
 
 ### Rate Limiter Demo Chapters
 
 - [ ] **RLIM-01**: Chapter narratives updated to describe agentic remediation flow
-- [ ] **RLIM-02**: Counter drift chaos → reset_counter action → verify counters aligned
+- [ ] **RLIM-02**: Counter drift chaos -> reset_counter action -> verify counters aligned
 - [ ] **RLIM-03**: Demo shows complete loop in agent panel (diagnosis + action + verification)
 
 ## Future Requirements
@@ -53,30 +51,29 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 | Verification via invariant re-check | Metrics more direct, faster for demo |
 | Production safety for autonomous mode | Demo only, not production deployment |
 | Multi-action workflows in demo | Keep demo simple, single action per fault |
+| Observe-only mode flag | Simplify - one mode only (EXECUTE) |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEMO-01 | TBD | Pending |
-| DEMO-02 | TBD | Pending |
-| DEMO-03 | TBD | Pending |
-| AGENT-01 | TBD | Pending |
-| AGENT-02 | TBD | Pending |
-| AGENT-03 | TBD | Pending |
-| AGENT-04 | TBD | Pending |
-| TIKV-01 | TBD | Pending |
-| TIKV-02 | TBD | Pending |
-| TIKV-03 | TBD | Pending |
-| RLIM-01 | TBD | Pending |
-| RLIM-02 | TBD | Pending |
-| RLIM-03 | TBD | Pending |
+| DEMO-01 | 21 | Pending |
+| AGENT-01 | 21 | Pending |
+| AGENT-02 | 21 | Pending |
+| AGENT-03 | 21 | Pending |
+| AGENT-04 | 21 | Pending |
+| TIKV-01 | 22 | Pending |
+| TIKV-02 | 22 | Pending |
+| TIKV-03 | 22 | Pending |
+| RLIM-01 | 22 | Pending |
+| RLIM-02 | 22 | Pending |
+| RLIM-03 | 22 | Pending |
 
 **Coverage:**
-- v2.2 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- v2.2 requirements: 11 total
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after initial definition*
+*Last updated: 2026-01-27 after roadmap creation*
