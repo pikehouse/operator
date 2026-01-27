@@ -310,11 +310,9 @@ class TUIDemoController:
         # Execute callback if present
         if chapter.on_enter is not None:
             try:
-                print(f"[TUI] Executing callback for: {chapter.title}")
                 await chapter.on_enter()
-                print(f"[TUI] Callback complete for: {chapter.title}")
             except Exception as e:
-                print(f"[TUI] ERROR in callback for {chapter.title}: {e}")
+                # Only log errors, not normal flow
                 import traceback
                 traceback.print_exc()
 
@@ -639,7 +637,6 @@ class TUIDemoController:
                 try:
                     docker.stop("ycsb-run", time=2)
                     docker.remove("ycsb-run", force=True)
-                    print("[TUI] Stopped YCSB load generator")
                 except Exception:
                     pass  # Container may not exist
 
@@ -647,9 +644,8 @@ class TUIDemoController:
                 # Stop loadgen service
                 try:
                     docker.compose.stop(["loadgen"])
-                    print("[TUI] Stopped loadgen service")
                 except Exception:
                     pass  # Service may not be running
 
-        except Exception as e:
-            print(f"[TUI] Warning: Could not stop load generators: {e}")
+        except Exception:
+            pass  # Cleanup is best-effort

@@ -38,12 +38,7 @@ def create_load_chapter(compose_file: Path) -> Chapter:
 
     async def on_enter() -> None:
         """Start YCSB load generation."""
-        print("[YCSB] Starting load generation...")
-        success = await start_ycsb_load(compose_file)
-        if success:
-            print("[YCSB] Load generation started!")
-        else:
-            print("[YCSB] Failed to start load - continuing anyway")
+        await start_ycsb_load(compose_file)
         await asyncio.sleep(2.0)
 
     return Chapter(

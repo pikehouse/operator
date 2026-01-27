@@ -124,8 +124,7 @@ async def start_ycsb_load(compose_file: Path) -> bool:
             name="ycsb-run",
         )
         return True
-    except Exception as e:
-        print(f"[YCSB] Error starting load: {e}")
+    except Exception:
         return False
 
 
