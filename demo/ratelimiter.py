@@ -183,18 +183,21 @@ Watch the Cluster panel → all nodes should be [green]Up[/green]
         narration="""Watch Monitor panel → should show [bold red]violation(s) detected[/bold red]
 Watch Workload panel → counter should show [bold red]OVER LIMIT[/bold red]
 
-[dim]Press SPACE when you see the violation...[/dim]""",
+Next: Agent will diagnose and act automatically.""",
     ),
     Chapter(
-        title="Stage 5: AI Diagnosis",
-        narration="""Watch Agent panel → AI analyzing the anomaly
-The AI sees: counters, nodes, metrics, violation details
+        title="Stage 5: AI Remediation",
+        narration="""Watch Agent panel for the complete agentic loop:
+1. Diagnosis: AI identifies counter drift root cause
+2. Action: reset_counter to realign distributed counters
+3. Verify: Agent checks counters are aligned after action
 
-[dim]Press SPACE to continue...[/dim]""",
+[dim]Autonomous remediation - no human approval.[/dim]""",
     ),
     Chapter(
         title="Stage 6: Recovery",
-        narration="""System recovering... counters resyncing with Redis
+        narration="""Agent executed reset_counter, verifying fix...
+Watch Agent panel for verification result.
 
 [dim]Auto-advancing...[/dim]""",
         auto_advance=True,
@@ -206,14 +209,16 @@ The AI sees: counters, nodes, metrics, violation details
         narration="""Watch Monitor panel → new violation detected
 Counter exceeds limit due to burst traffic race condition
 
-[dim]Press SPACE when you see the violation...[/dim]""",
+Next: Agent will diagnose and act automatically.""",
     ),
     Chapter(
-        title="Stage 9: AI Diagnosis",
-        narration="""Watch Agent panel → AI diagnosing ghost allowing
-Same generic reasoning, different anomaly type
+        title="Stage 9: AI Remediation",
+        narration="""Watch Agent panel for the agentic loop:
+1. Diagnosis: AI identifies ghost allowing root cause
+2. Action: reset_counter to fix counter state
+3. Verify: Agent checks counters are back to normal
 
-[dim]Press SPACE to continue...[/dim]""",
+[dim]Same autonomous loop, different anomaly.[/dim]""",
     ),
     Chapter(
         title="Complete",
