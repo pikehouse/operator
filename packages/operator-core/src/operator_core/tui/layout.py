@@ -56,11 +56,14 @@ def create_layout() -> Layout:
     )
 
     # Right column splits into 4 rows
+    # Narration needs ~8 rows for chapter content
+    # Monitor and agent share remaining space equally
+    # Workload needs ~6 rows for counter display
     layout["main"].split_column(
-        Layout(name="narration", size=5),
+        Layout(name="narration", size=8),
         Layout(name="monitor", ratio=1),
         Layout(name="agent", ratio=1),
-        Layout(name="workload", size=8),
+        Layout(name="workload", size=6),
     )
 
     return layout

@@ -365,18 +365,18 @@ class TUIDemoController:
         # Update narration panel (includes status from chaos callbacks)
         self._update_narration()
 
-        # Update monitor panel
+        # Update monitor panel (show last 12 lines to fit typical terminal)
         monitor_buf = self._subprocess_mgr.get_buffer("monitor")
         if monitor_buf:
             self._layout["main"]["monitor"].update(
-                make_panel(monitor_buf.get_text(n=20), "Monitor", "blue")
+                make_panel(monitor_buf.get_text(n=12), "Monitor", "blue")
             )
 
-        # Update agent panel
+        # Update agent panel (show last 12 lines to fit typical terminal)
         agent_buf = self._subprocess_mgr.get_buffer("agent")
         if agent_buf:
             self._layout["main"]["agent"].update(
-                make_panel(agent_buf.get_text(n=20), "Agent", "green")
+                make_panel(agent_buf.get_text(n=12), "Agent", "green")
             )
 
         # Update cluster panel with health status
