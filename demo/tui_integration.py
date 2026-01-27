@@ -306,7 +306,13 @@ class TUIDemoController:
         """
         if chapter.on_enter is not None:
             try:
+                print(f"[TUI] Executing callback for: {chapter.title}")
                 await chapter.on_enter()
+                print(f"[TUI] Callback complete for: {chapter.title}")
+            except Exception as e:
+                print(f"[TUI] ERROR in callback for {chapter.title}: {e}")
+                import traceback
+                traceback.print_exc()
             finally:
                 self._current_task = None
 

@@ -140,11 +140,20 @@ class MonitorLoop:
             # Generic observation pattern - subject handles all data gathering
             observation = await self.subject.observe()
 
+            # DEBUG: Show what we observed
+            counters = observation.get("counters", [])
+            if counters:
+                print(f"[DEBUG] Observed {len(counters)} counter(s): {[c.get('key') for c in counters]}")
+            else:
+                print("[DEBUG] No counters in observation")
+
             # Generic check pattern - checker handles all invariant checking
             violations = self.checker.check(observation)
         except Exception as e:
             # Log but don't crash on observation/check failure
             print(f"Check cycle failed: {e}")
+            import traceback
+            traceback.print_exc()
             violations = []
 
         # Track stats

@@ -181,6 +181,9 @@ class RateLimiterHealthPoller:
                         continue
                     keys.append(key)
 
+                # DEBUG: Show what keys we found
+                # print(f"[HEALTH] Found {len(keys)} ratelimit keys: {keys}")
+
                 # Get count for each key (sorted set cardinality within window)
                 import time
 

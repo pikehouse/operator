@@ -37,6 +37,9 @@ async def inject_redis_pause(duration_sec: float = 5.0) -> None:
     """
     import time
 
+    from datetime import datetime
+    print(f"[CHAOS {datetime.now().strftime('%H:%M:%S')}] inject_redis_pause starting...")
+
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
 
     try:
@@ -61,8 +64,14 @@ async def inject_redis_pause(duration_sec: float = 5.0) -> None:
         # Set TTL so key itself persists
         await r.expire(redis_key, 120)
 
+        # Verify creation
+        count = await r.zcard(redis_key)
+        print(f"[CHAOS] Created {redis_key} with {count} entries")
+
     finally:
         await r.aclose()
+
+    print("[CHAOS] inject_redis_pause complete")
 
 
 async def inject_burst_traffic(
@@ -89,6 +98,8 @@ async def inject_burst_traffic(
     """
     import time
 
+    print(f"[CHAOS] inject_burst_traffic starting for key={key}...")
+
     # Connect to Redis and inject over-limit counter
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
     try:
@@ -112,8 +123,14 @@ async def inject_burst_traffic(
         # Set TTL so key itself persists
         await r.expire(redis_key, 120)
 
+        # Verify creation
+        count = await r.zcard(redis_key)
+        print(f"[CHAOS] Created {redis_key} with {count} entries")
+
     finally:
         await r.aclose()
+
+    print(f"[CHAOS] inject_burst_traffic complete")
 
     # Return simulated results (the anomaly is the over-limit counter, not traffic)
     return {"allowed": over_limit_count, "denied": 0}
