@@ -162,12 +162,12 @@ class TUIDemoController:
         self._init_panels()
 
         # 4. Enter Live context for flicker-free rendering
-        # Use screen=True for alternate screen buffer - more reliable terminal control
+        # Use screen=False so print() statements from callbacks are visible
         with Live(
             self._layout,
             console=self.console,
             refresh_per_second=4,
-            screen=True,
+            screen=False,
         ) as live:
             # 5. Run TaskGroup with reader tasks and update loop
             try:
