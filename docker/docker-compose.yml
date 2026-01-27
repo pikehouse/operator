@@ -112,6 +112,28 @@ services:
     networks:
       - ratelimiter
 
+  loadgen:
+    build:
+      context: ./loadgen
+    environment:
+      - TARGETS=http://ratelimiter-1:8000,http://ratelimiter-2:8000,http://ratelimiter-3:8000
+      - RPS=${LOADGEN_RPS:-10}
+      - DURATION=${LOADGEN_DURATION:-0}
+      - BURST_ENABLED=${LOADGEN_BURST_ENABLED:-true}
+      - BURST_MULTIPLIER=${LOADGEN_BURST_MULTIPLIER:-5}
+      - BURST_DURATION=${LOADGEN_BURST_DURATION:-5}
+      - BURST_INTERVAL=${LOADGEN_BURST_INTERVAL:-30}
+    depends_on:
+      ratelimiter-1:
+        condition: service_healthy
+      ratelimiter-2:
+        condition: service_healthy
+      ratelimiter-3:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - ratelimiter
+
 networks:
   ratelimiter:
     driver: bridge
