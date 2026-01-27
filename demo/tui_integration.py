@@ -533,16 +533,23 @@ class TUIDemoController:
 
     def _format_workload_panel(self, health: dict[str, Any]) -> str:
         """
-        Format workload panel with counter statistics.
+        Format workload panel based on subject type.
 
-        Shows rate limit counters and their current counts vs limits.
+        For rate limiter: Shows counters and their current counts vs limits.
+        For TiKV: Shows ops/sec throughput.
 
         Args:
-            health: Health dict with counters list
+            health: Health dict with counters list or ops_per_sec
 
         Returns:
             Rich markup string for workload panel
         """
+        # Check if this is TiKV (has ops_per_sec)
+        ops_per_sec = health.get("ops_per_sec")
+        if ops_per_sec is not None:
+            return self._format_tikv_workload(ops_per_sec)
+
+        # Otherwise, format rate limiter counters
         counters = health.get("counters", [])
         if not counters:
             return "[dim]No active counters[/dim]"
@@ -573,5 +580,40 @@ class TUIDemoController:
                 status = f"[green]{count}/{limit}[/green]"
 
             lines.append(f"  {indicator} {key}: {status}")
+
+        return "\n".join(lines)
+
+    def _format_tikv_workload(self, ops_per_sec: float) -> str:
+        """
+        Format TiKV workload panel with ops/sec.
+
+        Args:
+            ops_per_sec: Current throughput from Prometheus
+
+        Returns:
+            Rich markup string for workload panel
+        """
+        # Track ops history for sparkline
+        if not hasattr(self, "_ops_history"):
+            self._ops_history: list[float] = []
+
+        self._ops_history.append(ops_per_sec)
+        if len(self._ops_history) > 30:
+            self._ops_history = self._ops_history[-30:]
+
+        lines = ["[bold]TiKV Throughput[/bold]", ""]
+
+        # Generate sparkline if we have enough data
+        if len(self._ops_history) >= 3:
+            try:
+                from sparklines import sparklines
+                sparkline = list(sparklines(self._ops_history))[0]
+                lines.append(f"[green]{sparkline}[/green]")
+                lines.append("")
+            except Exception:
+                pass  # sparklines not available
+
+        # Show current value
+        lines.append(f"Current: [bold]{ops_per_sec:.0f}[/bold] ops/sec")
 
         return "\n".join(lines)

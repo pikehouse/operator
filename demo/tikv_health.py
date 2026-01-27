@@ -136,11 +136,52 @@ class TiKVHealthPoller(HealthPollerProtocol):
                 "address": ",".join(member.get("client_urls", [])),
             })
 
+        # 3. Get ops/sec from Prometheus (if available)
+        ops_per_sec = await self._fetch_ops_per_sec(client)
+
         return {
             "nodes": nodes,
             "has_issues": any(n["health"] != "up" for n in nodes),
             "last_updated": datetime.now(),
+            "ops_per_sec": ops_per_sec,
         }
+
+    async def _fetch_ops_per_sec(self, client: httpx.AsyncClient) -> float | None:
+        """
+        Fetch TiKV ops/sec from Prometheus.
+
+        Queries the tikv_grpc_msg_duration_seconds_count rate for overall throughput.
+
+        Args:
+            client: Configured httpx client
+
+        Returns:
+            ops/sec value if available, None otherwise
+        """
+        try:
+            # Query Prometheus for TiKV gRPC request rate
+            prom_client = httpx.AsyncClient(
+                base_url="http://localhost:9090",
+                timeout=5.0,
+            )
+            async with prom_client:
+                query = 'sum(rate(tikv_grpc_msg_duration_seconds_count[30s]))'
+                resp = await prom_client.get(
+                    "/api/v1/query",
+                    params={"query": query},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+
+                # Parse Prometheus response
+                results = data.get("data", {}).get("result", [])
+                if results:
+                    value = results[0].get("value", [None, "0"])
+                    return float(value[1])
+        except Exception:
+            pass  # Prometheus not available or query failed
+
+        return None
 
     def _parse_tikv_state(self, state: str) -> str:
         """
