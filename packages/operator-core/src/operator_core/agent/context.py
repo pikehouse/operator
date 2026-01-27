@@ -4,7 +4,7 @@ Context gathering for AI diagnosis.
 Per CONTEXT.md decisions:
 - Metric snapshot only (current values at violation time)
 - Include similar ticket history (past diagnoses for same invariant)
-- Include full cluster topology (all stores, regions for correlation)
+- Include full cluster observation (generic, works for any subject)
 - Raw log tail deferred (stubbed for v1)
 
 Per RESEARCH.md Pattern 3: Gather all relevant information before
@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from operator_core.monitor.types import Ticket, TicketStatus
-from operator_core.types import ClusterMetrics, Store
 
 if TYPE_CHECKING:
     from operator_core.db.tickets import TicketDB
@@ -32,16 +31,14 @@ class DiagnosisContext:
     Attributes:
         ticket: The ticket being diagnosed
         metric_snapshot: Metrics captured at violation time (from ticket)
-        stores: Current cluster topology (all TiKV stores)
-        cluster_metrics: Store/region counts, leader distribution
+        observation: Current cluster state from subject.observe()
         log_tail: Last N lines from affected component (None in v1)
         similar_tickets: Past diagnoses for same invariant
     """
 
     ticket: Ticket
     metric_snapshot: dict[str, Any]
-    stores: list[Store]
-    cluster_metrics: ClusterMetrics
+    observation: dict[str, Any]
     log_tail: str | None
     similar_tickets: list[Ticket]
 
@@ -73,8 +70,7 @@ class ContextGatherer:
 
         Assembles context from:
         - Ticket's metric_snapshot (captured at violation time)
-        - Current cluster topology (stores)
-        - Cluster-wide metrics (store/region counts, leader distribution)
+        - Current cluster observation (generic, from subject.observe())
         - Similar past tickets (same invariant_name)
         - Log tail (stubbed - returns None for v1)
 
@@ -87,9 +83,8 @@ class ContextGatherer:
         # Metric snapshot at violation time (from ticket)
         metric_snapshot = ticket.metric_snapshot or {}
 
-        # Current cluster topology
-        stores = await self.subject.get_stores()
-        cluster_metrics = await self.subject.get_cluster_metrics()
+        # Current cluster observation (generic - works for any subject)
+        observation = await self.subject.observe()
 
         # Raw log tail (stubbed for v1)
         log_tail = await self._fetch_log_tail(ticket.store_id)
@@ -100,8 +95,7 @@ class ContextGatherer:
         return DiagnosisContext(
             ticket=ticket,
             metric_snapshot=metric_snapshot,
-            stores=stores,
-            cluster_metrics=cluster_metrics,
+            observation=observation,
             log_tail=log_tail,
             similar_tickets=similar_tickets,
         )

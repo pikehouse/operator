@@ -78,7 +78,6 @@ class MonitorLoop:
         self._shutdown = asyncio.Event()
 
         # Stats for heartbeat
-        self._invariant_count = 0
         self._violation_count = 0
         self._last_check: datetime | None = None
 
@@ -149,7 +148,6 @@ class MonitorLoop:
             violations = []
 
         # Track stats
-        self._invariant_count = len(violations) if violations else 0
         self._violation_count = len(violations)
 
         # Create/update tickets for violations
@@ -166,9 +164,7 @@ class MonitorLoop:
 
     def _log_heartbeat(self) -> None:
         """Output periodic status message per CONTEXT.md."""
-        status = (
-            "all passing"
-            if self._violation_count == 0
-            else f"{self._violation_count} violations"
-        )
-        print(f"Check complete: {self._invariant_count} invariants, {status}")
+        if self._violation_count == 0:
+            print("Check complete: all passing")
+        else:
+            print(f"Check complete: {self._violation_count} violation(s) detected")

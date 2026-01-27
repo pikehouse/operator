@@ -33,6 +33,7 @@ from typing import Any
 from rich.console import Console
 from rich.live import Live
 
+from demo.status import demo_status
 from demo.types import Chapter, DemoState, HealthPollerProtocol
 from operator_core.tui.keyboard import KeyboardTask
 from operator_core.tui.layout import (
@@ -129,6 +130,7 @@ class TUIDemoController:
         monitor_proc = await self._subprocess_mgr.spawn(
             "monitor",
             [
+                "-u",  # Unbuffered output (critical for live display)
                 "-m",
                 "operator_core.cli.main",
                 "monitor",
@@ -143,6 +145,7 @@ class TUIDemoController:
         agent_proc = await self._subprocess_mgr.spawn(
             "agent",
             [
+                "-u",  # Unbuffered output (critical for live display)
                 "-m",
                 "operator_core.cli.main",
                 "agent",
@@ -220,7 +223,7 @@ class TUIDemoController:
             make_panel("Waiting for agent...", "Agent", "green")
         )
         self._layout["main"]["workload"].update(
-            make_panel("No workload tracking for this demo", "Workload", "yellow")
+            make_panel("Waiting for data...", "Workload", "yellow")
         )
 
     def _handle_key(self, key: str) -> None:
@@ -245,6 +248,9 @@ class TUIDemoController:
             # Don't advance if current chapter blocks it
             if current.blocks_advance and self._current_task is not None:
                 return  # Action in progress
+
+            # Clear status when advancing
+            demo_status.clear()
 
             # Advance to next chapter
             if self._demo_state.advance():
@@ -271,15 +277,20 @@ class TUIDemoController:
         """
         Update narration panel with current chapter content.
 
-        Shows chapter title, narration text, key hints, and progress.
+        Shows chapter title, narration text, status (if any), key hints, and progress.
         """
         if self._demo_state is None:
             return
 
         chapter = self._demo_state.get_current()
         progress = self._demo_state.get_progress()
-        # Build content with progress, title, narration, and key hint
-        content = f"[bold cyan]{chapter.title}[/bold cyan] {progress}\n\n{chapter.narration}\n\n{chapter.key_hint}"
+
+        # Get current status (from chaos callbacks) - show at TOP for visibility
+        status = demo_status.get()
+        status_line = f"[bold]► {status}[/bold]\n\n" if status else ""
+
+        # Build content with status at top, then title, narration, and key hint
+        content = f"{status_line}[bold cyan]{chapter.title}[/bold cyan] {progress}\n\n{chapter.narration}\n\n{chapter.key_hint}"
         self._layout["main"]["narration"].update(
             make_panel(content, "Chapter", "magenta")
         )
@@ -328,13 +339,16 @@ class TUIDemoController:
 
         Updates all 5 panels:
         - Cluster: Health status (subject-specific formatting)
-        - Narration: Current chapter (updated by _update_narration)
+        - Narration: Current chapter with live status
         - Monitor: Subprocess output
         - Agent: Subprocess output
         - Workload: Placeholder (no workload tracking)
         """
         if self._subprocess_mgr is None:
             return
+
+        # Update narration panel (includes status from chaos callbacks)
+        self._update_narration()
 
         # Update monitor panel
         monitor_buf = self._subprocess_mgr.get_buffer("monitor")
@@ -362,6 +376,11 @@ class TUIDemoController:
                         has_issues=has_issues,
                         detection_active=False,  # Could parse monitor output for detection
                     )
+                )
+                # Update workload panel with counter stats
+                workload_content = self._format_workload_panel(health)
+                self._layout["main"]["workload"].update(
+                    make_panel(workload_content, "Workload", "yellow")
                 )
 
     def _format_health_panel(self, health: dict[str, Any]) -> str:
@@ -487,3 +506,48 @@ class TUIDemoController:
             status = "[dim]Unknown[/dim]"
 
         return f"{indicator} {name}: {status}"
+
+    def _format_workload_panel(self, health: dict[str, Any]) -> str:
+        """
+        Format workload panel with counter statistics.
+
+        Shows rate limit counters and their current counts vs limits.
+
+        Args:
+            health: Health dict with counters list
+
+        Returns:
+            Rich markup string for workload panel
+        """
+        counters = health.get("counters", [])
+        if not counters:
+            return "[dim]No active counters[/dim]"
+
+        lines = ["[bold]Rate Limit Counters[/bold]", ""]
+
+        # Count anomalies
+        over_limit = [c for c in counters if c.get("over_limit")]
+        if over_limit:
+            lines.append(f"[bold red]⚠ {len(over_limit)} OVER LIMIT[/bold red]")
+            lines.append("")
+
+        # Show each counter
+        for counter in counters:
+            key = counter.get("key", "?")
+            count = counter.get("count", 0)
+            limit = counter.get("limit", 10)
+            is_over = counter.get("over_limit", False)
+
+            if is_over:
+                indicator = f"[red]{DOWN_SYMBOL}[/red]"
+                status = f"[bold red]{count}/{limit}[/bold red] (OVER!)"
+            elif count > limit * 0.8:
+                indicator = f"[yellow]{UP_SYMBOL}[/yellow]"
+                status = f"[yellow]{count}/{limit}[/yellow]"
+            else:
+                indicator = f"[green]{UP_SYMBOL}[/green]"
+                status = f"[green]{count}/{limit}[/green]"
+
+            lines.append(f"  {indicator} {key}: {status}")
+
+        return "\n".join(lines)

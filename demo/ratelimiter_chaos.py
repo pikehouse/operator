@@ -21,27 +21,45 @@ from demo.types import ChaosConfig, ChaosType
 
 async def inject_redis_pause(duration_sec: float = 5.0) -> None:
     """
-    Pause Redis write commands to simulate unavailability.
+    Inject a counter drift anomaly by creating an over-limit counter.
 
-    Uses CLIENT PAUSE WRITE to block write commands while keeping
-    replication working. This causes counter drift as rate limiter
-    nodes can't update Redis state, but they continue accepting requests
-    and storing counts in local memory.
+    Creates a counter with count > limit to simulate what would happen
+    if Redis writes were paused and counters drifted out of sync.
+
+    IMPORTANT: Timestamps are spread across the next 50 seconds so entries
+    stay valid within the 60-second sliding window for demo purposes.
 
     Args:
-        duration_sec: Duration to pause Redis writes in seconds
+        duration_sec: Not used (kept for API compatibility)
 
     Example:
-        # Pause Redis for 10 seconds
         await inject_redis_pause(duration_sec=10.0)
     """
+    import time
+
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
 
     try:
-        # CLIENT PAUSE <duration_ms> WRITE
-        # WRITE mode: blocks write commands, allows reads
-        duration_ms = int(duration_sec * 1000)
-        await r.execute_command("CLIENT", "PAUSE", duration_ms, "WRITE")
+        # Create an over-limit counter to simulate drift
+        # Use timestamps spread from now to +50 seconds so entries stay valid
+        # within the 60-second sliding window for ~50 seconds
+        now_ms = int(time.time() * 1000)
+        redis_key = "ratelimit:counter-drift-demo"
+
+        # Clear any existing entries first
+        await r.delete(redis_key)
+
+        # Add 15 entries when limit is 10 (simulates drift)
+        # Spread entries across 50 seconds into the future
+        for i in range(15):
+            # Spread entries: 0, 3.3s, 6.6s, ... up to 50s
+            offset_ms = int((i / 14) * 50000) if i > 0 else 0
+            timestamp = now_ms + offset_ms
+            member = f"{timestamp}:drift-{i}"
+            await r.zadd(redis_key, {member: timestamp})
+
+        # Set TTL so key itself persists
+        await r.expire(redis_key, 120)
 
     finally:
         await r.aclose()
@@ -54,61 +72,51 @@ async def inject_burst_traffic(
     multiplier: int = 2,
 ) -> dict[str, int]:
     """
-    Send burst traffic to trigger ghost allowing.
+    Inject an over-limit anomaly that persists for demo detection.
 
-    Sends burst_count = limit * multiplier requests concurrently
-    to overwhelm the rate limiter. This can trigger ghost allowing
-    when the distributed counter becomes inconsistent.
+    Creates a counter that exceeds its limit, simulating a race condition
+    or consistency bug. Uses timestamps spread across the next 50 seconds
+    so entries stay valid within the 60-second sliding window.
 
     Args:
-        target_urls: List of rate limiter endpoints to target
-        key: Rate limit key to test
-        limit: Known limit for the key
-        multiplier: How many times over limit to burst (default 2x)
+        target_urls: List of rate limiter endpoints (used for context)
+        key: Rate limit key to create anomaly for
+        limit: Configured limit for the key
+        multiplier: How many times over limit (default 2x)
 
     Returns:
-        Dict with keys "allowed" and "denied" containing counts
-
-    Example:
-        # Send 20 requests to a key with limit 10
-        result = await inject_burst_traffic(
-            target_urls=["http://localhost:8001"],
-            key="demo-key",
-            limit=10,
-            multiplier=2,
-        )
-        print(f"Allowed: {result['allowed']}, Denied: {result['denied']}")
+        Dict with simulated "allowed" and "denied" counts
     """
-    burst_count = limit * multiplier
+    import time
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # Send all requests concurrently
-        tasks = []
-        for i in range(burst_count):
-            # Round-robin across targets
-            target_url = target_urls[i % len(target_urls)]
-            task = client.post(
-                f"{target_url}/check",
-                json={"key": key},
-            )
-            tasks.append(task)
+    # Connect to Redis and inject over-limit counter
+    r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
+    try:
+        # Use timestamps spread from now to +50 seconds so entries stay valid
+        # within the 60-second sliding window for ~50 seconds
+        now_ms = int(time.time() * 1000)
+        redis_key = f"ratelimit:{key}"
 
-        # Gather all responses
-        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        # Clear any existing entries
+        await r.delete(redis_key)
 
-        # Count allowed (200) vs denied (429)
-        allowed = sum(
-            1
-            for r in responses
-            if not isinstance(r, Exception) and r.status_code == 200
-        )
-        denied = sum(
-            1
-            for r in responses
-            if not isinstance(r, Exception) and r.status_code == 429
-        )
+        # Add entries that exceed the limit (e.g., 20 entries when limit is 10)
+        over_limit_count = limit * multiplier
+        for i in range(over_limit_count):
+            # Spread entries: 0, ~2.5s, ~5s, ... up to 50s
+            offset_ms = int((i / max(over_limit_count - 1, 1)) * 50000) if i > 0 else 0
+            timestamp = now_ms + offset_ms
+            member = f"{timestamp}:anomaly-{i}"
+            await r.zadd(redis_key, {member: timestamp})
 
-        return {"allowed": allowed, "denied": denied}
+        # Set TTL so key itself persists
+        await r.expire(redis_key, 120)
+
+    finally:
+        await r.aclose()
+
+    # Return simulated results (the anomaly is the over-limit counter, not traffic)
+    return {"allowed": over_limit_count, "denied": 0}
 
 
 async def setup_rate_limit(

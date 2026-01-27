@@ -10,15 +10,18 @@ Per RESEARCH.md Pattern 4: Prompt structure that elicits reasoned,
 evidence-based diagnosis.
 """
 
+import json
+from typing import Any
+
 from operator_core.agent.context import DiagnosisContext
 
 
-SYSTEM_PROMPT = """You are an expert SRE diagnosing issues in a TiKV distributed database cluster.
+SYSTEM_PROMPT = """You are an expert SRE diagnosing issues in a distributed system.
 
 When analyzing a ticket violation, provide a differential diagnosis:
 
 1. TIMELINE: What happened, in chronological order
-2. AFFECTED COMPONENTS: Which stores, regions, or cluster-wide systems
+2. AFFECTED COMPONENTS: Which nodes, services, or cluster-wide systems
 3. METRIC READINGS: Key values at violation time
 
 4. PRIMARY DIAGNOSIS: The most likely root cause
@@ -41,13 +44,75 @@ Write in clinical/technical tone like an SRE runbook. Be precise, terse, metric-
 Reference specific metric values and thresholds. Show your reasoning."""
 
 
+def _format_observation(observation: dict[str, Any]) -> str:
+    """Format observation dict for display in prompt.
+
+    Handles common observation structures (nodes, counters, etc.)
+    in a readable way, with fallback to JSON for unknown structures.
+
+    Args:
+        observation: Observation dict from subject.observe()
+
+    Returns:
+        Formatted string for prompt
+    """
+    lines = []
+
+    # Handle common keys with nice formatting
+    if "nodes" in observation:
+        lines.append("**Nodes:**")
+        for node in observation["nodes"]:
+            node_id = node.get("id", "?")
+            address = node.get("address", "unknown")
+            state = node.get("state", "unknown")
+            lines.append(f"- {node_id} ({address}): {state}")
+        lines.append("")
+
+    if "counters" in observation:
+        lines.append("**Counters:**")
+        for counter in observation["counters"]:
+            key = counter.get("key", "?")
+            count = counter.get("count", 0)
+            limit = counter.get("limit", 0)
+            remaining = counter.get("remaining", 0)
+            status = "OVER LIMIT" if count > limit else "OK"
+            lines.append(f"- {key}: count={count}, limit={limit}, remaining={remaining} [{status}]")
+        lines.append("")
+
+    if "stores" in observation:
+        lines.append("**Stores:**")
+        for store in observation["stores"]:
+            store_id = store.get("id", "?")
+            address = store.get("address", "unknown")
+            state = store.get("state", "unknown")
+            lines.append(f"- Store {store_id} ({address}): {state}")
+        lines.append("")
+
+    if "redis_connected" in observation:
+        status = "Connected" if observation["redis_connected"] else "DISCONNECTED"
+        lines.append(f"**Redis:** {status}")
+        lines.append("")
+
+    # Format remaining keys as JSON
+    handled_keys = {"nodes", "counters", "stores", "redis_connected", "node_metrics"}
+    remaining = {k: v for k, v in observation.items() if k not in handled_keys}
+    if remaining:
+        lines.append("**Additional data:**")
+        lines.append("```json")
+        lines.append(json.dumps(remaining, indent=2, default=str))
+        lines.append("```")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def build_diagnosis_prompt(context: DiagnosisContext) -> str:
     """Build structured prompt from diagnosis context.
 
     Creates a markdown-formatted prompt with sections:
-    - Ticket details (invariant, store, message, timing)
+    - Ticket details (invariant, component, message, timing)
     - Metrics at violation time
-    - Cluster topology
+    - Current cluster observation
     - Recent logs (if available)
     - Similar past tickets
 
@@ -64,7 +129,7 @@ def build_diagnosis_prompt(context: DiagnosisContext) -> str:
     sections.append(f"""## Ticket
 
 - **Invariant:** {ticket.invariant_name}
-- **Store:** {ticket.store_id or "cluster-wide"}
+- **Component:** {ticket.store_id or "cluster-wide"}
 - **Message:** {ticket.message}
 - **First seen:** {ticket.first_seen_at}
 - **Occurrences:** {ticket.occurrence_count}
@@ -77,24 +142,12 @@ def build_diagnosis_prompt(context: DiagnosisContext) -> str:
             sections.append(f"- **{key}:** {value}")
         sections.append("")
 
-    # Cluster topology
-    sections.append("## Cluster Topology\n")
-    sections.append(f"- **Total stores:** {context.cluster_metrics.store_count}")
-    sections.append(f"- **Total regions:** {context.cluster_metrics.region_count}")
-    sections.append("")
-
-    # Leader distribution
-    if context.cluster_metrics.leader_count:
-        sections.append("**Leader distribution:**")
-        for store_id, count in context.cluster_metrics.leader_count.items():
-            sections.append(f"- Store {store_id}: {count} leaders")
-        sections.append("")
-
-    # Store details
-    sections.append("**Stores:**")
-    for store in context.stores:
-        sections.append(f"- Store {store.id} ({store.address}): {store.state}")
-    sections.append("")
+    # Current cluster observation (generic)
+    sections.append("## Current Cluster State\n")
+    if context.observation:
+        sections.append(_format_observation(context.observation))
+    else:
+        sections.append("*No observation data available*\n")
 
     # Recent logs (if available)
     if context.log_tail:
