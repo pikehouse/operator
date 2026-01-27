@@ -80,6 +80,54 @@ async def restart_container(compose_file: Path, container_name: str) -> bool:
         return False
 
 
+async def start_ycsb_load(compose_file: Path) -> bool:
+    """
+    Start YCSB load generation against TiKV cluster.
+
+    Runs YCSB with workloada profile (50% reads, 50% updates).
+
+    Args:
+        compose_file: Path to docker-compose.yaml
+
+    Returns:
+        True if YCSB started successfully, False otherwise
+    """
+    docker = DockerClient(compose_files=[compose_file])
+
+    try:
+        # Run YCSB load phase first (creates initial data)
+        docker.compose.run(
+            "ycsb",
+            command=[
+                "load", "tikv",
+                "-P", "/workloads/workloada",
+                "-p", "tikv.pd=pd0:2379",
+                "-p", "tikv.type=raw",
+            ],
+            remove=True,
+            detach=False,
+        )
+
+        # Run YCSB workload in background
+        docker.compose.run(
+            "ycsb",
+            command=[
+                "run", "tikv",
+                "-P", "/workloads/workloada",
+                "-p", "tikv.pd=pd0:2379",
+                "-p", "tikv.type=raw",
+                "-p", "operationcount=1000000",  # Run for a long time
+            ],
+            remove=True,
+            detach=True,
+            name="ycsb-run",
+        )
+        return True
+    except Exception as e:
+        print(f"[YCSB] Error starting load: {e}")
+        return False
+
+
 # ChaosConfig for TiKV node kill scenario
 TIKV_CHAOS_CONFIG = ChaosConfig(
     name="TiKV Node Kill",

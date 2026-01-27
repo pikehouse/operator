@@ -13,7 +13,7 @@ import asyncio
 from pathlib import Path
 
 from demo.runner import DemoRunner
-from demo.tikv_chaos import kill_random_tikv, restart_container
+from demo.tikv_chaos import kill_random_tikv, restart_container, start_ycsb_load
 from demo.tikv_health import TiKVHealthPoller
 from demo.types import Chapter
 
@@ -23,6 +23,39 @@ COMPOSE_FILE = Path(__file__).parent.parent / "subjects" / "tikv" / "docker-comp
 
 # Track killed container for recovery
 _killed_container: str | None = None
+
+
+def create_load_chapter(compose_file: Path) -> Chapter:
+    """
+    Create load generation chapter that starts YCSB.
+
+    Args:
+        compose_file: Path to docker-compose.yaml
+
+    Returns:
+        Chapter configured to start YCSB load on enter
+    """
+
+    async def on_enter() -> None:
+        """Start YCSB load generation."""
+        print("[YCSB] Starting load generation...")
+        success = await start_ycsb_load(compose_file)
+        if success:
+            print("[YCSB] Load generation started!")
+        else:
+            print("[YCSB] Failed to start load - continuing anyway")
+        await asyncio.sleep(2.0)
+
+    return Chapter(
+        title="Stage 2: Load Generation",
+        narration=(
+            "Starting YCSB workload (50% reads, 50% updates)\n"
+            "Watch the Workload panel for ops/sec\n\n"
+            "[dim]Loading data and starting traffic...[/dim]"
+        ),
+        on_enter=on_enter,
+        auto_advance=True,
+    )
 
 
 def create_fault_chapter(compose_file: Path) -> Chapter:
@@ -128,15 +161,8 @@ TIKV_CHAPTERS = [
             "Press SPACE to continue when ready."
         ),
     ),
-    Chapter(
-        title="Stage 2: Load Generation",
-        narration=(
-            "YCSB is starting to generate write-heavy workload.\n\n"
-            "This simulates real production traffic hitting the cluster.\n"
-            "Watch for operation throughput in cluster metrics."
-        ),
-    ),
-    # Fault injection chapter added dynamically in main()
+    # Stage 2: Load Generation - added dynamically in main()
+    # Stage 3: Fault Injection - added dynamically in main()
     Chapter(
         title="Stage 5: Detection",
         narration=(
@@ -178,16 +204,16 @@ async def main() -> None:
         poll_interval=2.0,
     )
 
-    # Assemble chapters with fault and recovery
+    # Assemble chapters with load, fault, and recovery
     chapters = [
         TIKV_CHAPTERS[0],  # Welcome
         TIKV_CHAPTERS[1],  # Cluster Health
-        TIKV_CHAPTERS[2],  # Load Generation
-        create_fault_chapter(COMPOSE_FILE),  # Fault Injection (with callback)
-        TIKV_CHAPTERS[3],  # Detection
-        TIKV_CHAPTERS[4],  # AI Diagnosis
-        create_recovery_chapter(COMPOSE_FILE),  # Recovery (with callback)
-        TIKV_CHAPTERS[5],  # Complete
+        create_load_chapter(COMPOSE_FILE),  # Load Generation (starts YCSB)
+        create_fault_chapter(COMPOSE_FILE),  # Fault Injection (kills node)
+        TIKV_CHAPTERS[2],  # Detection
+        TIKV_CHAPTERS[3],  # AI Diagnosis
+        create_recovery_chapter(COMPOSE_FILE),  # Recovery (restarts node)
+        TIKV_CHAPTERS[4],  # Complete
     ]
 
     # Create and run demo
