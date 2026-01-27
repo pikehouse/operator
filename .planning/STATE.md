@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
-**Phase:** 17 of 20 (Rate Limiter Service Foundation)
-**Plan:** 04 of 04 completed (gap closure)
-**Status:** Phase 17 verified complete
-**Last activity:** 2026-01-26 - Completed 17-04-PLAN.md (Metrics wiring gap closure)
+**Phase:** 18 of 20 (Docker Compose Environment)
+**Plan:** 01 of 02 completed
+**Status:** In progress
+**Last activity:** 2026-01-26 - Completed 18-01-PLAN.md (Docker Compose environment)
 
-Progress: [######....] 60% (3/5 phases complete)
+Progress: [######....] 62% (3.5/5 phases complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 17 complete - Rate Limiter Service Foundation ready for deployment
+**Current focus:** Phase 18 in progress - Docker Compose environment for rate limiter cluster
 
 ## Milestones
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 |-------|------|--------------|--------|
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
-| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | — |
+| 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | IN PROGRESS (1/2) |
 | 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | — |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
@@ -93,6 +93,12 @@ See: .planning/MILESTONES.md
 - Decorator approach for histogram timing (@CHECK_LATENCY.time())
 - Gauge update on counters endpoint reflects current state per query
 
+**Key decisions from v2.1 (Phase 18):**
+- Inline Prometheus config via Docker configs feature (no separate prometheus.yml file)
+- Copy src/ before pip install in Dockerfile (hatch build requires source at install time)
+- restart: "no" for dev environment (show failures instead of hiding them)
+- depends_on with condition: service_healthy for proper startup ordering
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
@@ -100,8 +106,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-26
-**Stopped at:** Completed 17-04-PLAN.md (Metrics wiring gap closure)
-**Resume with:** Phase 18 (Docker Compose Environment)
+**Stopped at:** Completed 18-01-PLAN.md (Docker Compose environment)
+**Resume with:** 18-02-PLAN.md (Load generator)
 
 ## Phase 16 Completion Summary
 
@@ -125,9 +131,21 @@ All 4 plans of Phase 17 completed:
 
 Rate limiter service is fully instrumented and ready for deployment (Phase 18).
 
+## Phase 18 Progress
+
+Plan 01 of Phase 18 completed:
+- 18-01: Docker Compose environment with Redis, 3 rate limiter nodes, and Prometheus
+
+Files created:
+- packages/ratelimiter-service/Dockerfile
+- docker/docker-compose.yml
+- docker/.env.example
+
+Verified: All services start healthy, Prometheus scrapes all 3 ratelimiter targets.
+
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-26 (Phase 17 verified complete)*
+*State updated: 2026-01-26 (Phase 18 plan 01 complete)*
