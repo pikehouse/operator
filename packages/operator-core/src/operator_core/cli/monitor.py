@@ -36,13 +36,22 @@ def run_monitor(
         30.0, "--interval", "-i", help="Check interval in seconds"
     ),
     pd_endpoint: str = typer.Option(
-        None, "--pd", envvar="PD_ENDPOINT", help="PD endpoint (e.g., http://pd:2379)"
+        None, "--pd", envvar="PD_ENDPOINT", help="PD endpoint for TiKV (e.g., http://pd:2379)"
     ),
     prometheus_url: str = typer.Option(
         None,
         "--prometheus",
         envvar="PROMETHEUS_URL",
         help="Prometheus URL (e.g., http://prometheus:9090)",
+    ),
+    ratelimiter_url: str = typer.Option(
+        None,
+        "--ratelimiter",
+        envvar="RATELIMITER_URL",
+        help="Rate limiter API URL (e.g., http://ratelimiter:8000)",
+    ),
+    redis_url: str = typer.Option(
+        None, "--redis", envvar="REDIS_URL", help="Redis URL for rate limiter (e.g., redis://localhost:6379)"
     ),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
@@ -53,21 +62,47 @@ def run_monitor(
     tickets for violations. Runs until interrupted with Ctrl+C.
 
     Environment variables:
-        PD_ENDPOINT: PD API endpoint
+        PD_ENDPOINT: PD API endpoint (TiKV)
         PROMETHEUS_URL: Prometheus API URL
+        RATELIMITER_URL: Rate limiter API URL
+        REDIS_URL: Redis connection URL (rate limiter)
     """
     # Validate endpoints - use defaults if not provided via option or env var
-    if not pd_endpoint:
-        pd_endpoint = os.environ.get("PD_ENDPOINT", "http://localhost:2379")
     if not prometheus_url:
         prometheus_url = os.environ.get("PROMETHEUS_URL", "http://localhost:9090")
 
     # Ensure database directory exists
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"Starting monitor daemon for subject: {subject}")
-    print(f"  PD endpoint: {pd_endpoint}")
-    print(f"  Prometheus: {prometheus_url}")
+    # Build kwargs based on subject
+    if subject == "tikv":
+        if not pd_endpoint:
+            pd_endpoint = os.environ.get("PD_ENDPOINT", "http://localhost:2379")
+        factory_kwargs = {
+            "pd_endpoint": pd_endpoint,
+            "prometheus_url": prometheus_url,
+        }
+        print(f"Starting monitor daemon for subject: {subject}")
+        print(f"  PD endpoint: {pd_endpoint}")
+        print(f"  Prometheus: {prometheus_url}")
+    elif subject == "ratelimiter":
+        if not ratelimiter_url:
+            ratelimiter_url = os.environ.get("RATELIMITER_URL", "http://localhost:8001")
+        if not redis_url:
+            redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+        factory_kwargs = {
+            "ratelimiter_url": ratelimiter_url,
+            "redis_url": redis_url,
+            "prometheus_url": prometheus_url,
+        }
+        print(f"Starting monitor daemon for subject: {subject}")
+        print(f"  Rate limiter: {ratelimiter_url}")
+        print(f"  Redis: {redis_url}")
+        print(f"  Prometheus: {prometheus_url}")
+    else:
+        print(f"Error: Unknown subject '{subject}'")
+        raise typer.Exit(1)
+
     print(f"  Interval: {interval}s")
     print(f"  Database: {db_path}")
     print()
@@ -79,8 +114,7 @@ def run_monitor(
             # Use factory to create subject and checker
             subject_instance, checker = await create_subject(
                 subject,
-                pd_endpoint=pd_endpoint,
-                prometheus_url=prometheus_url,
+                **factory_kwargs,
             )
 
             loop = MonitorLoop(
