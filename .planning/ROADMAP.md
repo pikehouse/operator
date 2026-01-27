@@ -107,11 +107,11 @@ Plans:
 **Plans:** 5 plans
 
 Plans:
-- [ ] 19-01-PLAN.md - Package foundation (types, HTTP/Redis/Prom clients)
-- [ ] 19-02-PLAN.md - RateLimiterSubject and RateLimiterInvariantChecker
-- [ ] 19-03-PLAN.md - Add reset counter API endpoint to ratelimiter-service
-- [ ] 19-04-PLAN.md - Factory function and CLI integration
-- [ ] 19-05-PLAN.md - Protocol compliance and unit tests
+- [x] 19-01-PLAN.md - Package foundation (types, HTTP/Redis/Prom clients)
+- [x] 19-02-PLAN.md - RateLimiterSubject and RateLimiterInvariantChecker
+- [x] 19-03-PLAN.md - Add reset counter API endpoint to ratelimiter-service
+- [x] 19-04-PLAN.md - Factory function and CLI integration
+- [x] 19-05-PLAN.md - Protocol compliance and unit tests
 
 ### Phase 20: E2E Demo & Chaos
 
@@ -135,7 +135,7 @@ Plans:
 | 16 - Core Abstraction | v2.1 | 5/5 | Complete | 2026-01-26 |
 | 17 - Rate Limiter Service | v2.1 | 4/4 | Complete | 2026-01-26 |
 | 18 - Docker Compose | v2.1 | 2/2 | Complete | 2026-01-26 |
-| 19 - operator-ratelimiter | v2.1 | 0/5 | Planned | - |
+| 19 - operator-ratelimiter | v2.1 | 5/5 | Complete | 2026-01-27 |
 | 20 - E2E Demo | v2.1 | 0/TBD | Not started | - |
 
 ---
@@ -152,3 +152,4 @@ Plans:
 *Phase 18 planned: 2026-01-26*
 *Phase 18 completed: 2026-01-26*
 *Phase 19 planned: 2026-01-26*
+*Phase 19 completed: 2026-01-27*

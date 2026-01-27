@@ -25,23 +25,23 @@ Requirements for Multi-Subject Support milestone. Each maps to roadmap phases.
 
 ### operator-ratelimiter Package
 
-- [ ] **RLPKG-01**: RateLimiterSubject implements Subject Protocol
-- [ ] **RLPKG-02**: RateLimiterClient for HTTP management API calls
-- [ ] **RLPKG-03**: RedisClient for direct state inspection
-- [ ] **RLPKG-04**: RateLimiterInvariantChecker implements InvariantCheckerProtocol
+- [x] **RLPKG-01**: RateLimiterSubject implements Subject Protocol
+- [x] **RLPKG-02**: RateLimiterClient for HTTP management API calls
+- [x] **RLPKG-03**: RedisClient for direct state inspection
+- [x] **RLPKG-04**: RateLimiterInvariantChecker implements InvariantCheckerProtocol
 
 ### Monitoring & Invariants
 
-- [ ] **MON-01**: Detect node unreachable (rate limiter node down)
-- [ ] **MON-02**: Detect Redis disconnected (backend unavailable)
-- [ ] **MON-03**: Detect high latency (P99 > threshold)
-- [ ] **MON-04**: Detect counter drift (nodes disagree on count for same key)
-- [ ] **MON-05**: Detect ghost allowing (actual allowed > configured limit)
+- [x] **MON-01**: Detect node unreachable (rate limiter node down)
+- [x] **MON-02**: Detect Redis disconnected (backend unavailable)
+- [x] **MON-03**: Detect high latency (P99 > threshold)
+- [x] **MON-04**: Detect counter drift (nodes disagree on count for same key)
+- [x] **MON-05**: Detect ghost allowing (actual allowed > configured limit)
 
 ### Actions
 
-- [ ] **ACT-01**: Reset counter (clear rate limit state for a key)
-- [ ] **ACT-02**: Update limit (change rate limit configuration)
+- [x] **ACT-01**: Reset counter (clear rate limit state for a key)
+- [x] **ACT-02**: Update limit (change rate limit configuration)
 
 ### Demo & Validation
 
@@ -100,17 +100,17 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RLSVC-03 | Phase 17 | Complete |
 | RLSVC-04 | Phase 17 | Complete |
 | RLSVC-05 | Phase 18 | Complete |
-| RLPKG-01 | Phase 19 | Pending |
-| RLPKG-02 | Phase 19 | Pending |
-| RLPKG-03 | Phase 19 | Pending |
-| RLPKG-04 | Phase 19 | Pending |
-| MON-01 | Phase 19 | Pending |
-| MON-02 | Phase 19 | Pending |
-| MON-03 | Phase 19 | Pending |
-| MON-04 | Phase 19 | Pending |
-| MON-05 | Phase 19 | Pending |
-| ACT-01 | Phase 19 | Pending |
-| ACT-02 | Phase 19 | Pending |
+| RLPKG-01 | Phase 19 | Complete |
+| RLPKG-02 | Phase 19 | Complete |
+| RLPKG-03 | Phase 19 | Complete |
+| RLPKG-04 | Phase 19 | Complete |
+| MON-01 | Phase 19 | Complete |
+| MON-02 | Phase 19 | Complete |
+| MON-03 | Phase 19 | Complete |
+| MON-04 | Phase 19 | Complete |
+| MON-05 | Phase 19 | Complete |
+| ACT-01 | Phase 19 | Complete |
+| ACT-02 | Phase 19 | Complete |
 | DEMO-01 | Phase 18 | Complete |
 | DEMO-02 | Phase 20 | Pending |
 | DEMO-03 | Phase 20 | Pending |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 (Phase 18 complete)*
+*Last updated: 2026-01-27 (Phase 19 complete)*
