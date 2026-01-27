@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 19 of 20 (operator-ratelimiter Package)
-**Plan:** 01 of 05 completed
+**Plan:** 03 of 05 completed
 **Status:** In progress
-**Last activity:** 2026-01-27 - Completed 19-01-PLAN.md (Package foundation)
+**Last activity:** 2026-01-27 - Completed 19-03-PLAN.md (Management API actions)
 
-Progress: [########..] 81% (4.2/5 phases complete)
+Progress: [########..] 82% (4.4/5 phases complete)
 
 ## Project Reference
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
-| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (1/5) |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (3/5) |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
 ## Archives
@@ -109,6 +109,13 @@ See: .planning/MILESTONES.md
 - Fire-and-forget reset_counter operation
 - Graceful fallback for missing Prometheus metrics (return 0/None)
 
+**Key decisions from v2.1 (Phase 19-03):**
+- Per-key limit storage in Redis hash keys at "ratelimit:limit:{key}" (RLPKG-09)
+- Reset endpoint returns 200 for both existing and nonexistent keys (idempotent) (RLPKG-10)
+- Update limit requires explicit limit parameter (no optional/null to prevent accidents) (RLPKG-11)
+- Hash structure stores both limit and window_ms together
+- RateLimiter.get_limit() returns None if no custom limit exists
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
@@ -116,8 +123,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 19-01-PLAN.md (Package foundation) - Phase 19 plan 1/5 complete
-**Resume with:** 19-02-PLAN.md (RateLimiterSubject implementation)
+**Stopped at:** Completed 19-03-PLAN.md (Management API actions) - Phase 19 plan 3/5 complete
+**Resume with:** 19-02-PLAN.md (RateLimiterSubject implementation) or 19-04-PLAN.md (next in sequence)
 
 ## Phase 16 Completion Summary
 
@@ -158,8 +165,9 @@ Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). 
 
 ## Phase 19 Progress
 
-Plan 01 of 05 completed:
+Plans 01 and 03 of 05 completed:
 - 19-01: Created operator-ratelimiter package foundation (HTTP, Redis, Prometheus clients)
+- 19-03: Added management API actions (reset_counter, update_limit)
 
 Files created:
 - packages/operator-ratelimiter/pyproject.toml
@@ -168,12 +176,13 @@ Files created:
 - packages/operator-ratelimiter/src/operator_ratelimiter/ratelimiter_client.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/redis_client.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/prom_client.py
+- packages/ratelimiter-service/tests/test_management_api.py
 
-Next: 19-02 (RateLimiterSubject implementation)
+Next: 19-02 (RateLimiterSubject implementation) or 19-04 (Action definitions)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-27 (Phase 19 plan 01 complete)*
+*State updated: 2026-01-27 (Phase 19 plan 03 complete)*
