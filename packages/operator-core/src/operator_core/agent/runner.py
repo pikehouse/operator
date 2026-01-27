@@ -274,47 +274,48 @@ class AgentRunner:
             print("(no structured actions in diagnosis)")
             return
 
-        print(f"Processing {len(diagnosis_output.recommended_actions)} recommended action(s)...")
+        print(f"Processing {len(diagnosis_output.recommended_actions)} recommended action(s)...", flush=True)
 
         # Import here to avoid circular import at module level
         from operator_core.actions.safety import ObserveOnlyError
         from operator_core.actions.validation import ValidationError
 
         for rec in diagnosis_output.recommended_actions:
-            print(f"  → {rec.action_name} params={rec.parameters}")
+            print(f"  → {rec.action_name} params={rec.parameters}", flush=True)
             try:
                 # 1. Propose action (validates params, creates proposal)
                 proposal = await self.executor.propose_action(rec, ticket_id=ticket_id)
                 self._actions_proposed += 1
                 print(
                     f"Proposed action: {proposal.action_name} "
-                    f"(id={proposal.id}, urgency={rec.urgency})"
+                    f"(id={proposal.id}, urgency={rec.urgency})",
+                    flush=True,
                 )
 
                 # 2. Validate proposal (transitions to VALIDATED status)
                 await self.executor.validate_proposal(proposal.id)
-                print(f"Validated: {proposal.id}")
+                print(f"Validated: {proposal.id}", flush=True)
 
                 # 3. Execute immediately (AGENT-01)
                 record = await self.executor.execute_proposal(proposal.id, self.subject)
 
                 if record.success:
-                    print(f"✓ Executed: {proposal.action_name}")
+                    print(f"✓ Executed: {proposal.action_name}", flush=True)
                     # 4. Verify after delay (AGENT-02/03/04)
                     await self._verify_action_result(proposal.id, ticket_id)
                 else:
-                    print(f"✗ Execution failed: {record.error_message}")
+                    print(f"✗ Execution failed: {record.error_message}", flush=True)
 
             except ObserveOnlyError:
                 # Expected when in observe mode - just skip
-                print(f"Skipping action proposal: observe-only mode active")
+                print("Skipping action proposal: observe-only mode active", flush=True)
                 break  # Don't try other recommendations
             except ValidationError as e:
-                print(f"Action proposal validation failed for {rec.action_name}: {e}")
+                print(f"Action proposal validation failed for {rec.action_name}: {e}", flush=True)
             except ValueError as e:
-                print(f"Action proposal failed for {rec.action_name}: {e}")
+                print(f"Action proposal failed for {rec.action_name}: {e}", flush=True)
             except Exception as e:
-                print(f"Unexpected error proposing {rec.action_name}: {type(e).__name__}: {e}")
+                print(f"Unexpected error proposing {rec.action_name}: {type(e).__name__}: {e}", flush=True)
 
     async def _verify_action_result(
         self,
@@ -330,7 +331,7 @@ class AgentRunner:
             proposal_id: The executed proposal ID
             ticket_id: Ticket ID for context
         """
-        print(f"Waiting 5s for action effects to propagate...")
+        print("Waiting 5s for action effects to propagate...", flush=True)
         await asyncio.sleep(5.0)
 
         # Query subject metrics (AGENT-03)
@@ -341,16 +342,16 @@ class AgentRunner:
         cluster_health = observation.get("cluster_metrics", observation)
 
         # Log verification result (AGENT-04)
-        print("")
-        print(f"━━━ Verification for Action {proposal_id} ━━━")
-        print(f"Ticket: {ticket_id}")
-        print(f"Metrics observed: {len(observation)} keys")
+        print("", flush=True)
+        print(f"━━━ Verification for Action {proposal_id} ━━━", flush=True)
+        print(f"Ticket: {ticket_id}", flush=True)
+        print(f"Metrics observed: {len(observation)} keys", flush=True)
 
         # For v2.2 demo: assume success if we got metrics without error
         # Full invariant re-check is out of scope per REQUIREMENTS.md
-        print(f"✓ VERIFICATION COMPLETE: Action {proposal_id} executed")
-        print(f"  (Full invariant re-check is future work)")
-        print("")
+        print(f"✓ VERIFICATION COMPLETE: Action {proposal_id} executed", flush=True)
+        print("  (Full invariant re-check is future work)", flush=True)
+        print("", flush=True)
 
         self._actions_verified += 1
 
