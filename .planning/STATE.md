@@ -4,11 +4,11 @@
 
 **Milestone:** v2.2 Agentic Remediations Demo
 **Phase:** 21 - Agent Agentic Loop
-**Plan:** Not started
-**Status:** Roadmap complete, ready for planning
-**Last activity:** 2026-01-27 — Roadmap created for v2.2
+**Plan:** 01 of 1 complete
+**Status:** Phase complete
+**Last activity:** 2026-01-27 - Completed 21-01-PLAN.md
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█████░░░░░] 50%
 
 ## Project Reference
 
@@ -34,7 +34,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 21 | Agent Agentic Loop | DEMO-01, DEMO-02, DEMO-03, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (7) | Pending |
+| 21 | Agent Agentic Loop | DEMO-01, DEMO-02, DEMO-03, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (7) | Complete |
 | 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | Pending |
 
 ## Archives
@@ -73,17 +73,21 @@ See: .planning/MILESTONES.md
 - Both demos use same TUI layout (5 panels) via TUIDemoController
 - Monitor/agent subprocesses use --subject flag for subject selection
 
-**Relevant for v2.2:**
-- Action execution framework exists (v2.0) - need to enable EXECUTE mode in demo
-- Approval workflow exists but defaults to autonomous - need to ensure disabled for demo
-- Both demos already have chaos injection - need to wire action execution and verification
-- Agent already proposes actions - need to auto-execute and verify
+**Key decisions from v2.2 (Phase 21):**
+- Fixed 5s delay for verification (not adaptive polling) - sufficient for demo
+- Simplified verification logs success if metrics observed (full invariant re-check is future work)
+- Propose -> Validate -> Execute -> Verify agentic flow in AgentRunner
+
+**Relevant for Phase 22:**
+- AgentRunner now implements complete agentic loop
+- Need to configure demos with EXECUTE mode and approval_mode=False
+- Both demos already have chaos injection - ready for full E2E
 
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Roadmap created for v2.2
-**Resume with:** `/gsd:plan-phase 21`
+**Stopped at:** Completed 21-01-PLAN.md
+**Resume with:** `/gsd:execute-phase 22`
 
 ## Open Issues
 
@@ -96,4 +100,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (Roadmap created for v2.2)*
+*State updated: 2026-01-27 (Completed 21-01-PLAN.md)*
