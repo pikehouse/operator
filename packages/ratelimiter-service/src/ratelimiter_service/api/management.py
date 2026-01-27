@@ -109,24 +109,34 @@ async def get_counters(
 ) -> CountersResponse:
     """Return current rate limit counters from Redis."""
     counters = []
+    max_counters = 100  # Limit to avoid timeout on large key sets
 
     # Scan for all ratelimit keys (excluding :seq keys)
     async for key in redis_client.scan_iter("ratelimit:*"):
-        if key.endswith(":seq"):
+        # Handle both bytes and string keys
+        key_str = key.decode() if isinstance(key, bytes) else key
+        if key_str.endswith(":seq"):
             continue
 
         # Strip prefix for display
-        display_key = key.replace("ratelimit:", "", 1)
-        count = await limiter.get_counter(display_key)
+        display_key = key_str.replace("ratelimit:", "", 1)
 
-        counters.append(
-            CounterInfo(
-                key=display_key,
-                count=count,
-                limit=settings.default_limit,
-                remaining=max(0, settings.default_limit - count),
+        try:
+            count = await limiter.get_counter(display_key)
+            counters.append(
+                CounterInfo(
+                    key=display_key,
+                    count=count,
+                    limit=settings.default_limit,
+                    remaining=max(0, settings.default_limit - count),
+                )
             )
-        )
+        except redis.ResponseError:
+            # Skip keys with wrong type (not sorted sets)
+            continue
+
+        if len(counters) >= max_counters:
+            break
 
     # Update active counters metric
     set_active_counters(len(counters))
