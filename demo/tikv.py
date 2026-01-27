@@ -128,10 +128,10 @@ def create_recovery_chapter(compose_file: Path) -> Chapter:
     return Chapter(
         title="Stage 7: Recovery",
         narration=(
-            "Demo will now restart the killed node.\n"
-            "[dim](Agent action execution coming in v2 — currently observe-only)[/dim]\n\n"
-            "Watch the cluster health return to all green.\n"
-            "Workload should recover to normal levels."
+            "Agent executed transfer_leader, verifying fix...\n"
+            "Watch the Agent panel for verification result.\n\n"
+            "Demo also restarts the killed node for visual recovery.\n"
+            "Workload should return to normal levels."
         ),
         on_enter=on_enter,
         auto_advance=True,
@@ -163,15 +163,17 @@ TIKV_CHAPTERS = [
         narration=(
             "The MONITOR is checking cluster health invariants.\n\n"
             "Watch for violation detection in monitor output.\n"
-            "Detection typically takes 2-5 seconds."
+            "Next: Agent will diagnose and remediate automatically."
         ),
     ),
     Chapter(
-        title="Stage 6: AI Diagnosis",
+        title="Stage 6: AI Remediation",
         narration=(
-            "Claude is now analyzing the violation.\n\n"
-            "The AI correlates metrics, logs, and cluster state.\n"
-            "Diagnosis provides root cause and recommended actions."
+            "Watch the Agent panel for the complete agentic loop:\n"
+            "1. Diagnosis: Claude analyzes the violation\n"
+            "2. Action: transfer_leader to redistribute regions\n"
+            "3. Verify: Agent checks metrics after action\n\n"
+            "[dim]Agent runs in EXECUTE mode (no approval needed).[/dim]"
         ),
     ),
     # Recovery chapter added dynamically in main()
