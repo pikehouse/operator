@@ -173,3 +173,169 @@ class TestDiagnosisOutputSchema:
             expected_outcome="Test",
         )
         assert rec.parameters == {}
+
+
+class TestParameterInference:
+    """Tests for parameter inference when Claude returns empty params."""
+
+    @pytest.fixture
+    def runner(self, tmp_path, mock_subject):
+        """Create AgentRunner for testing inference."""
+        return AgentRunner(
+            subject=mock_subject,
+            db_path=tmp_path / "test.db",
+        )
+
+    def test_infer_reset_counter_finds_over_limit(self, runner):
+        """Should infer key from counter that's over limit."""
+        observation = {
+            "counters": [
+                {"key": "api-orders", "count": 5, "limit": 10},
+                {"key": "counter-drift-demo", "count": 15, "limit": 10},
+                {"key": "api-users", "count": 3, "limit": 10},
+            ]
+        }
+
+        result = runner._infer_action_parameters("reset_counter", observation)
+
+        assert result == {"key": "counter-drift-demo"}
+
+    def test_infer_reset_counter_no_over_limit(self, runner):
+        """Should return None when no counter is over limit."""
+        observation = {
+            "counters": [
+                {"key": "api-orders", "count": 5, "limit": 10},
+                {"key": "api-users", "count": 3, "limit": 10},
+            ]
+        }
+
+        result = runner._infer_action_parameters("reset_counter", observation)
+
+        assert result is None
+
+    def test_infer_reset_counter_empty_counters(self, runner):
+        """Should return None when counters list is empty."""
+        observation = {"counters": []}
+
+        result = runner._infer_action_parameters("reset_counter", observation)
+
+        assert result is None
+
+    def test_infer_reset_counter_no_counters_key(self, runner):
+        """Should return None when observation has no counters."""
+        observation = {"nodes": [{"id": "node-1", "state": "Up"}]}
+
+        result = runner._infer_action_parameters("reset_counter", observation)
+
+        assert result is None
+
+    def test_infer_unknown_action_returns_none(self, runner):
+        """Should return None for actions without inference logic."""
+        observation = {
+            "counters": [
+                {"key": "counter-drift-demo", "count": 15, "limit": 10},
+            ]
+        }
+
+        result = runner._infer_action_parameters("unknown_action", observation)
+
+        assert result is None
+
+    def test_infer_finds_first_over_limit(self, runner):
+        """Should return the first counter that's over limit."""
+        observation = {
+            "counters": [
+                {"key": "first-over", "count": 12, "limit": 10},
+                {"key": "second-over", "count": 20, "limit": 10},
+            ]
+        }
+
+        result = runner._infer_action_parameters("reset_counter", observation)
+
+        assert result == {"key": "first-over"}
+
+
+class TestParameterInferenceIntegration:
+    """Integration tests for parameter inference in action flow."""
+
+    @pytest.fixture
+    def mock_subject_with_over_limit(self):
+        """Subject that returns over-limit counter in observation."""
+        class SubjectWithOverLimit(MockSubject):
+            async def observe(self):
+                return {
+                    "counters": [
+                        {"key": "counter-drift-demo", "count": 15, "limit": 10},
+                    ]
+                }
+        return SubjectWithOverLimit()
+
+    @pytest.fixture
+    def executor_with_subject(self, tmp_path, mock_subject_with_over_limit):
+        """Create executor with over-limit subject."""
+        from operator_core.actions.safety import SafetyController, SafetyMode
+        from operator_core.actions.audit import ActionAuditor
+
+        db_path = tmp_path / "test.db"
+        auditor = ActionAuditor(db_path)
+        registry = ActionRegistry(mock_subject_with_over_limit)
+        safety = SafetyController(db_path, auditor, mode=SafetyMode.EXECUTE)
+
+        return ActionExecutor(
+            db_path=db_path,
+            registry=registry,
+            safety=safety,
+            auditor=auditor,
+            approval_mode=False,
+        )
+
+    @pytest.mark.asyncio
+    async def test_empty_params_get_inferred_and_executed(
+        self, tmp_path, mock_subject_with_over_limit, executor_with_subject
+    ):
+        """Action with empty params should succeed via inference."""
+        # Track calls
+        calls = []
+
+        async def track_reset_counter(key: str):
+            calls.append(key)
+
+        mock_subject_with_over_limit.reset_counter = track_reset_counter
+
+        # Create runner with executor
+        runner = AgentRunner(
+            subject=mock_subject_with_over_limit,
+            db_path=tmp_path / "test.db",
+            executor=executor_with_subject,
+        )
+
+        # Create recommendation with EMPTY params (simulating Claude's behavior)
+        rec = ActionRecommendation(
+            action_name="reset_counter",
+            parameters={},  # Empty - should be inferred
+            reason="Counter exceeded limit",
+            expected_outcome="Counter reset to zero",
+        )
+
+        # Get observation for inference
+        observation = await mock_subject_with_over_limit.observe()
+
+        # Manually test inference + proposal flow
+        inferred = runner._infer_action_parameters(rec.action_name, observation)
+        assert inferred == {"key": "counter-drift-demo"}
+
+        # Update rec with inferred params (as runner does)
+        rec.parameters = inferred
+
+        # Now proposal should succeed
+        proposal = await executor_with_subject.propose_action(rec, ticket_id=1)
+        assert proposal.parameters == {"key": "counter-drift-demo"}
+
+        # Execute should work
+        await executor_with_subject.validate_proposal(proposal.id)
+        record = await executor_with_subject.execute_proposal(
+            proposal.id, mock_subject_with_over_limit
+        )
+
+        assert record.success
+        assert calls == ["counter-drift-demo"]
