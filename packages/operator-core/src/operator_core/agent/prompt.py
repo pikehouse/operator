@@ -41,10 +41,11 @@ When analyzing a ticket violation, provide a differential diagnosis:
    - ALWAYS include potential risks/side effects
 
 7. STRUCTURED ACTIONS (recommended_actions):
-   - If Available Actions are listed, use them in the recommended_actions field
-   - CRITICAL: Fill in ALL required parameters from the observation data
-   - Example: For reset_counter with key parameter, extract the counter key from the violation
-   - The parameters dict must contain all required fields or the action will fail validation
+   - If Available Actions are listed, populate the recommended_actions field
+   - CRITICAL: The `parameters` dict MUST contain all required values
+   - Extract parameter values from the ticket/observation (e.g., counter key, store ID)
+   - Example: {"key": "counter-drift-demo"} for reset_counter on that counter
+   - Empty parameters {} will cause validation failure
 
 Write in clinical/technical tone like an SRE runbook. Be precise, terse, metric-focused.
 Reference specific metric values and thresholds. Show your reasoning."""
@@ -184,15 +185,24 @@ def build_diagnosis_prompt(context: DiagnosisContext) -> str:
     # Available actions (for structured recommendations)
     if context.action_definitions:
         sections.append("## Available Actions\n")
-        sections.append("When recommending actions, use these exact action names and parameters:\n")
+        sections.append("**IMPORTANT:** In `recommended_actions`, you MUST fill the `parameters` dict with values from the observation.\n")
         for action in context.action_definitions:
             sections.append(f"### `{action.name}`")
             sections.append(f"- **Description:** {action.description}")
             if action.parameters:
                 sections.append("- **Parameters:**")
+                example_params = []
                 for param_name, param_def in action.parameters.items():
                     required = "required" if param_def.required else "optional"
                     sections.append(f"  - `{param_name}` ({param_def.type}, {required}): {param_def.description}")
+                    # Build example
+                    if param_def.type == "str":
+                        example_params.append(f'"{param_name}": "<value from observation>"')
+                    elif param_def.type == "int":
+                        example_params.append(f'"{param_name}": 0')
+                    else:
+                        example_params.append(f'"{param_name}": ...')
+                sections.append(f"- **Example parameters:** {{{', '.join(example_params)}}}")
             sections.append(f"- **Risk Level:** {action.risk_level}")
             sections.append("")
 
