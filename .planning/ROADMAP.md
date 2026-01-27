@@ -123,7 +123,14 @@ Plans:
   2. Chaos injection causes ghost allowing anomaly (boundary burst)
   3. AI correctly identifies root cause without rate-limiter-specific prompts in core
   4. Same demo patterns work for both TiKV and rate limiter subjects
-**Plans:** TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 20-01-PLAN.md - Shared demo infrastructure (Chapter, ChaosConfig, DemoRunner)
+- [ ] 20-02-PLAN.md - TiKV demo entry point with chapters and chaos
+- [ ] 20-03-PLAN.md - Rate limiter demo with counter drift and ghost allowing chaos
+- [ ] 20-04-PLAN.md - TUI integration and run-demo script
+- [ ] 20-05-PLAN.md - E2E validation (human verification)
 
 ## Progress
 
@@ -136,7 +143,7 @@ Plans:
 | 17 - Rate Limiter Service | v2.1 | 4/4 | Complete | 2026-01-26 |
 | 18 - Docker Compose | v2.1 | 2/2 | Complete | 2026-01-26 |
 | 19 - operator-ratelimiter | v2.1 | 5/5 | Complete | 2026-01-27 |
-| 20 - E2E Demo | v2.1 | 0/TBD | Not started | - |
+| 20 - E2E Demo | v2.1 | 0/5 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -153,3 +160,4 @@ Plans:
 *Phase 18 completed: 2026-01-26*
 *Phase 19 planned: 2026-01-26*
 *Phase 19 completed: 2026-01-27*
+*Phase 20 planned: 2026-01-27*
