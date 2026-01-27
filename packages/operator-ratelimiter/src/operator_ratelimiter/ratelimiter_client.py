@@ -12,6 +12,8 @@ from operator_ratelimiter.types import (
     LimitsResponse,
     NodeInfo,
     NodesResponse,
+    UpdateLimitRequest,
+    UpdateLimitResponse,
 )
 
 
@@ -129,3 +131,27 @@ class RateLimiterClient:
         """
         response = await self.http.post(f"/api/counters/{key}/reset")
         response.raise_for_status()
+
+    async def update_limit(self, key: str, limit: int, window_ms: int | None = None) -> UpdateLimitResponse:
+        """
+        Update rate limit for a specific key.
+
+        Calls PUT /api/limits/{key} to set a custom rate limit for the key.
+
+        Args:
+            key: The key to update limit for.
+            limit: New max requests in window.
+            window_ms: Window size in milliseconds (optional, uses service default if not provided).
+
+        Returns:
+            UpdateLimitResponse with key, limit, window_ms, and updated status.
+
+        Raises:
+            httpx.HTTPStatusError: On HTTP errors (4xx, 5xx responses).
+            pydantic.ValidationError: On malformed response data.
+        """
+        request = UpdateLimitRequest(limit=limit, window_ms=window_ms)
+        response = await self.http.put(f"/api/limits/{key}", json=request.model_dump())
+        response.raise_for_status()
+
+        return UpdateLimitResponse.model_validate(response.json())

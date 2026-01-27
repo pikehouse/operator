@@ -54,3 +54,19 @@ class BlocksResponse(BaseModel):
     """Response from /api/blocks."""
 
     blocked: list[BlockedKeyInfo]
+
+
+class UpdateLimitRequest(BaseModel):
+    """Request to update rate limit for a key."""
+
+    limit: int
+    window_ms: int | None = None
+
+
+class UpdateLimitResponse(BaseModel):
+    """Response from PUT /api/limits/{key}."""
+
+    key: str
+    limit: int
+    window_ms: int
+    updated: bool

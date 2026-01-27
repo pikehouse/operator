@@ -122,3 +122,45 @@ class RateLimiter:
         seq_key = f"{prefixed_key}:seq"
         deleted = await self._redis.delete(prefixed_key, seq_key)
         return deleted > 0
+
+    async def update_limit(self, key: str, limit: int, window_ms: int | None = None) -> bool:
+        """
+        Update rate limit for a specific key.
+
+        Stores per-key limit override in Redis. If window_ms is not provided,
+        uses the default window size.
+
+        Args:
+            key: Rate limit key (e.g., "user:123")
+            limit: New max requests in window
+            window_ms: Window size in milliseconds (optional)
+
+        Returns:
+            True (operation always succeeds)
+        """
+        from .config import settings
+
+        window_ms = window_ms if window_ms is not None else settings.default_window_ms
+        limit_key = f"ratelimit:limit:{key}"
+
+        # Store as hash with limit and window
+        await self._redis.hset(limit_key, mapping={"limit": limit, "window_ms": window_ms})
+        return True
+
+    async def get_limit(self, key: str) -> tuple[int, int] | None:
+        """
+        Get stored limit for a key.
+
+        Args:
+            key: Rate limit key
+
+        Returns:
+            Tuple of (limit, window_ms) if custom limit exists, None otherwise
+        """
+        limit_key = f"ratelimit:limit:{key}"
+        data = await self._redis.hgetall(limit_key)
+
+        if not data:
+            return None
+
+        return (int(data["limit"]), int(data["window_ms"]))

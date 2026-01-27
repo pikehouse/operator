@@ -72,6 +72,22 @@ class ResetResponse(BaseModel):
     reset: bool
 
 
+class UpdateLimitRequest(BaseModel):
+    """Request to update rate limit for a key."""
+
+    limit: int
+    window_ms: int | None = None
+
+
+class UpdateLimitResponse(BaseModel):
+    """Response from PUT /api/limits/{key}."""
+
+    key: str
+    limit: int
+    window_ms: int
+    updated: bool
+
+
 async def get_limiter(redis_client: redis.Redis = Depends(get_redis)) -> RateLimiter:
     """Dependency to get RateLimiter instance."""
     return RateLimiter(redis_client)
@@ -159,3 +175,20 @@ async def reset_counter(key: str, limiter: RateLimiter = Depends(get_limiter)) -
     """Reset rate limit counter for a key."""
     reset = await limiter.reset_counter(key)
     return ResetResponse(key=key, reset=reset)
+
+
+@management_router.put("/limits/{key}", response_model=UpdateLimitResponse)
+async def update_limit(
+    key: str,
+    request: UpdateLimitRequest,
+    limiter: RateLimiter = Depends(get_limiter),
+) -> UpdateLimitResponse:
+    """Update rate limit for a specific key."""
+    updated = await limiter.update_limit(key, request.limit, request.window_ms)
+
+    # Determine actual window used
+    window_ms = request.window_ms if request.window_ms is not None else settings.default_window_ms
+
+    return UpdateLimitResponse(
+        key=key, limit=request.limit, window_ms=window_ms, updated=updated
+    )
