@@ -1,509 +1,397 @@
-# Stack Research: Agent Action Execution
+# Technology Stack: Infrastructure Actions & Script Execution
 
-**Focus:** Action execution framework for TiKV operator (leader transfer, region scheduling, dry-run mode, approval workflow)
-**Researched:** 2026-01-25
-**Overall Confidence:** HIGH (verified with official PD documentation, GitHub sources, PyPI)
+**Project:** Operator v2.3
+**Feature Scope:** Docker control, host operations, sandboxed script execution
+**Researched:** 2026-01-27
+**Overall Confidence:** HIGH
 
----
+## Executive Summary
 
-## Current Stack (Existing - DO NOT CHANGE)
+The existing stack already includes most necessary components. The project uses `python-on-whales>=0.70.0` which supports all required Docker operations (container lifecycle, exec, logs, networking). For async compatibility with the existing asyncio architecture, we'll wrap synchronous operations with `asyncio.run_in_executor()` rather than introducing a parallel async Docker library. Minimal additions: `aiofiles` for async file I/O, Python stdlib's `os` and `signal` modules for process operations (no additional dependencies needed).
 
-These are already in use and validated:
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| Python | 3.11+ | Runtime |
-| httpx | >=0.27.0 | Async HTTP client (PD API, Prometheus) |
-| Pydantic | >=2.0.0 | Data validation, structured outputs |
-| aiosqlite | >=0.20.0 | Async SQLite for tickets |
-| anthropic | >=0.40.0 | Claude API integration |
-| Typer | >=0.21.0 | CLI framework |
-| Rich | >=14.0.0 | TUI, panels, live display |
-| python-on-whales | >=0.70.0 | Docker/Compose orchestration |
-
-**Existing Patterns Already Suitable for Actions:**
-- `PDClient` with injected `httpx.AsyncClient` - extend for POST endpoints
-- `Subject` Protocol with action method signatures - implement the stubs
-- `DiagnosisOutput` Pydantic model - pattern for action request/result models
-- `TicketDB` async context manager - pattern for action audit logging
+**Key Decision:** Stay with python-on-whales + executor pattern rather than switching to aiodocker. Rationale: Already integrated, covers all operations, switching would require rewriting existing Docker Compose management code with marginal benefit.
 
 ---
 
-## Additions for v2.0 (Action Execution)
+## Existing Stack (No Changes Needed)
 
-### Core Finding: NO NEW DEPENDENCIES REQUIRED
+### Docker Operations
+| Technology | Current Version | Purpose | Coverage |
+|------------|-----------------|---------|----------|
+| **python-on-whales** | 0.70.0+ (current: 0.80.0) | Docker CLI wrapper | Container lifecycle, exec, logs, networking |
+| **Docker Compose** | via python-on-whales | Orchestration | Already managing TiKV/ratelimiter containers |
 
-The existing stack already provides everything needed for action execution:
+**Why no change:**
+- [python-on-whales 0.80.0](https://pypi.org/project/python-on-whales/) (released 2026-01-10) supports all required operations
+- Thread-safe by design (no intermediate state stored)
+- [Comprehensive API coverage](https://gabrieldemarmiesse.github.io/python-on-whales/docker_client/) including `docker.container.start()`, `docker.container.stop()`, `docker.container.restart()`, `docker.container.kill()`, `docker.container.exec()`, `docker.container.logs()`, `docker.network.connect()`, `docker.network.disconnect()`
+- Already integrated with existing deployment infrastructure
+- Synchronous operations work fine with asyncio via `run_in_executor()`
 
-| Capability | Provided By | Notes |
-|------------|-------------|-------|
-| HTTP POST to PD API | httpx (existing) | Already used for GET, just add POST methods |
-| Action validation | Pydantic (existing) | Already used for DiagnosisOutput |
-| Audit logging | aiosqlite (existing) | Extend tickets schema for action log |
-| Dry-run mode | Python stdlib | No library needed - simple flag pattern |
-| Approval workflow | asyncio.Event (stdlib) | Human-in-the-loop with async pause/resume |
+**Alternative considered:** [aiodocker 0.25.0](https://pypi.org/project/aiodocker/) provides native async/await Docker API. **Rejected** because:
+1. Would require rewriting existing Docker Compose management
+2. Performance benefit minimal for operator use case (not high-frequency Docker operations)
+3. Adds dependency on aiohttp (not currently used elsewhere in stack)
+4. python-on-whales is sufficient when wrapped with executor pattern
 
-**Why no drypy/dryable library:**
-- These libraries add global state management complexity
-- Our actions are method calls on Subject, not decorated functions
-- A simple `dry_run: bool` parameter is cleaner and more explicit
-- Keeps action behavior visible in the call site
+### Process Operations
+| Technology | Version | Purpose | Why Sufficient |
+|------------|---------|---------|----------------|
+| **Python stdlib: os** | stdlib (Python 3.11+) | Process signaling | `os.kill(pid, signal)` for SIGTERM/SIGKILL |
+| **Python stdlib: signal** | stdlib (Python 3.11+) | Signal constants | SIGTERM, SIGKILL, SIGINT constants |
+
+**Why no psutil:**
+- [psutil 7.2.1](https://pypi.org/project/psutil/) is feature-rich but overkill for simple signaling
+- stdlib `os.kill()` handles required operations (send signals to processes)
+- [asyncio loop.add_signal_handler()](https://docs.python.org/3/library/asyncio-eventloop.html) for receiving signals
+- psutil is synchronous-only, would still require executor wrapping
+- Avoid dependency bloat for operations stdlib already provides
 
 ---
 
-## PD API Endpoints for Actions
+## Required Additions
 
-**Source:** [tikv/pd router.go](https://github.com/tikv/pd/blob/master/server/api/router.go), [PD Control Guide](https://docs.pingcap.com/tidb/stable/pd-control/)
+### Async File Operations
+| Technology | Version | Purpose | Why |
+|------------|---------|---------|-----|
+| **aiofiles** | 25.1.0+ | Async file I/O | Non-blocking file read/write for host operations |
 
-### Operator Endpoints (for immediate actions)
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/pd/api/v1/operators` | POST | Create operator (transfer-leader, add-peer, etc.) |
-| `/pd/api/v1/operators` | GET | List active operators |
-| `/pd/api/v1/operators/{region_id}` | GET | Get operator for specific region |
-| `/pd/api/v1/operators/{region_id}` | DELETE | Cancel operator for region |
-
-**POST `/pd/api/v1/operators` body format:**
-```json
-{
-  "name": "transfer-leader",
-  "region_id": 1,
-  "to_store_id": 2
-}
+**Installation:**
+```bash
+uv add "aiofiles>=25.1.0"
 ```
 
-Other operator names:
-- `add-peer` - requires `region_id`, `to_store_id`
-- `remove-peer` - requires `region_id`, `from_store_id`
-- `split-region` - requires `region_id`
+**Rationale:**
+- [aiofiles 25.1.0](https://pypi.org/project/aiofiles/) (released 2025-10-09) supports Python 3.9-3.14
+- Integrates seamlessly with existing asyncio architecture
+- Host file operations (read/write) need async to avoid blocking event loop
+- Simple API: `async with aiofiles.open(path, mode) as f: content = await f.read()`
+- Delegates I/O to thread pool automatically (same pattern as run_in_executor but cleaner API)
 
-### Scheduler Endpoints (for ongoing policies)
+**Alternatives considered:**
+- **aiopath**: Pathlib-like async interface. Rejected because adds abstraction overhead; aiofiles' explicit open/read/write is clearer for action implementations
+- **anyio**: Cross-framework async (trio/asyncio). Rejected because project is asyncio-only; unnecessary abstraction
+- **Plain stdlib + run_in_executor**: Would work but aiofiles provides cleaner, more maintainable code
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/pd/api/v1/schedulers` | POST | Add scheduler (evict-leader, balance-region) |
-| `/pd/api/v1/schedulers` | GET | List active schedulers |
-| `/pd/api/v1/schedulers/{name}` | DELETE | Remove scheduler |
-| `/pd/api/v1/schedulers/{name}` | POST | Pause/resume scheduler |
+### Sandbox Container Images
 
-**POST `/pd/api/v1/schedulers` body format (evict-leader):**
-```json
-{
-  "name": "evict-leader-scheduler",
-  "store_id": 1
-}
-```
+For script execution, we need minimal base images with Python/bash interpreters.
 
-### Config Endpoints (for tuning)
+**Base Images (no Python dependencies, pulled at runtime):**
+- `python:3.11-slim` (for Python script execution)
+- `bash:5.2-alpine` (for bash script execution)
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/pd/api/v1/config` | GET | Get current config |
-| `/pd/api/v1/config` | POST | Update config values |
-| `/pd/api/v1/config/schedule` | GET/POST | Schedule-specific config |
+**Why these:**
+- **python:3.11-slim**: Matches project's Python 3.11+ requirement, includes pip for potential library installation
+- **bash:5.2-alpine**: Minimal shell environment (~2MB vs ~50MB for Ubuntu)
+- Official images, regularly updated, security-patched
+- No custom Dockerfile needed (reduces maintenance)
 
-**POST `/pd/api/v1/config` body format:**
-```json
-{
-  "leader-schedule-limit": 4,
-  "replica-schedule-limit": 8
-}
-```
-
-### Store State Endpoints
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/pd/api/v1/store/{store_id}/state` | POST | Change store state (for drain) |
-
-**POST body (query param):** `?state=Offline` or `?state=Tombstone`
-
----
-
-## Implementation Patterns
-
-### Pattern 1: Action Models (Pydantic)
-
-Extend existing Pydantic pattern from `diagnosis.py`:
-
+**Security configuration (applied via python-on-whales):**
 ```python
-from pydantic import BaseModel, Field
-from enum import Enum
-from typing import Literal
-
-class ActionType(str, Enum):
-    TRANSFER_LEADER = "transfer-leader"
-    SPLIT_REGION = "split-region"
-    ADD_PEER = "add-peer"
-    REMOVE_PEER = "remove-peer"
-    EVICT_LEADER = "evict-leader-scheduler"
-    SET_CONFIG = "set-config"
-
-class ActionRequest(BaseModel):
-    """Request to execute an action on the cluster."""
-    action_type: ActionType
-    region_id: int | None = None
-    store_id: str | None = None
-    to_store_id: str | None = None
-    config_key: str | None = None
-    config_value: int | float | None = None
-
-    rationale: str = Field(description="Why this action is recommended")
-    ticket_id: int | None = Field(default=None, description="Associated ticket")
-
-class ActionResult(BaseModel):
-    """Result of an action execution."""
-    success: bool
-    action_type: ActionType
-    dry_run: bool
-    message: str
-    pd_response: dict | None = None
-    error: str | None = None
-    executed_at: str | None = None
-
-class ActionApproval(BaseModel):
-    """Human approval decision."""
-    approved: bool
-    approver: str | None = None
-    reason: str | None = None
-    modified_request: ActionRequest | None = None  # Allow edits
+docker.run(
+    image="python:3.11-slim",
+    command=["python", "/sandbox/script.py"],
+    volumes=["/host/path:/sandbox:ro"],  # Read-only mount
+    network_mode="none",                  # No network access
+    user="nobody",                        # Non-root execution
+    remove=True,                          # Auto-cleanup
+    cpus=1.0,                            # CPU limit
+    memory="512m",                       # Memory limit
+)
 ```
 
-### Pattern 2: Dry-Run Mode (No Library Needed)
+**Security layers applied:**
+1. **Default seccomp profile**: [Docker's default](https://docs.docker.com/engine/security/seccomp/) blocks ~51 dangerous syscalls (e.g., `unshare`, `mount`, `reboot`)
+2. **No network**: `network_mode="none"` prevents external communication
+3. **Non-root user**: Run as `nobody` (UID 65534) to prevent privilege escalation
+4. **Resource limits**: CPU and memory caps prevent resource exhaustion
+5. **Read-only volumes**: Scripts can't modify host filesystem
+6. **Ephemeral containers**: `remove=True` ensures no persistent state
 
-Simple parameter-based approach:
+**Reference:** [Setting Up a Secure Python Sandbox for LLM Agents](https://dida.do/blog/setting-up-a-secure-python-sandbox-for-llm-agents) and [epicbox security model](https://github.com/StepicOrg/epicbox) (AppArmor + Docker isolation).
 
-```python
-class PDClient:
-    async def create_operator(
-        self,
-        name: str,
-        region_id: int,
-        to_store_id: str | None = None,
-        dry_run: bool = False,
-    ) -> ActionResult:
-        """Create a PD operator (transfer-leader, split-region, etc.)."""
-        body = {"name": name, "region_id": region_id}
-        if to_store_id:
-            body["to_store_id"] = int(to_store_id)
+---
 
-        if dry_run:
-            return ActionResult(
-                success=True,
-                action_type=ActionType(name),
-                dry_run=True,
-                message=f"[DRY RUN] Would POST to /pd/api/v1/operators: {body}",
-                pd_response=None,
-            )
+## Integration Patterns
 
-        response = await self.http.post("/pd/api/v1/operators", json=body)
-        response.raise_for_status()
+### Async Wrapping for python-on-whales
 
-        return ActionResult(
-            success=True,
-            action_type=ActionType(name),
-            dry_run=False,
-            message=f"Created operator: {name}",
-            pd_response=response.json(),
-            executed_at=datetime.now().isoformat(),
-        )
-```
-
-### Pattern 3: Human-in-the-Loop Approval (asyncio.Event)
-
-Based on [FlowHunt patterns](https://www.flowhunt.io/blog/human-in-the-loop-middleware-python-safe-ai-agents/):
+python-on-whales is synchronous (calls Docker CLI via subprocess). Wrap with executor for async compatibility:
 
 ```python
 import asyncio
-from dataclasses import dataclass, field
-from typing import Callable, Awaitable
+from python_on_whales import docker
 
-@dataclass
-class PendingApproval:
-    """Tracks a pending action awaiting human approval."""
-    request: ActionRequest
-    event: asyncio.Event = field(default_factory=asyncio.Event)
-    result: ActionApproval | None = None
-
-class ApprovalManager:
-    """Manages human-in-the-loop approval workflow."""
-
-    def __init__(self, timeout_seconds: float = 300.0):
-        self.timeout = timeout_seconds
-        self.pending: dict[str, PendingApproval] = {}
-        self._on_approval_requested: Callable[[ActionRequest], Awaitable[None]] | None = None
-
-    def on_approval_requested(self, callback: Callable[[ActionRequest], Awaitable[None]]):
-        """Register callback for when approval is requested (e.g., update TUI)."""
-        self._on_approval_requested = callback
-
-    async def request_approval(self, request: ActionRequest) -> ActionApproval:
-        """Request human approval, blocking until decision or timeout."""
-        approval_id = f"{request.action_type.value}-{request.region_id}-{id(request)}"
-        pending = PendingApproval(request=request)
-        self.pending[approval_id] = pending
-
-        # Notify UI that approval is needed
-        if self._on_approval_requested:
-            await self._on_approval_requested(request)
-
-        try:
-            await asyncio.wait_for(pending.event.wait(), timeout=self.timeout)
-            return pending.result or ActionApproval(approved=False, reason="No decision recorded")
-        except asyncio.TimeoutError:
-            return ActionApproval(approved=False, reason=f"Approval timed out after {self.timeout}s")
-        finally:
-            del self.pending[approval_id]
-
-    def approve(self, approval_id: str, approver: str, modified: ActionRequest | None = None):
-        """Human approves the action."""
-        if approval_id in self.pending:
-            pending = self.pending[approval_id]
-            pending.result = ActionApproval(
-                approved=True,
-                approver=approver,
-                modified_request=modified,
-            )
-            pending.event.set()
-
-    def reject(self, approval_id: str, reason: str):
-        """Human rejects the action."""
-        if approval_id in self.pending:
-            pending = self.pending[approval_id]
-            pending.result = ActionApproval(approved=False, reason=reason)
-            pending.event.set()
-```
-
-### Pattern 4: Action Executor (Orchestrates Everything)
-
-```python
-class ActionExecutor:
-    """Executes actions with dry-run, approval, and audit support."""
-
-    def __init__(
-        self,
-        subject: TiKVSubject,
-        approval_manager: ApprovalManager,
-        db: TicketDB,
-        dry_run: bool = False,
-        require_approval: bool = True,
-    ):
-        self.subject = subject
-        self.approval = approval_manager
-        self.db = db
-        self.dry_run = dry_run
-        self.require_approval = require_approval
-
-    async def execute(self, request: ActionRequest) -> ActionResult:
-        """Execute an action with full workflow."""
-
-        # 1. Dry-run short-circuit
-        if self.dry_run:
-            result = await self._execute_dry_run(request)
-            await self._audit_log(request, result)
-            return result
-
-        # 2. Request approval if required
-        if self.require_approval:
-            approval = await self.approval.request_approval(request)
-            if not approval.approved:
-                result = ActionResult(
-                    success=False,
-                    action_type=request.action_type,
-                    dry_run=False,
-                    message=f"Action rejected: {approval.reason}",
-                )
-                await self._audit_log(request, result, approval)
-                return result
-
-            # Use modified request if provided
-            if approval.modified_request:
-                request = approval.modified_request
-
-        # 3. Execute the action
-        result = await self._execute_real(request)
-
-        # 4. Audit log
-        await self._audit_log(request, result)
-
-        return result
-
-    async def _execute_real(self, request: ActionRequest) -> ActionResult:
-        """Execute action against real PD API."""
-        match request.action_type:
-            case ActionType.TRANSFER_LEADER:
-                await self.subject.transfer_leader(request.region_id, request.to_store_id)
-                return ActionResult(success=True, ...)
-            case ActionType.SPLIT_REGION:
-                await self.subject.split_region(request.region_id)
-                return ActionResult(success=True, ...)
-            # ... other cases
-```
-
-### Pattern 5: Audit Logging (Extend Existing Schema)
-
-```sql
--- Add to existing schema.py
-CREATE TABLE IF NOT EXISTS action_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    request_json TEXT NOT NULL,
-    result_json TEXT NOT NULL,
-    approval_json TEXT,
-    ticket_id INTEGER REFERENCES tickets(id),
-    dry_run INTEGER NOT NULL DEFAULT 0,
-    executed_at TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_action_log_ticket ON action_log(ticket_id);
-CREATE INDEX IF NOT EXISTS idx_action_log_executed ON action_log(executed_at);
-```
-
----
-
-## What NOT to Add
-
-| Library | Why Not |
-|---------|---------|
-| **drypy / dryable** | Global state pattern doesn't fit our method-based actions. Simple `dry_run: bool` parameter is cleaner. |
-| **LangChain / LangGraph** | Overkill for single-action approval. Our workflow is simpler than multi-agent orchestration. Already have Claude API directly. |
-| **Temporal / Prefect** | Workflow engines for complex pipelines. Our actions are single operations, not sagas. |
-| **django-approval-workflow** | Django-specific. We're not using Django. |
-| **SpiffWorkflow** | BPMN workflow engine is overkill. Our approval is binary (approve/reject). |
-| **requests** | httpx already handles sync and async. No need for second HTTP library. |
-| **aiohttp** | httpx is already in use and working well. Switching provides no benefit. |
-
----
-
-## Integration Points
-
-### With Existing PDClient
-
-Extend `pd_client.py` with POST methods:
-
-```python
-# Add to existing PDClient class
-async def create_operator(self, name: str, region_id: int, **kwargs) -> dict:
-    """POST /pd/api/v1/operators"""
-    body = {"name": name, "region_id": region_id, **kwargs}
-    response = await self.http.post("/pd/api/v1/operators", json=body)
-    response.raise_for_status()
-    return response.json()
-
-async def add_scheduler(self, name: str, store_id: int | None = None) -> dict:
-    """POST /pd/api/v1/schedulers"""
-    body = {"name": name}
-    if store_id:
-        body["store_id"] = store_id
-    response = await self.http.post("/pd/api/v1/schedulers", json=body)
-    response.raise_for_status()
-    return response.json()
-
-async def update_config(self, config: dict) -> dict:
-    """POST /pd/api/v1/config"""
-    response = await self.http.post("/pd/api/v1/config", json=config)
-    response.raise_for_status()
-    return response.json()
-```
-
-### With Existing TiKVSubject
-
-Implement the stubbed action methods:
-
-```python
-# Replace NotImplementedError with actual implementation
-async def transfer_leader(self, region_id: int, to_store_id: str) -> None:
-    await self.pd.create_operator(
-        name="transfer-leader",
-        region_id=region_id,
-        to_store_id=int(to_store_id),
-    )
-
-async def split_region(self, region_id: int) -> None:
-    await self.pd.create_operator(
-        name="split-region",
-        region_id=region_id,
-    )
-
-async def drain_store(self, store_id: str) -> None:
-    # Use evict-leader-scheduler for safe drain
-    await self.pd.add_scheduler(
-        name="evict-leader-scheduler",
-        store_id=int(store_id),
+async def docker_container_start(container_id: str) -> None:
+    """Start container asynchronously."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,  # Default ThreadPoolExecutor
+        docker.container.start,
+        container_id
     )
 ```
 
-### With TUI (Approval Workflow)
+**Why this works:**
+- [python-on-whales is thread-safe](https://gabrieldemarmiesse.github.io/python-on-whales/docker_client/) (no shared state)
+- Docker daemon handles concurrent requests internally
+- Executor offloads blocking subprocess calls to thread pool
+- Standard pattern used throughout Python async ecosystem for blocking I/O
+
+**Pattern for all Docker operations:**
+- Container lifecycle: `docker.container.{start,stop,restart,kill}` → wrap with executor
+- Exec: `docker.container.exec()` → wrap with executor
+- Logs: `docker.container.logs()` → wrap with executor (returns generator, consume in thread)
+- Networking: `docker.network.{connect,disconnect}` → wrap with executor
+
+### File Operations with aiofiles
 
 ```python
-# In tui/controller.py - add approval panel
-class ApprovalPanel:
-    def __init__(self, approval_manager: ApprovalManager):
-        self.manager = approval_manager
-        self.manager.on_approval_requested(self._on_request)
+import aiofiles
 
-    async def _on_request(self, request: ActionRequest):
-        """Called when agent proposes an action."""
-        # Update TUI to show pending approval
-        self.current_request = request
-        self.show_approval_prompt()
+async def read_host_file(path: str) -> str:
+    """Read file from host asynchronously."""
+    async with aiofiles.open(path, mode='r') as f:
+        return await f.read()
 
-    def handle_keypress(self, key: str):
-        if key == "y":  # Approve
-            self.manager.approve(self._current_id(), approver="human")
-        elif key == "n":  # Reject
-            self.manager.reject(self._current_id(), reason="Human rejected")
+async def write_host_file(path: str, content: str) -> None:
+    """Write file to host asynchronously."""
+    async with aiofiles.open(path, mode='w') as f:
+        await f.write(content)
 ```
+
+**Error handling:**
+- Wrap in try/except for `FileNotFoundError`, `PermissionError`
+- Validate paths to prevent directory traversal (e.g., reject `../` patterns)
+
+### Process Signaling (stdlib only)
+
+```python
+import os
+import signal
+import asyncio
+
+async def send_signal_to_process(pid: int, sig: signal.Signals) -> None:
+    """Send signal to process asynchronously."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,
+        os.kill,
+        pid,
+        sig
+    )
+
+# Usage
+await send_signal_to_process(12345, signal.SIGTERM)  # Graceful shutdown
+await send_signal_to_process(12345, signal.SIGKILL)  # Force kill
+```
+
+**Why executor wrapping:**
+- `os.kill()` is fast (syscall) but best practice to avoid blocking event loop
+- Consistent pattern with other blocking operations
+
+### Script Execution Pattern
+
+```python
+import aiofiles
+import asyncio
+from python_on_whales import docker
+
+async def execute_python_script(script_content: str) -> dict:
+    """Execute Python script in sandbox, return output."""
+    # Write script to temp file
+    script_path = "/tmp/operator_script.py"
+    async with aiofiles.open(script_path, mode='w') as f:
+        await f.write(script_content)
+
+    # Execute in sandbox container
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: docker.run(
+            image="python:3.11-slim",
+            command=["python", "/sandbox/script.py"],
+            volumes=[(script_path, "/sandbox/script.py")],
+            network_mode="none",
+            user="nobody",
+            remove=True,
+            cpus=1.0,
+            memory="512m",
+        )
+    )
+
+    return {
+        "stdout": result,  # docker.run returns stdout
+        "exit_code": 0,    # Non-zero exit raises exception
+    }
+```
+
+**Capture considerations:**
+- `docker.run()` returns stdout as string (stderr merged by default)
+- Exceptions raised on non-zero exit codes (catch and return error)
+- Timeout via `docker.run(..., timeout=30)` to prevent infinite loops
+- Clean up temp files after execution
 
 ---
 
-## Installation
+## Version Summary
 
-**No new packages to install.** Existing dependencies cover all requirements:
-
-```toml
-# Already in pyproject.toml - no changes needed
-dependencies = [
-    "typer>=0.21.0",
-    "rich>=14.0.0",
-    "python-on-whales>=0.70.0",
-    "httpx>=0.27.0",      # Already supports POST
-    "pydantic>=2.0.0",    # Already used for models
-    "aiosqlite>=0.20.0",  # Already used for audit
-    "anthropic>=0.40.0",
-]
-```
+| Component | Version | Source | Confidence |
+|-----------|---------|--------|------------|
+| python-on-whales | 0.80.0 | [PyPI verified](https://pypi.org/project/python-on-whales/) | HIGH |
+| aiofiles | 25.1.0 | [PyPI verified](https://pypi.org/project/aiofiles/) | HIGH |
+| os/signal | stdlib | Python 3.11+ docs | HIGH |
+| python:3.11-slim | latest | Docker Hub official | HIGH |
+| bash:5.2-alpine | latest | Docker Hub official | HIGH |
 
 ---
 
-## Version Verification
+## Installation Steps
 
-| Package | Current Version | Required | Status |
-|---------|-----------------|----------|--------|
-| httpx | 0.28.1 (Jan 2026) | >=0.27.0 | OK - POST support exists |
-| Pydantic | 2.12.5 (Jan 2026) | >=2.0.0 | OK - BaseModel, Field work |
-| aiosqlite | 0.20.0 | >=0.20.0 | OK - async context managers |
+```bash
+# Add new dependency to operator-core
+cd packages/operator-core
+uv add "aiofiles>=25.1.0"
+
+# Verify Docker images available (pulled automatically on first use)
+docker pull python:3.11-slim
+docker pull bash:5.2-alpine
+```
+
+**No other changes needed.** Existing dependencies cover all Docker operations.
+
+---
+
+## Security Considerations
+
+### Docker Sandbox Hardening
+
+| Layer | Configuration | Risk Mitigated |
+|-------|--------------|----------------|
+| Seccomp | Default profile | Blocks 51 dangerous syscalls (container escape) |
+| Network | `network_mode="none"` | Prevents data exfiltration, C2 communication |
+| User | `user="nobody"` | Limits damage from privilege escalation exploits |
+| Resources | `cpus=1.0, memory="512m"` | Prevents DoS via resource exhaustion |
+| Filesystem | Read-only volumes | Prevents host filesystem tampering |
+| Ephemeral | `remove=True` | No persistent backdoors in containers |
+
+**Known Limitations:**
+- Docker isolation is not a security boundary ([kernel vulnerabilities affect all containers](https://dida.do/blog/setting-up-a-secure-python-sandbox-for-llm-agents))
+- For production use with untrusted AI-generated code, consider: (1) separate infrastructure for script execution, (2) gVisor for enhanced kernel isolation, (3) AppArmor profiles for additional syscall filtering
+
+**Acceptable for operator use case because:**
+- Scripts generated by Claude (not arbitrary user input)
+- Running on operator's own infrastructure (not multi-tenant)
+- Actions already require authentication
+- Defense-in-depth via multiple layers (seccomp + network isolation + non-root + resource limits)
+
+### Host File Operation Constraints
+
+**Implement in action layer:**
+- **Path validation:** Reject `../` patterns, absolute paths only
+- **Allowlist:** Restrict to specific directories (e.g., `/var/log/operator/`, `/etc/operator/`)
+- **Size limits:** Reject reads >10MB, writes >1MB
+- **Permission checks:** Verify file permissions before operations
+
+**Rationale:** Actions run with operator's privileges. Limit blast radius of buggy/malicious actions.
+
+### Process Signaling Constraints
+
+**Implement in action layer:**
+- **PID validation:** Verify PID exists and belongs to managed service
+- **Signal allowlist:** Only SIGTERM (15) and SIGKILL (9)
+- **Ownership check:** Ensure process owned by operator user
+- **Rate limiting:** Prevent signal spam
+
+---
+
+## Alternatives Considered
+
+### aiodocker vs python-on-whales
+
+**aiodocker advantages:**
+- Native async/await (no executor wrapping)
+- Direct HTTP API access (no subprocess overhead)
+
+**aiodocker disadvantages:**
+- Requires rewriting existing Docker Compose code
+- Adds aiohttp dependency (unused elsewhere in stack)
+- Marginal performance benefit (Docker operations not high-frequency)
+- Different API paradigm (HTTP vs CLI) increases cognitive load
+
+**Decision:** Stay with python-on-whales. Executor pattern is idiomatic Python async for blocking I/O.
+
+### psutil vs stdlib (os/signal)
+
+**psutil advantages:**
+- Rich process introspection (CPU%, memory%, open files)
+- Cross-platform abstractions
+
+**psutil disadvantages:**
+- Synchronous-only (still needs executor wrapping)
+- Large dependency for simple signaling operations
+- Operator only needs `kill()` (stdlib sufficient)
+
+**Decision:** Use stdlib. Add psutil later if process monitoring needed.
+
+### Custom Docker Sandbox Library vs Direct python-on-whales
+
+**Custom library (e.g., [epicbox](https://github.com/StepicOrg/epicbox)):**
+- Higher-level API for sandboxing
+- Built-in security profiles
+
+**Direct python-on-whales:**
+- Lower-level control over container configuration
+- No additional dependency
+- Security configuration explicit in action code (easier to audit)
+
+**Decision:** Direct python-on-whales. Operator has specific needs (output capture, resource limits) better served by explicit configuration.
+
+---
+
+## Open Questions / Future Considerations
+
+1. **Script library installation:** If Python scripts need external libraries (e.g., `requests`), consider:
+   - Pre-built images with common libraries (increases image size)
+   - Dynamic `pip install` in sandbox (increases execution time)
+   - Allowlist of approved libraries (reduces risk)
+
+   **Recommendation:** Start with no external libraries. Add if needed based on actual use cases.
+
+2. **Script execution timeout:** What's appropriate timeout?
+   - Short (30s): Prevents runaway scripts, may terminate slow operations
+   - Long (5m): Accommodates slow operations, delays failure detection
+
+   **Recommendation:** Start with 60s, make configurable per action.
+
+3. **Output size limits:** Scripts could generate massive output (DoS).
+   - Recommendation: Cap at 1MB, truncate with warning.
+
+4. **Multi-language support:** Currently Python/bash. Future: Go, Rust?
+   - Recommendation: Start with Python/bash. Add languages based on demand.
 
 ---
 
 ## Sources
 
-### PD API Documentation
-- [PD Control User Guide](https://docs.pingcap.com/tidb/stable/pd-control/) - pd-ctl commands (HIGH confidence)
-- [tikv/pd router.go](https://github.com/tikv/pd/blob/master/server/api/router.go) - HTTP endpoints (HIGH confidence)
-- [PD HTTP Client Package](https://pkg.go.dev/github.com/tikv/pd/client/http) - Go client reference (HIGH confidence)
-- [Scheduling Introduction Wiki](https://github.com/tikv/pd/wiki/Scheduling-Introduction) - Operator concepts (HIGH confidence)
+### High Confidence (Official Documentation)
+- [python-on-whales PyPI](https://pypi.org/project/python-on-whales/) - Version and release info
+- [python-on-whales Documentation](https://gabrieldemarmiesse.github.io/python-on-whales/docker_client/) - API reference
+- [aiofiles PyPI](https://pypi.org/project/aiofiles/) - Version and Python compatibility
+- [aiodocker PyPI](https://pypi.org/project/aiodocker/) - Alternative Docker library
+- [psutil PyPI](https://pypi.org/project/psutil/) - Process utilities
+- [Python asyncio Documentation](https://docs.python.org/3/library/asyncio-eventloop.html) - Event loop and signals
+- [Docker Seccomp Security](https://docs.docker.com/engine/security/seccomp/) - Security profiles
 
-### Human-in-the-Loop Patterns
-- [FlowHunt: Human in the Loop Middleware](https://www.flowhunt.io/blog/human-in-the-loop-middleware-python-safe-ai-agents/) - asyncio.Event pattern (MEDIUM confidence)
-- [LangChain HITL](https://docs.langchain.com/oss/python/langchain/human-in-the-loop) - Interrupt pattern reference (MEDIUM confidence)
+### Medium Confidence (Community/Tutorials)
+- [Setting Up a Secure Python Sandbox for LLM Agents](https://dida.do/blog/setting-up-a-secure-python-sandbox-for-llm-agents) - Security patterns
+- [epicbox GitHub](https://github.com/StepicOrg/epicbox) - Sandbox reference implementation
+- [Docker Python-on-whales Blog](https://www.docker.com/blog/guest-post-calling-the-docker-cli-from-python-with-python-on-whales/) - Usage patterns
+- [Twilio aiofiles Tutorial](https://www.twilio.com/en-us/blog/developers/tutorials/building-blocks/working-with-files-asynchronously-in-python-using-aiofiles-and-asyncio) - Async file I/O patterns
 
-### Dry-Run Libraries (Evaluated, Rejected)
-- [drypy](https://github.com/dzanotelli/drypy) - Decorator pattern, not suitable for methods
-- [dryable](https://github.com/haarcuba/dryable) - Global state pattern, too implicit
-
-### Version Verification
-- [httpx PyPI](https://pypi.org/project/httpx/) - Version 0.28.1
-- [Pydantic PyPI](https://pypi.org/project/pydantic/) - Version 2.12.5
-- [httpx Releases](https://github.com/encode/httpx/releases) - Changelog verification
+### Search Results (Supporting)
+- [Python on whales asyncio](https://github.com/gabrieldemarmiesse/python-on-whales) - Threading safety
+- [aiodocker GitHub](https://github.com/aio-libs/aiodocker) - Async Docker API
+- [Docker seccomp best practices](https://martinheinz.dev/blog/41) - Hardening guide
+- [Asyncio signal handling](https://superfastpython.com/asyncio-control-c-sigint/) - Signal patterns

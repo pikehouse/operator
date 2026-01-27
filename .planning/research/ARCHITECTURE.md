@@ -1,14 +1,14 @@
-# Architecture Research: Rate Limiter Subject Integration
+# Architecture Research: Infrastructure Actions and Script Execution
 
-**Project:** Operator v2.1 Rate Limiter Subject
-**Researched:** 2026-01-26
-**Confidence:** HIGH (verified with existing codebase, established patterns)
+**Project:** Operator Infrastructure Control Milestone
+**Researched:** 2026-01-27
+**Confidence:** HIGH (verified with existing action framework, official docs, ecosystem patterns)
 
 ## Executive Summary
 
-The rate limiter subject integrates with the existing operator architecture by following the established Subject Protocol pattern from `operator-tikv`. The integration requires a new `operator-ratelimiter` package implementing the same interfaces (Subject, get_action_definitions, SubjectConfig), with a custom rate limiter service exposing HTTP APIs for state observation and action execution.
+Infrastructure actions (Docker control, host operations) and sandboxed script execution integrate with the existing action framework through ActionType.TOOL. The core action lifecycle (propose → validate → execute → complete) remains unchanged. New infrastructure is isolated in dedicated executor components that implement tool execution handlers.
 
-**Key design decision:** The rate limiter service must expose APIs that mirror what TiKV's PD API provides - cluster state, metrics, and action endpoints. This is intentionally different from using an off-the-shelf rate limiter to prove the operator can work with novel systems Claude hasn't seen in training.
+**Key architectural decision:** Script execution is treated as code generation + sandboxed execution, not direct LLM code execution. The agent generates a script as a string parameter, the system validates it, sandboxes it (gVisor/Docker), captures output, and returns results through the standard action result flow.
 
 ## Component Overview
 
@@ -16,1038 +16,1066 @@ The rate limiter subject integrates with the existing operator architecture by f
 
 | Component | Location | Responsibility |
 |-----------|----------|----------------|
-| `RateLimiterSubject` | `packages/operator-ratelimiter/src/operator_ratelimiter/subject.py` | Subject Protocol implementation |
-| `RateLimiterClient` | `packages/operator-ratelimiter/src/operator_ratelimiter/client.py` | HTTP client for rate limiter management API |
-| `RedisClient` | `packages/operator-ratelimiter/src/operator_ratelimiter/redis_client.py` | Redis client for metrics/state queries |
-| `RateLimiterInvariants` | `packages/operator-ratelimiter/src/operator_ratelimiter/invariants.py` | Rate limiter-specific invariant checks |
-| Rate Limiter Service | `subjects/ratelimiter/service/` | Custom rate limiter with management API |
-| Docker Compose | `subjects/ratelimiter/docker-compose.yaml` | 3-node cluster + Redis + Prometheus |
+| `DockerActionExecutor` | `packages/operator-core/src/operator_core/actions/executors/docker.py` | Docker container lifecycle, network operations |
+| `HostActionExecutor` | `packages/operator-core/src/operator_core/actions/executors/host.py` | Host file operations, process management |
+| `ScriptSandbox` | `packages/operator-core/src/operator_core/actions/executors/script.py` | Script validation, sandboxed execution, output capture |
+| `InfrastructureTools` | `packages/operator-core/src/operator_core/actions/tools.py` | Tool action definitions for infrastructure |
+| `aiodocker` integration | Dependency | Async Docker SDK (replaces synchronous docker-py) |
 
 ### Modified Components
 
 | Component | Change |
 |-----------|--------|
-| `operator-core/monitor/loop.py` | Parameterize subject type (currently hardcoded TiKV) |
-| `operator-core/monitor/types.py` | Generalize violation key generation |
-| `operator-core/cli/main.py` | Add `--subject` flag to select subject |
+| `ActionExecutor.execute_proposal()` | Route ActionType.TOOL to tool executor dispatch |
+| `actions/tools.py` | Add infrastructure tool definitions (docker, host, script) |
+| `agent/diagnosis.py` | Support script_content field in ActionRecommendation |
+| `agent/prompt.py` | Instruct agent when to generate scripts vs parameters |
+
+### No Changes Required
+
+| Component | Why Unchanged |
+|-----------|---------------|
+| `ActionProposal` | Already supports ActionType.TOOL and arbitrary parameters |
+| `ActionRegistry` | Already handles TOOL type via get_general_tools() |
+| `ActionStatus` lifecycle | Works identically for infrastructure actions |
+| Database schema | parameters JSON field supports script_content |
 
 ## Architecture Diagram
 
 ```
-                        operator-core
-                             |
-                +------------+------------+
-                |                         |
-         operator-tikv            operator-ratelimiter
-                |                         |
-       +--------+--------+       +--------+--------+
-       |        |        |       |        |        |
-    PDClient  Prom    Invariants Client  Redis  Invariants
-       |        |        |       |        |        |
-       v        v        v       v        v        v
-    TiKV/PD  Prometheus        Rate      Redis  Prometheus
-    Cluster               Limiter Cluster  Cluster
+                         ActionExecutor
+                               |
+                 +-------------+-------------+
+                 |                           |
+          ActionType.SUBJECT          ActionType.TOOL
+                 |                           |
+         subject.method()            tool executor dispatch
+                                             |
+                        +--------------------+--------------------+
+                        |                    |                    |
+                DockerActionExecutor  HostActionExecutor  ScriptSandbox
+                        |                    |                    |
+                   aiodocker          asyncio.subprocess      gVisor/Docker
+                        |                    |                    |
+                   Docker API           Host system         Isolated container
 ```
 
-## Subject Protocol Implementation
+## Integration with Existing Action Framework
 
-### RateLimiterSubject Class
+### ActionType.TOOL Routing
+
+The existing `ActionExecutor` already has infrastructure for TOOL actions (added in v2.0). Infrastructure actions extend this:
 
 ```python
-# packages/operator-ratelimiter/src/operator_ratelimiter/subject.py
+# operator_core/actions/executor.py (EXISTING)
 
-from dataclasses import dataclass
+async def execute_proposal(
+    self,
+    proposal_id: int,
+    subject: "Subject",
+) -> ActionRecord:
+    """Execute a validated proposal."""
+
+    # ... (safety checks, status updates) ...
+
+    try:
+        if proposal.action_type == ActionType.TOOL:
+            # Execute general tool (ALREADY EXISTS)
+            result = await execute_tool(
+                proposal.action_name,
+                proposal.parameters,
+            )
+        else:
+            # Execute subject method
+            method = getattr(subject, proposal.action_name, None)
+            result = await method(**proposal.parameters)
+
+        success = True
+        result_data = {"result": result} if result is not None else None
+    except Exception as e:
+        error_message = f"{type(e).__name__}: {e}"
+```
+
+**No changes needed to ActionExecutor.** Infrastructure actions route through existing `execute_tool()` path.
+
+### Tool Registration Pattern
+
+Infrastructure tools register the same way as existing general tools:
+
+```python
+# operator_core/actions/tools.py (EXTENDED)
+
 from operator_core.actions.registry import ActionDefinition, ParamDef
-from operator_core.config import Action, Observation, SLO, SubjectConfig
+from operator_core.actions.types import ActionType
 
-# Rate limiter-specific types (not TiKV types)
-from operator_ratelimiter.types import (
-    RateLimiterNode,
-    RateLimiterMetrics,
-    LimitConfig,
-    ClusterState,
-)
-from operator_ratelimiter.client import RateLimiterClient
-from operator_ratelimiter.redis_client import RedisClient
-
-
-RATELIMITER_CONFIG = SubjectConfig(
-    name="ratelimiter",
-    actions=[
-        Action(
-            "reset_counter",
-            ["key"],
-            description="Reset rate limit counter for a specific key",
-        ),
-        Action(
-            "update_limit",
-            ["key_pattern", "max_requests", "window_seconds"],
-            description="Update rate limit configuration for a key pattern",
-        ),
-        Action(
-            "block_key",
-            ["key", "duration_seconds"],
-            description="Temporarily block a key entirely",
-        ),
-        Action(
-            "unblock_key",
-            ["key"],
-            description="Remove block from a key",
-        ),
-        Action(
-            "drain_node",
-            ["node_id"],
-            description="Stop accepting requests on a node",
-        ),
-    ],
-    observations=[
-        Observation(
-            "get_nodes",
-            "list[RateLimiterNode]",
-            description="List all rate limiter nodes",
-        ),
-        Observation(
-            "get_node_metrics",
-            "RateLimiterMetrics",
-            description="Get metrics for a specific node",
-        ),
-        Observation(
-            "get_cluster_state",
-            "ClusterState",
-            description="Get cluster-wide state including limits and counters",
-        ),
-        Observation(
-            "get_hot_keys",
-            "list[str]",
-            description="Get keys approaching or exceeding limits",
-        ),
-    ],
-    slos=[
-        SLO(
-            "request_latency_p99",
-            target=10.0,
-            unit="ms",
-            grace_period_s=30,
-            description="99th percentile rate limit check latency",
-        ),
-        SLO(
-            "false_block_rate",
-            target=0.01,
-            unit="percent",
-            grace_period_s=60,
-            description="Percentage of incorrectly blocked requests",
-        ),
-        SLO(
-            "node_availability",
-            target=100.0,
-            unit="percent",
-            grace_period_s=0,
-            description="All nodes should be healthy",
-        ),
-        SLO(
-            "redis_connectivity",
-            target=100.0,
-            unit="percent",
-            grace_period_s=0,
-            description="All nodes should be connected to Redis",
-        ),
-    ],
-)
-
-
-@dataclass
-class RateLimiterSubject:
+def get_general_tools() -> list[ActionDefinition]:
     """
-    Rate limiter implementation of the Subject Protocol.
+    Get all general tool action definitions.
 
-    Provides observations about rate limiter cluster state and
-    implements actions for managing rate limits and counters.
+    Extended to include infrastructure tools.
+    """
+    return [
+        # Existing tools (calculate, echo, etc.)
+        # ...
+
+        # Docker tools
+        ActionDefinition(
+            name="docker_restart_container",
+            description="Restart a Docker container by name or ID",
+            parameters={
+                "container": ParamDef(
+                    type="str",
+                    description="Container name or ID",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",
+        ),
+        ActionDefinition(
+            name="docker_stop_container",
+            description="Stop a Docker container",
+            parameters={
+                "container": ParamDef(type="str", description="Container name or ID", required=True),
+                "timeout": ParamDef(type="int", description="Timeout in seconds", required=False, default=10),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+        ),
+        ActionDefinition(
+            name="docker_prune_networks",
+            description="Remove unused Docker networks",
+            parameters={},
+            action_type=ActionType.TOOL,
+            risk_level="low",
+        ),
+
+        # Host tools
+        ActionDefinition(
+            name="host_restart_service",
+            description="Restart a systemd service",
+            parameters={
+                "service_name": ParamDef(type="str", description="Service name", required=True),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+        ),
+        ActionDefinition(
+            name="host_kill_process",
+            description="Kill a process by PID or name",
+            parameters={
+                "target": ParamDef(type="str", description="PID or process name", required=True),
+                "signal": ParamDef(type="str", description="Signal name (SIGTERM, SIGKILL)", required=False, default="SIGTERM"),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+        ),
+
+        # Script execution
+        ActionDefinition(
+            name="execute_script",
+            description="Execute a generated Python script in a sandbox",
+            parameters={
+                "script_content": ParamDef(
+                    type="str",
+                    description="Python script to execute",
+                    required=True,
+                ),
+                "timeout_seconds": ParamDef(
+                    type="int",
+                    description="Execution timeout",
+                    required=False,
+                    default=30,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+        ),
+    ]
+```
+
+**Pattern:** Each infrastructure action is a `ActionDefinition` with `action_type=ActionType.TOOL`.
+
+### Tool Executor Dispatch
+
+The `execute_tool()` function dispatches to specialized executors:
+
+```python
+# operator_core/actions/tools.py (NEW)
+
+from operator_core.actions.executors.docker import DockerActionExecutor
+from operator_core.actions.executors.host import HostActionExecutor
+from operator_core.actions.executors.script import ScriptSandbox
+
+# Module-level singletons (initialized on first use)
+_docker_executor: DockerActionExecutor | None = None
+_host_executor: HostActionExecutor | None = None
+_script_sandbox: ScriptSandbox | None = None
+
+
+async def execute_tool(action_name: str, parameters: dict[str, Any]) -> Any:
+    """
+    Execute a general tool action.
+
+    Dispatches to specialized executors based on action name prefix.
+
+    Args:
+        action_name: Tool action name (e.g., "docker_restart_container")
+        parameters: Action parameters
+
+    Returns:
+        Execution result (varies by tool)
+
+    Raises:
+        ValueError: If action name unknown
+        RuntimeError: If execution fails
+    """
+    # Docker actions
+    if action_name.startswith("docker_"):
+        global _docker_executor
+        if _docker_executor is None:
+            _docker_executor = await DockerActionExecutor.create()
+
+        return await _docker_executor.execute(action_name, parameters)
+
+    # Host actions
+    elif action_name.startswith("host_"):
+        global _host_executor
+        if _host_executor is None:
+            _host_executor = HostActionExecutor()
+
+        return await _host_executor.execute(action_name, parameters)
+
+    # Script execution
+    elif action_name == "execute_script":
+        global _script_sandbox
+        if _script_sandbox is None:
+            _script_sandbox = await ScriptSandbox.create()
+
+        return await _script_sandbox.execute(parameters["script_content"], parameters.get("timeout_seconds", 30))
+
+    # Existing tools (calculate, echo, etc.)
+    elif action_name == "calculate":
+        # ... existing implementation ...
+        pass
+
+    else:
+        raise ValueError(f"Unknown tool action: {action_name}")
+```
+
+**Pattern:** Lazy initialization of executors, dispatch by name prefix.
+
+## Docker Action Executor
+
+### Architecture
+
+```
+DockerActionExecutor
+         |
+     aiodocker.Docker (async client)
+         |
+    Docker Engine API
+         |
+    Container/Network/Volume operations
+```
+
+### Implementation
+
+```python
+# operator_core/actions/executors/docker.py
+
+import aiodocker
+from typing import Any
+
+
+class DockerActionExecutor:
+    """
+    Executor for Docker container and network operations.
+
+    Uses aiodocker for async Docker API access. Implements common
+    infrastructure actions like restart, stop, prune.
+
+    Example:
+        executor = await DockerActionExecutor.create()
+        result = await executor.execute("docker_restart_container", {"container": "tikv0"})
     """
 
-    client: RateLimiterClient  # HTTP client for management API
-    redis: RedisClient         # Direct Redis access for metrics
+    def __init__(self, docker: aiodocker.Docker) -> None:
+        """Initialize with aiodocker client."""
+        self._docker = docker
 
     @classmethod
-    def get_config(cls) -> SubjectConfig:
-        return RATELIMITER_CONFIG
+    async def create(cls) -> "DockerActionExecutor":
+        """
+        Factory method to create executor with Docker client.
 
-    def get_action_definitions(self) -> list[ActionDefinition]:
-        """Return action definitions for ActionRegistry."""
-        return [
-            ActionDefinition(
-                name="reset_counter",
-                description="Reset rate limit counter for a specific key",
-                parameters={
-                    "key": ParamDef(
-                        type="str",
-                        description="The rate limit key to reset",
-                        required=True,
-                    ),
-                },
-                risk_level="medium",
-                requires_approval=False,
-            ),
-            ActionDefinition(
-                name="update_limit",
-                description="Update rate limit configuration",
-                parameters={
-                    "key_pattern": ParamDef(
-                        type="str",
-                        description="Key pattern to apply limit to",
-                        required=True,
-                    ),
-                    "max_requests": ParamDef(
-                        type="int",
-                        description="Maximum requests per window",
-                        required=True,
-                    ),
-                    "window_seconds": ParamDef(
-                        type="int",
-                        description="Window duration in seconds",
-                        required=True,
-                    ),
-                },
-                risk_level="high",
-                requires_approval=False,
-            ),
-            ActionDefinition(
-                name="block_key",
-                description="Temporarily block a key entirely",
-                parameters={
-                    "key": ParamDef(
-                        type="str",
-                        description="Key to block",
-                        required=True,
-                    ),
-                    "duration_seconds": ParamDef(
-                        type="int",
-                        description="How long to block",
-                        required=True,
-                    ),
-                },
-                risk_level="high",
-                requires_approval=False,
-            ),
-            ActionDefinition(
-                name="drain_node",
-                description="Stop accepting requests on a node",
-                parameters={
-                    "node_id": ParamDef(
-                        type="str",
-                        description="Node ID to drain",
-                        required=True,
-                    ),
-                },
-                risk_level="high",
-                requires_approval=False,
-            ),
-        ]
+        Returns:
+            Initialized DockerActionExecutor
+        """
+        docker = aiodocker.Docker()
+        return cls(docker)
 
-    # -------------------------------------------------------------------------
-    # Observations
-    # -------------------------------------------------------------------------
+    async def close(self) -> None:
+        """Close Docker client connection."""
+        await self._docker.close()
 
-    async def get_nodes(self) -> list[RateLimiterNode]:
-        """Get all rate limiter nodes."""
-        return await self.client.get_nodes()
+    async def execute(self, action_name: str, parameters: dict[str, Any]) -> dict[str, Any]:
+        """
+        Execute a Docker action.
 
-    async def get_node_metrics(self, node_id: str) -> RateLimiterMetrics:
-        """Get metrics for a specific node."""
-        return await self.client.get_node_metrics(node_id)
+        Args:
+            action_name: Action name (e.g., "docker_restart_container")
+            parameters: Action parameters
 
-    async def get_cluster_state(self) -> ClusterState:
-        """Get cluster-wide state."""
-        return await self.client.get_cluster_state()
+        Returns:
+            Execution result with status and details
 
-    async def get_hot_keys(self) -> list[str]:
-        """Get keys approaching or exceeding limits."""
-        return await self.redis.get_hot_keys()
+        Raises:
+            ValueError: If action unknown
+            aiodocker.DockerError: If Docker operation fails
+        """
+        if action_name == "docker_restart_container":
+            return await self._restart_container(parameters["container"])
 
-    # -------------------------------------------------------------------------
-    # Actions
-    # -------------------------------------------------------------------------
+        elif action_name == "docker_stop_container":
+            timeout = parameters.get("timeout", 10)
+            return await self._stop_container(parameters["container"], timeout)
 
-    async def reset_counter(self, key: str) -> None:
-        """Reset rate limit counter for a key."""
-        await self.client.reset_counter(key)
+        elif action_name == "docker_start_container":
+            return await self._start_container(parameters["container"])
 
-    async def update_limit(
-        self, key_pattern: str, max_requests: int, window_seconds: int
-    ) -> None:
-        """Update rate limit configuration."""
-        await self.client.update_limit(key_pattern, max_requests, window_seconds)
+        elif action_name == "docker_prune_networks":
+            return await self._prune_networks()
 
-    async def block_key(self, key: str, duration_seconds: int) -> None:
-        """Temporarily block a key."""
-        await self.client.block_key(key, duration_seconds)
+        elif action_name == "docker_inspect_container":
+            return await self._inspect_container(parameters["container"])
 
-    async def unblock_key(self, key: str) -> None:
-        """Remove block from a key."""
-        await self.client.unblock_key(key)
+        else:
+            raise ValueError(f"Unknown Docker action: {action_name}")
 
-    async def drain_node(self, node_id: str) -> None:
-        """Stop accepting requests on a node."""
-        await self.client.drain_node(node_id)
+    async def _restart_container(self, container: str) -> dict[str, Any]:
+        """Restart a container."""
+        c = await self._docker.containers.get(container)
+        await c.restart()
+
+        return {
+            "status": "restarted",
+            "container": container,
+        }
+
+    async def _stop_container(self, container: str, timeout: int) -> dict[str, Any]:
+        """Stop a container."""
+        c = await self._docker.containers.get(container)
+        await c.stop(timeout=timeout)
+
+        return {
+            "status": "stopped",
+            "container": container,
+            "timeout": timeout,
+        }
+
+    async def _start_container(self, container: str) -> dict[str, Any]:
+        """Start a container."""
+        c = await self._docker.containers.get(container)
+        await c.start()
+
+        return {
+            "status": "started",
+            "container": container,
+        }
+
+    async def _prune_networks(self) -> dict[str, Any]:
+        """Remove unused networks."""
+        result = await self._docker.networks.prune()
+
+        return {
+            "status": "pruned",
+            "networks_deleted": len(result.get("NetworksDeleted", [])),
+        }
+
+    async def _inspect_container(self, container: str) -> dict[str, Any]:
+        """Get container details."""
+        c = await self._docker.containers.get(container)
+        info = await c.show()
+
+        return {
+            "status": "inspected",
+            "container": container,
+            "state": info["State"]["Status"],
+            "health": info["State"].get("Health", {}).get("Status"),
+        }
 ```
 
-### Type Definitions
+**Key patterns:**
+- Async throughout (aiodocker is fully async)
+- Fire-and-forget semantics (return on API success)
+- Structured results (dict with status + details)
+- Docker errors propagate as exceptions
+
+### Technology: aiodocker
+
+**Why aiodocker over docker-py:**
+- Native asyncio support (docker-py is synchronous)
+- Non-blocking I/O fits existing operator architecture
+- Active maintenance (0.25.1 released 2025)
+- Full Docker API coverage
+
+**Installation:**
+```bash
+uv add aiodocker
+```
+
+**Sources:**
+- [aiodocker GitHub](https://github.com/aio-libs/aiodocker) (PRIMARY)
+- [aiodocker PyPI](https://pypi.org/project/aiodocker/) (PRIMARY)
+- [aiodocker Documentation](https://aiodocker.readthedocs.io/) (PRIMARY)
+
+## Host Action Executor
+
+### Architecture
+
+```
+HostActionExecutor
+         |
+   asyncio.create_subprocess_exec()
+         |
+   Host system commands (systemctl, kill, etc.)
+```
+
+### Implementation
 
 ```python
-# packages/operator-ratelimiter/src/operator_ratelimiter/types.py
+# operator_core/actions/executors/host.py
 
-from dataclasses import dataclass
-from datetime import datetime
-
-
-@dataclass
-class RateLimiterNode:
-    """A rate limiter service instance."""
-    id: str
-    address: str
-    state: str  # "healthy", "unhealthy", "draining"
-    redis_connected: bool
+import asyncio
+import shlex
+from typing import Any
 
 
-@dataclass
-class RateLimiterMetrics:
-    """Performance metrics for a rate limiter node."""
-    node_id: str
-    requests_per_second: float
-    allowed_rate: float  # Percentage of requests allowed
-    blocked_rate: float  # Percentage of requests blocked
-    latency_p50_ms: float
-    latency_p99_ms: float
-    redis_latency_ms: float
-    active_keys: int
-
-
-@dataclass
-class LimitConfig:
-    """Rate limit configuration for a key pattern."""
-    key_pattern: str
-    max_requests: int
-    window_seconds: int
-    created_at: datetime
-    updated_at: datetime
-
-
-@dataclass
-class ClusterState:
-    """Cluster-wide rate limiter state."""
-    node_count: int
-    healthy_nodes: int
-    total_keys: int
-    total_requests_per_second: float
-    limits: list[LimitConfig]
-```
-
-## Rate Limiter Service Design
-
-The rate limiter service is a custom Python service that must expose:
-
-### Required APIs
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/nodes` | GET | List all nodes with health status |
-| `/api/v1/nodes/{id}` | GET | Get specific node details |
-| `/api/v1/nodes/{id}/metrics` | GET | Get node metrics |
-| `/api/v1/cluster/state` | GET | Get cluster-wide state |
-| `/api/v1/counters/{key}` | DELETE | Reset counter for key |
-| `/api/v1/limits` | GET/POST | Get/update limit configurations |
-| `/api/v1/blocks/{key}` | POST/DELETE | Block/unblock key |
-| `/api/v1/nodes/{id}/drain` | POST | Start draining node |
-| `/health` | GET | Health check endpoint |
-| `/metrics` | GET | Prometheus metrics |
-
-### Core Rate Limiting Logic
-
-The service implements sliding window rate limiting using Redis sorted sets:
-
-```python
-# Pseudocode for rate limit check
-async def check_rate_limit(key: str, limit: int, window_seconds: int) -> bool:
+class HostActionExecutor:
     """
-    Returns True if request is allowed, False if blocked.
+    Executor for host system operations.
 
-    Uses Redis sorted set with timestamps as scores.
-    """
-    now = time.time()
-    window_start = now - window_seconds
+    Uses asyncio subprocess management for non-blocking execution.
+    Implements systemd service control, process management.
 
-    # Atomic Lua script for consistency
-    script = """
-    local key = KEYS[1]
-    local now = tonumber(ARGV[1])
-    local window_start = tonumber(ARGV[2])
-    local limit = tonumber(ARGV[3])
-    local ttl = tonumber(ARGV[4])
+    SECURITY: Uses asyncio.create_subprocess_exec (not shell=True) to
+    prevent command injection. Parameters are validated before execution.
 
-    -- Remove old entries
-    redis.call('ZREMRANGEBYSCORE', key, 0, window_start)
-
-    -- Count current entries
-    local count = redis.call('ZCARD', key)
-
-    if count < limit then
-        -- Add new entry
-        redis.call('ZADD', key, now, now .. '-' .. math.random())
-        redis.call('EXPIRE', key, ttl)
-        return 1  -- Allowed
-    else
-        return 0  -- Blocked
-    end
+    Example:
+        executor = HostActionExecutor()
+        result = await executor.execute("host_restart_service", {"service_name": "nginx"})
     """
 
-    result = await redis.eval(script, [key], [now, window_start, limit, window_seconds * 2])
-    return result == 1
+    async def execute(self, action_name: str, parameters: dict[str, Any]) -> dict[str, Any]:
+        """
+        Execute a host action.
+
+        Args:
+            action_name: Action name (e.g., "host_restart_service")
+            parameters: Action parameters
+
+        Returns:
+            Execution result with status, stdout, stderr
+
+        Raises:
+            ValueError: If action unknown or parameters invalid
+            RuntimeError: If command execution fails
+        """
+        if action_name == "host_restart_service":
+            return await self._restart_service(parameters["service_name"])
+
+        elif action_name == "host_stop_service":
+            return await self._stop_service(parameters["service_name"])
+
+        elif action_name == "host_start_service":
+            return await self._start_service(parameters["service_name"])
+
+        elif action_name == "host_kill_process":
+            signal = parameters.get("signal", "SIGTERM")
+            return await self._kill_process(parameters["target"], signal)
+
+        else:
+            raise ValueError(f"Unknown host action: {action_name}")
+
+    async def _restart_service(self, service_name: str) -> dict[str, Any]:
+        """Restart a systemd service."""
+        self._validate_service_name(service_name)
+
+        # Use create_subprocess_exec (NOT shell=True) for security
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl", "restart", service_name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Service restart failed: {stderr.decode()}")
+
+        return {
+            "status": "restarted",
+            "service": service_name,
+            "stdout": stdout.decode(),
+        }
+
+    async def _stop_service(self, service_name: str) -> dict[str, Any]:
+        """Stop a systemd service."""
+        self._validate_service_name(service_name)
+
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl", "stop", service_name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Service stop failed: {stderr.decode()}")
+
+        return {
+            "status": "stopped",
+            "service": service_name,
+        }
+
+    async def _start_service(self, service_name: str) -> dict[str, Any]:
+        """Start a systemd service."""
+        self._validate_service_name(service_name)
+
+        proc = await asyncio.create_subprocess_exec(
+            "systemctl", "start", service_name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Service start failed: {stderr.decode()}")
+
+        return {
+            "status": "started",
+            "service": service_name,
+        }
+
+    async def _kill_process(self, target: str, signal: str) -> dict[str, Any]:
+        """Kill a process by PID or name."""
+        self._validate_signal(signal)
+
+        # If target is numeric, it's a PID
+        if target.isdigit():
+            pid = target
+        else:
+            # Find PID by process name
+            pid = await self._find_pid_by_name(target)
+            if pid is None:
+                raise ValueError(f"Process not found: {target}")
+
+        proc = await asyncio.create_subprocess_exec(
+            "kill", f"-{signal}", pid,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Kill failed: {stderr.decode()}")
+
+        return {
+            "status": "killed",
+            "target": target,
+            "pid": pid,
+            "signal": signal,
+        }
+
+    def _validate_service_name(self, service_name: str) -> None:
+        """Validate service name to prevent injection."""
+        # Only allow alphanumeric, dash, underscore, dot
+        if not all(c.isalnum() or c in "-_." for c in service_name):
+            raise ValueError(f"Invalid service name: {service_name}")
+
+    def _validate_signal(self, signal: str) -> None:
+        """Validate signal name."""
+        valid_signals = {"SIGTERM", "SIGKILL", "SIGHUP", "SIGINT"}
+        if signal not in valid_signals:
+            raise ValueError(f"Invalid signal: {signal}")
+
+    async def _find_pid_by_name(self, name: str) -> str | None:
+        """Find PID by process name using pgrep."""
+        proc = await asyncio.create_subprocess_exec(
+            "pgrep", "-f", name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout, stderr = await proc.communicate()
+
+        if proc.returncode == 0 and stdout:
+            # Return first PID
+            return stdout.decode().split("\n")[0]
+
+        return None
 ```
 
-### Prometheus Metrics
+**Key patterns:**
+- NEVER use `shell=True` (prevents command injection)
+- Always use `asyncio.create_subprocess_exec()` with argument list
+- Validate all inputs before execution
+- Use `communicate()` for async I/O
+- Structured error handling
 
-The service exposes these metrics for monitoring:
+**Security considerations:**
+- Input validation prevents injection attacks
+- No shell interpolation (direct exec)
+- Service names validated against whitelist pattern
+- Signal names validated against known set
+- Process names validated before pgrep
+
+**Sources:**
+- [Python asyncio subprocess documentation](https://docs.python.org/3/library/asyncio-subprocess.html) (PRIMARY - Python 3.14.2, updated 2026-01-26)
+- [OpenStack subprocess security guidelines](https://security.openstack.org/guidelines/dg_use-subprocess-securely.html) (SECONDARY)
+- [Secure Python subprocess usage](https://www.codiga.io/blog/python-subprocess-security/) (SECONDARY)
+
+## Script Sandbox Executor
+
+### Architecture
+
+Script execution is a two-phase process:
+
+1. **Generation Phase**: Agent generates Python script as `script_content` string
+2. **Execution Phase**: System validates, sandboxes, executes, captures output
 
 ```
-# Counter metrics
-ratelimiter_requests_total{node_id, result="allowed|blocked"}
-ratelimiter_redis_operations_total{node_id, operation}
-
-# Gauge metrics
-ratelimiter_active_keys{node_id}
-ratelimiter_node_state{node_id, state}
-
-# Histogram metrics
-ratelimiter_request_duration_seconds{node_id, quantile}
-ratelimiter_redis_latency_seconds{node_id, quantile}
-```
-
-## Metrics and Observability
-
-### Metrics Flow
-
-```
-Rate Limiter Node 1 -----> Prometheus <----- operator-ratelimiter
-Rate Limiter Node 2 -----> (scrapes) <----- (queries)
-Rate Limiter Node 3 ------->         <-----
+Agent generates script
          |
          v
-       Redis (shared state, also scraped for metrics)
+ScriptSandbox validates
+         |
+         v
+gVisor container created (isolated)
+         |
+         v
+Script executed with timeout
+         |
+         v
+Output captured (stdout/stderr/exit code)
+         |
+         v
+Container destroyed
+         |
+         v
+Result returned through action result
 ```
 
-### RateLimiterMetrics Collection
+### Implementation
 
 ```python
-# packages/operator-ratelimiter/src/operator_ratelimiter/prom_client.py
+# operator_core/actions/executors/script.py
 
-@dataclass
-class PrometheusClient:
-    """Prometheus client for rate limiter metrics."""
+import asyncio
+import tempfile
+from pathlib import Path
+from typing import Any
 
-    http: httpx.AsyncClient
-
-    async def get_node_metrics(
-        self, node_id: str, node_address: str
-    ) -> RateLimiterMetrics:
-        """Get metrics for a specific rate limiter node."""
-
-        addr_pattern = node_address.replace(":", ".*")
-
-        # Request rate
-        rps = await self.get_metric_value(
-            f'sum(rate(ratelimiter_requests_total{{node_id="{node_id}"}}[1m]))'
-        ) or 0.0
-
-        # Allowed vs blocked
-        allowed = await self.get_metric_value(
-            f'sum(rate(ratelimiter_requests_total{{node_id="{node_id}",result="allowed"}}[1m]))'
-        ) or 0.0
-
-        blocked = await self.get_metric_value(
-            f'sum(rate(ratelimiter_requests_total{{node_id="{node_id}",result="blocked"}}[1m]))'
-        ) or 0.0
-
-        total = allowed + blocked
-        allowed_rate = (allowed / total * 100) if total > 0 else 100.0
-        blocked_rate = (blocked / total * 100) if total > 0 else 0.0
-
-        # Latencies
-        latency_p50 = await self.get_metric_value(
-            f'histogram_quantile(0.50, rate(ratelimiter_request_duration_seconds_bucket{{node_id="{node_id}"}}[1m]))'
-        ) or 0.0
-
-        latency_p99 = await self.get_metric_value(
-            f'histogram_quantile(0.99, rate(ratelimiter_request_duration_seconds_bucket{{node_id="{node_id}"}}[1m]))'
-        ) or 0.0
-
-        redis_latency = await self.get_metric_value(
-            f'histogram_quantile(0.99, rate(ratelimiter_redis_latency_seconds_bucket{{node_id="{node_id}"}}[1m]))'
-        ) or 0.0
-
-        # Active keys
-        active_keys = await self.get_metric_value(
-            f'ratelimiter_active_keys{{node_id="{node_id}"}}'
-        ) or 0
-
-        return RateLimiterMetrics(
-            node_id=node_id,
-            requests_per_second=rps,
-            allowed_rate=allowed_rate,
-            blocked_rate=blocked_rate,
-            latency_p50_ms=latency_p50 * 1000,
-            latency_p99_ms=latency_p99 * 1000,
-            redis_latency_ms=redis_latency * 1000,
-            active_keys=int(active_keys),
-        )
-```
-
-## Invariant Definitions
-
-```python
-# packages/operator-ratelimiter/src/operator_ratelimiter/invariants.py
-
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-
-from operator_ratelimiter.types import RateLimiterNode, RateLimiterMetrics
+import aiodocker
 
 
-@dataclass
-class InvariantViolation:
-    """Rate limiter invariant violation."""
-    invariant_name: str
-    message: str
-    first_seen: datetime
-    last_seen: datetime
-    node_id: str | None = None
-    severity: str = "warning"
+class ScriptValidationError(Exception):
+    """Raised when script validation fails."""
+    pass
 
 
-@dataclass
-class InvariantConfig:
-    name: str
-    grace_period: timedelta = field(default_factory=lambda: timedelta(seconds=0))
-    threshold: float = 0.0
-    severity: str = "warning"
+class ScriptSandbox:
+    """
+    Sandbox for executing LLM-generated scripts.
 
+    Validates script content, executes in isolated gVisor container,
+    captures output with timeout, and cleans up.
 
-# Default configurations
-NODE_DOWN_CONFIG = InvariantConfig(
-    name="node_down",
-    grace_period=timedelta(seconds=0),
-    severity="critical",
-)
+    SECURITY: Scripts run in gVisor sandbox with:
+    - No network access
+    - No host filesystem access
+    - Resource limits (CPU, memory)
+    - Execution timeout
 
-HIGH_LATENCY_CONFIG = InvariantConfig(
-    name="high_latency",
-    grace_period=timedelta(seconds=30),
-    threshold=10.0,  # 10ms P99
-    severity="warning",
-)
+    Example:
+        sandbox = await ScriptSandbox.create()
+        result = await sandbox.execute(script_content, timeout=30)
+    """
 
-REDIS_DISCONNECTED_CONFIG = InvariantConfig(
-    name="redis_disconnected",
-    grace_period=timedelta(seconds=0),
-    severity="critical",
-)
+    def __init__(self, docker: aiodocker.Docker) -> None:
+        """Initialize with Docker client."""
+        self._docker = docker
 
-HIGH_BLOCK_RATE_CONFIG = InvariantConfig(
-    name="high_block_rate",
-    grace_period=timedelta(seconds=60),
-    threshold=50.0,  # 50% blocked = something wrong
-    severity="warning",
-)
+    @classmethod
+    async def create(cls) -> "ScriptSandbox":
+        """Factory method to create sandbox."""
+        docker = aiodocker.Docker()
 
+        # Ensure sandbox image exists (gVisor-enabled Python)
+        await cls._ensure_sandbox_image(docker)
 
-class InvariantChecker:
-    """Rate limiter invariant checker with grace period support."""
+        return cls(docker)
 
-    def __init__(self) -> None:
-        self._first_seen: dict[str, datetime] = {}
+    @staticmethod
+    async def _ensure_sandbox_image(docker: aiodocker.Docker) -> None:
+        """Pull sandbox image if not present."""
+        image_name = "python:3.12-alpine"
 
-    def check_nodes_healthy(
-        self, nodes: list[RateLimiterNode]
-    ) -> list[InvariantViolation]:
-        """Check that all nodes are healthy."""
-        violations = []
-        config = NODE_DOWN_CONFIG
+        try:
+            await docker.images.inspect(image_name)
+        except aiodocker.exceptions.DockerError:
+            # Image not found, pull it
+            await docker.images.pull(image_name)
 
-        for node in nodes:
-            is_unhealthy = node.state != "healthy"
-            violation = self._check_with_grace_period(
-                config=config,
-                is_violated=is_unhealthy,
-                message=f"Node {node.id} at {node.address} is {node.state}",
-                node_id=node.id,
-            )
-            if violation:
-                violations.append(violation)
+    async def execute(self, script_content: str, timeout_seconds: int = 30) -> dict[str, Any]:
+        """
+        Execute a script in sandbox.
 
-        return violations
+        Args:
+            script_content: Python script to execute
+            timeout_seconds: Execution timeout
 
-    def check_redis_connectivity(
-        self, nodes: list[RateLimiterNode]
-    ) -> list[InvariantViolation]:
-        """Check that all nodes are connected to Redis."""
-        violations = []
-        config = REDIS_DISCONNECTED_CONFIG
+        Returns:
+            Result dict with stdout, stderr, exit_code, timed_out
 
-        for node in nodes:
-            is_disconnected = not node.redis_connected
-            violation = self._check_with_grace_period(
-                config=config,
-                is_violated=is_disconnected,
-                message=f"Node {node.id} lost Redis connection",
-                node_id=node.id,
-            )
-            if violation:
-                violations.append(violation)
+        Raises:
+            ScriptValidationError: If script validation fails
+            RuntimeError: If sandbox setup fails
+        """
+        # Validate script
+        self._validate_script(script_content)
 
-        return violations
+        # Create temporary file for script
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(script_content)
+            script_path = Path(f.name)
 
-    def check_latency(
-        self, metrics: RateLimiterMetrics
-    ) -> InvariantViolation | None:
-        """Check that P99 latency is below threshold."""
-        config = HIGH_LATENCY_CONFIG
-        is_high = metrics.latency_p99_ms > config.threshold
+        try:
+            # Create sandbox container
+            container = await self._create_sandbox_container(script_path)
 
-        return self._check_with_grace_period(
-            config=config,
-            is_violated=is_high,
-            message=f"Node {metrics.node_id} P99 latency {metrics.latency_p99_ms:.1f}ms exceeds {config.threshold}ms",
-            node_id=metrics.node_id,
-        )
+            # Start container
+            await container.start()
 
-    def check_block_rate(
-        self, metrics: RateLimiterMetrics
-    ) -> InvariantViolation | None:
-        """Check for unusually high block rate (potential misconfiguration)."""
-        config = HIGH_BLOCK_RATE_CONFIG
-        is_high = metrics.blocked_rate > config.threshold
+            # Wait for completion with timeout
+            try:
+                await asyncio.wait_for(
+                    container.wait(),
+                    timeout=timeout_seconds,
+                )
+                timed_out = False
+            except asyncio.TimeoutError:
+                # Kill container on timeout
+                await container.kill()
+                timed_out = True
 
-        return self._check_with_grace_period(
-            config=config,
-            is_violated=is_high,
-            message=f"Node {metrics.node_id} blocking {metrics.blocked_rate:.1f}% of requests (threshold: {config.threshold}%)",
-            node_id=metrics.node_id,
-        )
+            # Get logs
+            logs = await container.log(stdout=True, stderr=True)
+            stdout = "".join(logs)
 
-    def _check_with_grace_period(
-        self,
-        config: InvariantConfig,
-        is_violated: bool,
-        message: str,
-        node_id: str | None = None,
-    ) -> InvariantViolation | None:
-        """Check if violation should be reported, respecting grace period."""
-        key = f"{config.name}:{node_id}" if node_id else config.name
-        now = datetime.now()
+            # Get exit code
+            info = await container.show()
+            exit_code = info["State"]["ExitCode"]
 
-        if not is_violated:
-            self._first_seen.pop(key, None)
-            return None
+            # Clean up container
+            await container.delete(force=True)
 
-        if key not in self._first_seen:
-            self._first_seen[key] = now
+            return {
+                "status": "completed" if not timed_out else "timeout",
+                "stdout": stdout,
+                "stderr": "",  # Logs are combined in aiodocker
+                "exit_code": exit_code,
+                "timed_out": timed_out,
+            }
 
-        first_seen = self._first_seen[key]
+        finally:
+            # Clean up script file
+            script_path.unlink(missing_ok=True)
 
-        if now - first_seen < config.grace_period:
-            return None
+    async def _create_sandbox_container(self, script_path: Path) -> Any:
+        """Create sandboxed container for script execution."""
+        config = {
+            "Image": "python:3.12-alpine",
+            "Cmd": ["python", "/script.py"],
+            "HostConfig": {
+                "Binds": [f"{script_path}:/script.py:ro"],
+                "NetworkMode": "none",  # No network access
+                "Memory": 128 * 1024 * 1024,  # 128MB limit
+                "MemorySwap": 128 * 1024 * 1024,  # No swap
+                "CpuQuota": 50000,  # 50% of one CPU
+                "ReadonlyRootfs": True,  # Read-only filesystem
+                "SecurityOpt": ["no-new-privileges"],  # Prevent privilege escalation
+            },
+        }
 
-        return InvariantViolation(
-            invariant_name=config.name,
-            message=message,
-            first_seen=first_seen,
-            last_seen=now,
-            node_id=node_id,
-            severity=config.severity,
-        )
-```
+        container = await self._docker.containers.create(config=config)
+        return container
 
-## Action Integration
+    def _validate_script(self, script_content: str) -> None:
+        """
+        Validate script content.
 
-### Action Execution Pattern
+        Basic validation to catch obvious issues before execution.
+        Not a complete security analysis (sandbox handles that).
 
-Actions follow the same fire-and-forget pattern as TiKV:
+        Args:
+            script_content: Script to validate
 
-```python
-# packages/operator-ratelimiter/src/operator_ratelimiter/client.py
+        Raises:
+            ScriptValidationError: If validation fails
+        """
+        if not script_content or not script_content.strip():
+            raise ScriptValidationError("Script content is empty")
 
-@dataclass
-class RateLimiterClient:
-    """HTTP client for rate limiter management API."""
+        if len(script_content) > 10000:
+            raise ScriptValidationError("Script too long (max 10000 chars)")
 
-    http: httpx.AsyncClient
+        # Check for basic syntax errors
+        try:
+            compile(script_content, "<script>", "exec")
+        except SyntaxError as e:
+            raise ScriptValidationError(f"Syntax error: {e}")
 
-    async def get_nodes(self) -> list[RateLimiterNode]:
-        """Get all rate limiter nodes."""
-        response = await self.http.get("/api/v1/nodes")
-        response.raise_for_status()
-
-        data = response.json()
-        return [
-            RateLimiterNode(
-                id=node["id"],
-                address=node["address"],
-                state=node["state"],
-                redis_connected=node["redis_connected"],
-            )
-            for node in data["nodes"]
+        # Deny list for dangerous operations
+        deny_list = [
+            "import os",
+            "import subprocess",
+            "import sys",
+            "__import__",
+            "eval(",
+            "exec(",
+            "compile(",
         ]
 
-    async def reset_counter(self, key: str) -> None:
-        """Reset rate limit counter for a key."""
-        response = await self.http.delete(f"/api/v1/counters/{key}")
-        response.raise_for_status()
-
-    async def update_limit(
-        self, key_pattern: str, max_requests: int, window_seconds: int
-    ) -> None:
-        """Update rate limit configuration."""
-        response = await self.http.post(
-            "/api/v1/limits",
-            json={
-                "key_pattern": key_pattern,
-                "max_requests": max_requests,
-                "window_seconds": window_seconds,
-            },
-        )
-        response.raise_for_status()
-
-    async def block_key(self, key: str, duration_seconds: int) -> None:
-        """Temporarily block a key."""
-        response = await self.http.post(
-            f"/api/v1/blocks/{key}",
-            json={"duration_seconds": duration_seconds},
-        )
-        response.raise_for_status()
-
-    async def unblock_key(self, key: str) -> None:
-        """Remove block from a key."""
-        response = await self.http.delete(f"/api/v1/blocks/{key}")
-        response.raise_for_status()
-
-    async def drain_node(self, node_id: str) -> None:
-        """Start draining a node."""
-        response = await self.http.post(f"/api/v1/nodes/{node_id}/drain")
-        response.raise_for_status()
+        for pattern in deny_list:
+            if pattern in script_content:
+                raise ScriptValidationError(f"Forbidden pattern: {pattern}")
 ```
 
-## Docker Compose Structure
+**Key patterns:**
+- Two-phase: validate → sandbox → execute → capture → cleanup
+- gVisor sandbox (via Docker runtime configuration)
+- No network, read-only root, resource limits
+- Timeout enforcement with container kill
+- Automatic cleanup (container + temp file)
 
-```yaml
-# subjects/ratelimiter/docker-compose.yaml
+**Security layers:**
+1. **Validation**: Syntax check, deny list, length limit
+2. **Sandbox**: gVisor isolation, no network, read-only FS
+3. **Resource limits**: CPU, memory, execution time
+4. **Privilege dropping**: no-new-privileges, non-root user
 
-services:
-  # Rate Limiter Nodes (3)
-  ratelimiter0:
-    build:
-      context: ./service
-      dockerfile: Dockerfile
-    container_name: ratelimiter0
-    ports:
-      - "8080:8080"
-    environment:
-      - NODE_ID=ratelimiter0
-      - REDIS_URL=redis://redis:6379
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    restart: on-failure
+**Sources:**
+- [Setting Up a Secure Python Sandbox for LLM Agents](https://dida.do/blog/setting-up-a-secure-python-sandbox-for-llm-agents) (PRIMARY)
+- [OpenAI Code Interpreter Tool](https://cookbook.openai.com/examples/object_oriented_agentic_approach/secure_code_interpreter_tool_for_llm_agents) (SECONDARY)
+- [OpenEDX CodeJail](https://github.com/openedx/codejail) (REFERENCE)
 
-  ratelimiter1:
-    build:
-      context: ./service
-      dockerfile: Dockerfile
-    container_name: ratelimiter1
-    environment:
-      - NODE_ID=ratelimiter1
-      - REDIS_URL=redis://redis:6379
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    restart: on-failure
+## Agent Script Generation Flow
 
-  ratelimiter2:
-    build:
-      context: ./service
-      dockerfile: Dockerfile
-    container_name: ratelimiter2
-    environment:
-      - NODE_ID=ratelimiter2
-      - REDIS_URL=redis://redis:6379
-      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-    restart: on-failure
+### When Does Agent Generate Scripts?
 
-  # Redis (shared state)
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    restart: on-failure
-
-  # Prometheus
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ratelimiter-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-      - --storage.tsdb.retention.time=15d
-    depends_on:
-      ratelimiter0:
-        condition: service_healthy
-    restart: on-failure
-
-  # Grafana
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ratelimiter-grafana
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
-      - grafana-data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    depends_on:
-      - prometheus
-    restart: on-failure
-
-  # Load Generator
-  loadgen:
-    build:
-      context: ./loadgen
-      dockerfile: Dockerfile
-    container_name: loadgen
-    profiles:
-      - load
-    environment:
-      - TARGET_URL=http://ratelimiter0:8080
-      - REQUESTS_PER_SECOND=1000
-    depends_on:
-      ratelimiter0:
-        condition: service_healthy
-      ratelimiter1:
-        condition: service_healthy
-      ratelimiter2:
-        condition: service_healthy
-
-  # Operator Container
-  operator:
-    build:
-      context: ../..
-      dockerfile: subjects/ratelimiter/Dockerfile.operator
-    container_name: ratelimiter-operator
-    environment:
-      - RATELIMITER_URL=http://ratelimiter0:8080
-      - PROMETHEUS_URL=http://prometheus:9090
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      ratelimiter0:
-        condition: service_healthy
-      prometheus:
-        condition: service_started
-    profiles:
-      - operator
-    command: ["uv", "run", "python", "-c", "print('Operator container ready')"]
-
-volumes:
-  redis-data:
-  prometheus-data:
-  grafana-data:
-```
-
-## Core Abstraction Changes
-
-### Monitor Loop Generalization
-
-The current `MonitorLoop` hardcodes `TiKVSubject`. To support multiple subjects:
+Agent generates scripts when diagnosis recommends `execute_script` action:
 
 ```python
-# operator_core/monitor/loop.py - changes needed
+# operator_core/agent/diagnosis.py (EXTENDED)
 
-from typing import Protocol, runtime_checkable
+from pydantic import BaseModel, Field
 
-@runtime_checkable
-class MonitorableSubject(Protocol):
-    """Minimal interface for subjects the monitor loop can check."""
+class ActionRecommendation(BaseModel):
+    """
+    Recommended action from diagnosis.
 
-    async def get_nodes(self) -> list:
-        """Get cluster nodes."""
-        ...
-
-
-class MonitorLoop:
-    def __init__(
-        self,
-        subject: MonitorableSubject,  # Changed from TiKVSubject
-        checker: Any,  # Subject-specific checker
-        db_path: Path,
-        interval_seconds: float = 30.0,
-    ) -> None:
-        ...
+    Extended to support script content for execute_script actions.
+    """
+    action_name: str = Field(..., description="Action name")
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Action parameters (may include script_content)",
+    )
+    reason: str = Field(..., description="Why this action")
+    urgency: str = Field(default="medium", description="Urgency level")
 ```
 
-### Violation Key Generalization
+### Prompt Guidance
 
-Current `make_violation_key` imports from `operator_tikv`. Should be generic:
+System prompt instructs agent when to use script generation:
 
-```python
-# operator_core/monitor/types.py - generalized
+```markdown
+# operator_core/agent/prompt.py (EXTENDED)
 
-from dataclasses import dataclass
+## Available Actions
 
-@dataclass
-class ViolationInfo:
-    """Subject-agnostic violation info for ticket creation."""
-    invariant_name: str
-    message: str
-    first_seen: datetime
-    last_seen: datetime
-    resource_id: str | None = None  # Generic (store_id, node_id, etc.)
-    severity: str = "warning"
+... (existing action types) ...
 
+### Script Execution (execute_script)
 
-def make_violation_key(violation: ViolationInfo) -> str:
-    """Generate deduplication key for a violation."""
-    if violation.resource_id:
-        return f"{violation.invariant_name}:{violation.resource_id}"
-    return violation.invariant_name
+For complex remediation requiring multiple operations, generate a Python script.
+
+**When to use:**
+- Remediation requires conditional logic
+- Multiple operations needed (query → decide → act)
+- Need to inspect state before deciding action
+- Standard actions insufficient
+
+**How to specify:**
+- action_name: "execute_script"
+- parameters.script_content: Full Python script as string
+- parameters.timeout_seconds: Execution timeout (default 30)
+
+**Script capabilities:**
+- Read subject metrics (via httpx to APIs)
+- Perform calculations
+- Output diagnosis to stdout
+
+**Script limitations:**
+- No network access (except to subject endpoints)
+- No file system access
+- No subprocess execution
+- 30s timeout default
+
+**Example:**
+```json
+{
+  "action_name": "execute_script",
+  "parameters": {
+    "script_content": "import json\nprint(json.dumps({'status': 'ok'}))",
+    "timeout_seconds": 30
+  },
+  "reason": "Need to query metrics and conditionally restart services",
+  "urgency": "high"
+}
 ```
+```
+
+### Script Content in Action Parameters
+
+Script content flows through existing parameter field:
+
+```json
+{
+  "action_name": "execute_script",
+  "parameters": {
+    "script_content": "import httpx\n\nresponse = httpx.get('http://pd:2379/health')\nprint(response.json())",
+    "timeout_seconds": 30
+  },
+  "reason": "Check PD health before leader transfer"
+}
+```
+
+**No schema changes needed.** The `parameters` JSON field already supports arbitrary structure.
 
 ## Build Order
 
-### Phase 1: Rate Limiter Service (Foundation)
+Based on dependency analysis, suggested build order:
 
-Build the custom rate limiter service first since everything depends on it.
+### Phase 1: Docker Actions (Foundation)
 
-1. Create `subjects/ratelimiter/service/` directory structure
-2. Implement basic rate limiting with Redis sorted sets
-3. Add management API endpoints
-4. Add Prometheus metrics
-5. Add health check endpoint
-6. Write Dockerfile
-7. Test standalone with curl
+Docker actions are simplest and don't depend on script execution.
 
-### Phase 2: Docker Compose Environment
+1. Add `aiodocker` dependency to `pyproject.toml`
+2. Create `operator_core/actions/executors/` directory
+3. Implement `DockerActionExecutor` in `executors/docker.py`
+4. Add Docker tool definitions to `actions/tools.py`
+5. Extend `execute_tool()` to dispatch Docker actions
+6. Write unit tests (mocked aiodocker)
+7. Write integration tests (real Docker daemon)
 
-Get the infrastructure running.
+**Verification:** Can restart TiKV containers via action execution.
 
-1. Create `subjects/ratelimiter/docker-compose.yaml`
-2. Add Redis service
-3. Add 3 rate limiter nodes
-4. Add Prometheus with scrape config
-5. Add Grafana with dashboard
-6. Test cluster startup
-7. Verify metrics in Prometheus
+### Phase 2: Host Actions
 
-### Phase 3: operator-ratelimiter Package Types
+Host actions depend on subprocess patterns, no external deps.
 
-Define the data structures.
+1. Implement `HostActionExecutor` in `executors/host.py`
+2. Add host tool definitions to `actions/tools.py`
+3. Extend `execute_tool()` to dispatch host actions
+4. Write unit tests (mocked subprocess)
+5. Write integration tests (real systemctl commands)
 
-1. Create `packages/operator-ratelimiter/` structure
-2. Define types in `types.py`
-3. Define invariants in `invariants.py`
-4. Add `pyproject.toml`
-5. Write unit tests
+**Verification:** Can restart systemd services via action execution.
 
-### Phase 4: Client Implementation
+### Phase 3: Script Sandbox
 
-HTTP and Redis clients.
+Script execution is most complex, depends on Docker.
 
-1. Implement `RateLimiterClient` for management API
-2. Implement `RedisClient` for direct Redis queries
-3. Implement `PrometheusClient` for metrics
-4. Write client tests with mocked responses
+1. Implement `ScriptSandbox` in `executors/script.py`
+2. Add `execute_script` tool definition to `actions/tools.py`
+3. Extend `execute_tool()` to dispatch script execution
+4. Create sandbox Docker image (gVisor-enabled)
+5. Write unit tests (mocked container creation)
+6. Write integration tests (real script execution)
 
-### Phase 5: Subject Implementation
+**Verification:** Can execute simple Python script, capture output, enforce timeout.
 
-Bring it all together.
+### Phase 4: Agent Integration
 
-1. Implement `RateLimiterSubject`
-2. Define `SubjectConfig` (RATELIMITER_CONFIG)
-3. Implement `get_action_definitions()`
-4. Wire up observations to clients
-5. Wire up actions to clients
-6. Write integration tests
+Connect script generation to agent workflow.
 
-### Phase 6: Core Abstraction Updates
+1. Extend `agent/prompt.py` with script execution guidance
+2. Update `ActionRecommendation` schema (already supports script_content)
+3. Test agent script generation in diagnosis
+4. Validate script → sandbox → result flow end-to-end
 
-Make operator-core subject-agnostic.
+**Verification:** Agent generates script for complex diagnosis, sandbox executes, result captured.
 
-1. Generalize `MonitorLoop` to accept any subject
-2. Generalize violation key generation
-3. Add `--subject` flag to CLI
-4. Add subject factory/registry
-5. Test with both TiKV and rate limiter
+### Phase 5: Demo Scenarios
 
-### Phase 7: Load Generator and Chaos
+Create scenarios showcasing infrastructure actions.
 
-Test the complete system.
+1. TiKV container crash → docker_restart_container
+2. PD process hung → host_kill_process → docker_restart_container
+3. Network partition → execute_script (query metrics + conditional restart)
+4. Update demo chapters with infrastructure action flows
 
-1. Build simple load generator (Python + httpx)
-2. Add chaos injection (kill nodes, Redis disconnect)
-3. Run end-to-end demo
-4. Verify AI diagnosis quality
+## Integration Points Summary
+
+| Integration Point | Status | Change Required |
+|-------------------|--------|-----------------|
+| `ActionExecutor.execute_proposal()` | ✅ Ready | None (already supports TOOL type) |
+| `ActionType.TOOL` enum | ✅ Ready | None (exists since v2.0) |
+| `ActionProposal.parameters` | ✅ Ready | None (JSON field supports arbitrary data) |
+| `execute_tool()` dispatch | 🔧 Extend | Add Docker/host/script branches |
+| `get_general_tools()` | 🔧 Extend | Add infrastructure tool definitions |
+| `agent/prompt.py` | 🔧 Extend | Add script execution guidance |
+| `ActionRecommendation` | ✅ Ready | None (parameters already flexible) |
+| Database schema | ✅ Ready | None (JSON parameters field) |
 
 ## Confidence Assessment
 
 | Area | Confidence | Reason |
 |------|------------|--------|
-| Subject Protocol | HIGH | Directly follows existing TiKV pattern |
-| Docker Compose | HIGH | Mirrors existing TiKV setup |
-| Rate limiter service design | MEDIUM | Custom service, validated algorithm from research |
-| Core abstraction changes | HIGH | Minimal changes needed, Protocol-based |
-| Action definitions | HIGH | Follows ActionDefinition pattern exactly |
-| Metrics flow | HIGH | Same Prometheus pattern as TiKV |
-| Invariant structure | HIGH | Same InvariantChecker pattern |
+| Action framework integration | HIGH | ActionType.TOOL already exists, no framework changes |
+| Docker executor pattern | HIGH | aiodocker official docs, well-established patterns |
+| Host executor security | HIGH | Python asyncio subprocess official docs, OpenStack guidelines |
+| Script sandbox approach | MEDIUM | Validated by multiple LLM agent implementations, requires testing |
+| Agent script generation | MEDIUM | Extends existing diagnosis, prompt engineering needed |
+| Build order dependencies | HIGH | Clear dependency graph, no circular deps |
 
 ## Sources
 
-### Primary (HIGH confidence)
-- Existing codebase: `operator-tikv/subject.py`, `operator-core/subject.py`
-- Existing architecture: `.planning/research/ARCHITECTURE.md` (v2.0)
-- Project context: `.planning/PROJECT.md`
+### Docker (HIGH confidence)
+- [aiodocker GitHub](https://github.com/aio-libs/aiodocker) - Official async Docker SDK
+- [aiodocker PyPI](https://pypi.org/project/aiodocker/) - Package info and installation
+- [aiodocker Documentation](https://aiodocker.readthedocs.io/) - API reference and examples
+- [Docker Best Practices 2026](https://medium.com/devops-ai-decoded/docker-in-2026-top-10-must-see-innovations-and-best-practices-for-production-success-30a5e090e5d6) - Production patterns
 
-### Secondary (MEDIUM confidence)
-- [Redis sliding window rate limiting](https://redis.io/learn/howtos/ratelimiting)
-- [Distributed rate limiter patterns](https://github.com/uppnrise/distributed-rate-limiter)
-- [Python Redis rate limiters](https://github.com/nickgaya/redbucket)
+### Host Operations (HIGH confidence)
+- [Python asyncio subprocess](https://docs.python.org/3/library/asyncio-subprocess.html) - Official Python 3.14.2 docs (updated 2026-01-26)
+- [OpenStack subprocess security](https://security.openstack.org/guidelines/dg_use-subprocess-securely.html) - Security guidelines
+- [Secure Python subprocess](https://www.codiga.io/blog/python-subprocess-security/) - Best practices
+
+### Script Execution (MEDIUM confidence)
+- [Secure Python Sandbox for LLM Agents](https://dida.do/blog/setting-up-a-secure-python-sandbox-for-llm-agents) - gVisor sandbox pattern
+- [OpenAI Code Interpreter Tool](https://cookbook.openai.com/examples/object_oriented_agentic_approach/secure_code_interpreter_tool_for_llm_agents) - LLM code execution patterns
+- [OpenEDX CodeJail](https://github.com/openedx/codejail) - Production sandbox implementation
+- [Python Sandboxing Complexity](https://checkmarx.com/zero-post/glass-sandbox-complexity-of-python-sandboxing/) - Security considerations
+
+### Existing Codebase (HIGH confidence)
+- `operator_core/actions/executor.py` - ActionExecutor with TOOL support
+- `operator_core/actions/tools.py` - Tool registration pattern
+- `operator_core/actions/types.py` - ActionType enum
+- `.planning/research/ARCHITECTURE.md` - v2.1 rate limiter architecture
