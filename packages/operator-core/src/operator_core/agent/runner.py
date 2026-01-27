@@ -266,11 +266,15 @@ class AgentRunner:
         """
         if self.executor is None:
             # No executor - operate in observe-only mode (v1 behavior)
+            print("(observe-only mode - no actions)")
             return
 
         if not diagnosis_output.recommended_actions:
             # No actions recommended
+            print("(no structured actions in diagnosis)")
             return
+
+        print(f"Processing {len(diagnosis_output.recommended_actions)} recommended action(s)...")
 
         # Import here to avoid circular import at module level
         from operator_core.actions.safety import ObserveOnlyError
