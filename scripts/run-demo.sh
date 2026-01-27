@@ -61,8 +61,19 @@ if [[ "$SUBJECT" == "tikv" ]]; then
     echo ""
     echo "Compose file: $COMPOSE_FILE"
     echo ""
-    echo "Ensure TiKV cluster is running:"
-    echo "  docker compose -f $COMPOSE_FILE up -d"
+
+    # Ensure TiKV cluster is running
+    echo "Checking cluster status..."
+    if ! docker compose -f "$COMPOSE_FILE" ps | grep -q "tikv"; then
+        echo ""
+        echo "Starting TiKV cluster..."
+        docker compose -f "$COMPOSE_FILE" up -d
+        echo ""
+        echo "Waiting for cluster to be ready..."
+        sleep 10
+    else
+        echo "Cluster is running."
+    fi
     echo ""
 
 elif [[ "$SUBJECT" == "ratelimiter" ]]; then
@@ -79,18 +90,24 @@ elif [[ "$SUBJECT" == "ratelimiter" ]]; then
     echo "Compose file: $COMPOSE_FILE"
     echo ""
 
-    # Ensure rate limiter cluster is running
+    # Ensure rate limiter cluster is running (but NOT loadgen for demos)
     echo "Checking cluster status..."
     if ! docker compose -f "$COMPOSE_FILE" ps | grep -q "ratelimiter"; then
         echo ""
         echo "Starting rate limiter cluster..."
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d redis ratelimiter-1 ratelimiter-2 ratelimiter-3 prometheus
         echo ""
         echo "Waiting for services to be ready..."
         sleep 3
     else
         echo "Cluster is running."
     fi
+
+    # Stop loadgen if running (it interferes with chaos detection)
+    docker compose -f "$COMPOSE_FILE" stop loadgen 2>/dev/null || true
+
+    # Flush Redis for clean demo state
+    docker exec docker-redis-1 redis-cli FLUSHALL >/dev/null 2>&1 || true
     echo ""
 fi
 
