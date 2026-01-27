@@ -29,10 +29,11 @@ class ActionRecommendation(BaseModel):
     """
 
     action_name: str = Field(
-        ..., description="Action name matching Subject method (e.g., 'transfer_leader')"
+        ..., description="Action name from Available Actions (e.g., 'reset_counter', 'transfer_leader')"
     )
     parameters: dict[str, Any] = Field(
-        default_factory=dict, description="Typed parameters for the action"
+        default_factory=dict,
+        description="REQUIRED: All parameters from Available Actions must be filled. E.g., for reset_counter: {'key': 'counter-drift-demo'}",
     )
     reason: str = Field(
         ..., description="Why this action is recommended (ties to diagnosis)"

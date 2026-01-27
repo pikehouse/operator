@@ -40,6 +40,12 @@ When analyzing a ticket violation, provide a differential diagnosis:
    - "Wait and observe" is a valid recommendation
    - ALWAYS include potential risks/side effects
 
+7. STRUCTURED ACTIONS (recommended_actions):
+   - If Available Actions are listed, use them in the recommended_actions field
+   - CRITICAL: Fill in ALL required parameters from the observation data
+   - Example: For reset_counter with key parameter, extract the counter key from the violation
+   - The parameters dict must contain all required fields or the action will fail validation
+
 Write in clinical/technical tone like an SRE runbook. Be precise, terse, metric-focused.
 Reference specific metric values and thresholds. Show your reasoning."""
 
