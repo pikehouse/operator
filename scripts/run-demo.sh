@@ -52,6 +52,7 @@ fi
 # Set subject-specific configuration
 if [[ "$SUBJECT" == "tikv" ]]; then
     COMPOSE_FILE="subjects/tikv/docker-compose.yaml"
+    OTHER_COMPOSE_FILE="docker/docker-compose.yml"
     export PD_ENDPOINT=http://localhost:2379
     export PROMETHEUS_URL=http://localhost:9090
 
@@ -61,6 +62,13 @@ if [[ "$SUBJECT" == "tikv" ]]; then
     echo ""
     echo "Compose file: $COMPOSE_FILE"
     echo ""
+
+    # Stop rate limiter cluster if running (port conflicts)
+    if docker compose -f "$OTHER_COMPOSE_FILE" ps 2>/dev/null | grep -q "ratelimiter\|redis\|prometheus"; then
+        echo "Stopping rate limiter cluster (port conflict)..."
+        docker compose -f "$OTHER_COMPOSE_FILE" down >/dev/null 2>&1 || true
+        echo ""
+    fi
 
     # Ensure TiKV cluster is running
     echo "Checking cluster status..."
@@ -78,6 +86,7 @@ if [[ "$SUBJECT" == "tikv" ]]; then
 
 elif [[ "$SUBJECT" == "ratelimiter" ]]; then
     COMPOSE_FILE="docker/docker-compose.yml"
+    OTHER_COMPOSE_FILE="subjects/tikv/docker-compose.yaml"
     # Rate limiter endpoints for monitor/agent subprocesses
     export RATELIMITER_URL="http://localhost:8001"
     export REDIS_URL="redis://localhost:6379"
@@ -89,6 +98,13 @@ elif [[ "$SUBJECT" == "ratelimiter" ]]; then
     echo ""
     echo "Compose file: $COMPOSE_FILE"
     echo ""
+
+    # Stop TiKV cluster if running (port conflicts)
+    if docker compose -f "$OTHER_COMPOSE_FILE" ps 2>/dev/null | grep -q "tikv\|pd\|prometheus"; then
+        echo "Stopping TiKV cluster (port conflict)..."
+        docker compose -f "$OTHER_COMPOSE_FILE" down >/dev/null 2>&1 || true
+        echo ""
+    fi
 
     # Ensure rate limiter cluster is running (but NOT loadgen for demos)
     echo "Checking cluster status..."
