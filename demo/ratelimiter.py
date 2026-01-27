@@ -73,9 +73,8 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
         narration=f"""Creating baseline traffic ({limit} req/{window_sec}s limit)
 Watch Workload panel → healthy counters appearing
 
-[dim]Auto-advancing...[/dim]""",
+[dim]Press SPACE when you see counters...[/dim]""",
         on_enter=setup,
-        auto_advance=True,
     )
 
 
