@@ -255,6 +255,103 @@ class TestParameterInference:
         assert result == {"key": "first-over"}
 
 
+class TestTiKVParameterInference:
+    """Tests for TiKV action parameter inference."""
+
+    @pytest.fixture
+    def runner(self, tmp_path, mock_subject):
+        """Create AgentRunner for testing inference."""
+        return AgentRunner(
+            subject=mock_subject,
+            db_path=tmp_path / "test.db",
+        )
+
+    def test_infer_drain_store_finds_down_store(self, runner):
+        """Should infer store_id from down store."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Down"},
+                {"id": "3", "address": "tikv-3:20160", "state": "Up"},
+            ]
+        }
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result == {"store_id": "2"}
+
+    def test_infer_drain_store_no_down_stores(self, runner):
+        """Should return None when all stores are up."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Up"},
+            ]
+        }
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result is None
+
+    def test_infer_drain_store_empty_stores(self, runner):
+        """Should return None when stores list is empty."""
+        observation = {"stores": []}
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result is None
+
+    def test_infer_drain_store_no_stores_key(self, runner):
+        """Should return None when observation has no stores."""
+        observation = {"counters": []}
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result is None
+
+    def test_infer_drain_store_finds_first_down(self, runner):
+        """Should return the first down store when multiple are down."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Down"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Down"},
+                {"id": "3", "address": "tikv-3:20160", "state": "Up"},
+            ]
+        }
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result == {"store_id": "1"}
+
+    def test_infer_drain_store_handles_disconnected_state(self, runner):
+        """Should treat Disconnected as down."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Disconnected"},
+            ]
+        }
+
+        result = runner._infer_action_parameters("drain_store", observation)
+
+        assert result == {"store_id": "2"}
+
+    def test_infer_transfer_leader_returns_none(self, runner):
+        """transfer_leader needs region_id which requires region query."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Down"},
+            ],
+            "cluster_metrics": {"leader_count": {"1": 10, "2": 5}},
+        }
+
+        # transfer_leader is too complex to infer without region queries
+        result = runner._infer_action_parameters("transfer_leader", observation)
+
+        assert result is None
+
+
 class TestParameterInferenceIntegration:
     """Integration tests for parameter inference in action flow."""
 

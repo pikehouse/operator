@@ -512,6 +512,7 @@ class AgentRunner:
         Returns:
             Dict of inferred parameters, or None if inference not possible
         """
+        # Rate limiter actions
         if action_name == "reset_counter":
             # Find the counter that's over limit
             counters = observation.get("counters", [])
@@ -520,10 +521,36 @@ class AgentRunner:
                 limit = counter.get("limit", 0)
                 if count > limit:
                     return {"key": counter.get("key")}
-            # No over-limit counter found
             return None
 
-        # Add more action-specific inference as needed
+        # TiKV actions
+        if action_name == "drain_store":
+            # Find a store that's down
+            stores = observation.get("stores", [])
+            for store in stores:
+                if store.get("state") != "Up":
+                    return {"store_id": store.get("id")}
+            return None
+
+        if action_name == "transfer_leader":
+            # Find a region on a down store and an up store to transfer to
+            stores = observation.get("stores", [])
+            down_stores = [s for s in stores if s.get("state") != "Up"]
+            up_stores = [s for s in stores if s.get("state") == "Up"]
+
+            if not down_stores or not up_stores:
+                return None
+
+            # Get leader counts to find a region on the down store
+            cluster_metrics = observation.get("cluster_metrics", {})
+            leader_count = cluster_metrics.get("leader_count", {})
+
+            down_store_id = down_stores[0].get("id")
+            # If the down store had leaders, we need region IDs
+            # This is complex - would need to query regions. For now, return None
+            # and let the action fail gracefully.
+            return None
+
         return None
 
     def _print_diagnosis_summary(self, diagnosis: DiagnosisOutput, ticket_id: int) -> None:
