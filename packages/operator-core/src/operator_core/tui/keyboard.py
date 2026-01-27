@@ -30,9 +30,8 @@ def _readkey_with_timeout(timeout: float) -> str | None:
     """
     Read a keypress with timeout.
 
-    Sets terminal to cbreak mode, uses select() to check if input
-    is available, then reads directly from stdin. This avoids
-    conflicts with readchar's own terminal mode handling.
+    Uses select() to check if input is available, then reads from stdin.
+    Does NOT change terminal modes - caller must ensure cbreak mode is set.
 
     Args:
         timeout: Maximum seconds to wait for input
@@ -40,26 +39,18 @@ def _readkey_with_timeout(timeout: float) -> str | None:
     Returns:
         Key pressed, or None if timeout
     """
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        # Set cbreak mode so select() can see individual keypresses
-        tty.setcbreak(fd)
-        # Check if stdin has data available
-        if select.select([sys.stdin], [], [], timeout)[0]:
-            # Read directly - avoid readchar's terminal mode changes
-            char = sys.stdin.read(1)
-            # Handle escape sequences (arrow keys, etc.)
-            if char == "\x1b":  # Escape
-                if select.select([sys.stdin], [], [], 0.05)[0]:
+    # Check if stdin has data available
+    if select.select([sys.stdin], [], [], timeout)[0]:
+        # Read directly
+        char = sys.stdin.read(1)
+        # Handle escape sequences (arrow keys, etc.)
+        if char == "\x1b":  # Escape
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                char += sys.stdin.read(1)
+                if char == "\x1b[" and select.select([sys.stdin], [], [], 0.05)[0]:
                     char += sys.stdin.read(1)
-                    if char == "\x1b[" and select.select([sys.stdin], [], [], 0.05)[0]:
-                        char += sys.stdin.read(1)
-            return char
-        return None
-    finally:
-        # Always restore terminal settings
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        return char
+    return None
 
 
 class KeyboardTask:
@@ -85,27 +76,39 @@ class KeyboardTask:
         """
         self._on_key = on_key
         self._shutdown = asyncio.Event()
+        self._old_settings: list | None = None
 
     async def run(self) -> None:
         """
         Main task loop. Run inside TaskGroup.
 
+        Sets cbreak mode once at startup, restores at shutdown.
         Uses executor with select-based timeout so threads always
         return quickly, enabling clean shutdown.
         """
         loop = asyncio.get_running_loop()
 
-        while not self._shutdown.is_set():
-            try:
-                # Use select-based timeout so thread returns quickly
-                key = await loop.run_in_executor(
-                    None,
-                    lambda: _readkey_with_timeout(0.3),
-                )
-                if key is not None:
-                    self._on_key(key)
-            except asyncio.CancelledError:
-                break  # TaskGroup cancelled us
+        # Set cbreak mode once at startup
+        fd = sys.stdin.fileno()
+        self._old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setcbreak(fd)
+
+            while not self._shutdown.is_set():
+                try:
+                    # Use select-based timeout so thread returns quickly
+                    key = await loop.run_in_executor(
+                        None,
+                        lambda: _readkey_with_timeout(0.3),
+                    )
+                    if key is not None:
+                        self._on_key(key)
+                except asyncio.CancelledError:
+                    break  # TaskGroup cancelled us
+        finally:
+            # Restore terminal settings
+            if self._old_settings is not None:
+                termios.tcsetattr(fd, termios.TCSADRAIN, self._old_settings)
 
     def stop(self) -> None:
         """Signal task to stop."""
