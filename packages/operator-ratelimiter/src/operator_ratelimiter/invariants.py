@@ -69,8 +69,15 @@ COUNTER_DRIFT_CONFIG = InvariantConfig(
 
 GHOST_ALLOWING_CONFIG = InvariantConfig(
     name="ghost_allowing",
-    grace_period=timedelta(seconds=0),  # Immediate - misconfiguration is critical
-    threshold=0.0,  # Any allowing with limit=0 is a violation
+    grace_period=timedelta(seconds=0),  # Immediate - over-limit is critical
+    threshold=0.0,  # Any over-limit allowing is a violation
+    severity="warning",
+)
+
+OVER_LIMIT_CONFIG = InvariantConfig(
+    name="over_limit",
+    grace_period=timedelta(seconds=0),  # Immediate - over-limit is critical
+    threshold=0.0,  # Any count > limit is a violation
     severity="warning",
 )
 
@@ -335,26 +342,43 @@ class RateLimiterInvariantChecker:
         counters: list[CounterInfo],
     ) -> list[InvariantViolation]:
         """
-        Check counter invariants: ghost allowing.
+        Check counter invariants: over-limit and ghost allowing.
 
-        Counter drift detection requires Redis access and is not implemented
-        in the generic check flow (would need additional Redis queries).
+        Detects:
+        - Over-limit: count > limit (more requests allowed than limit permits)
+        - Ghost allowing: limit is 0 but remaining > 0 (misconfigured key)
 
         Args:
             counters: List of CounterInfo objects from management API
 
         Returns:
-            List of violations for counters with ghost allowing
+            List of violations for counter anomalies
         """
         violations: list[InvariantViolation] = []
 
-        # Track which keys currently have ghost allowing
+        # Track which keys currently have violations
+        current_over_limit_keys: set[str] = set()
         current_ghost_keys: set[str] = set()
 
         for counter in counters:
-            # Ghost allowing: limit is 0 but remaining > 0 (requests being allowed)
+            # Over-limit: count exceeds limit (requests allowed when they shouldn't be)
+            is_over_limit = counter.count > counter.limit
+            if is_over_limit:
+                current_over_limit_keys.add(counter.key)
+
+            violation = self._check_with_grace_period(
+                config=OVER_LIMIT_CONFIG,
+                is_violated=is_over_limit,
+                message=f"Counter {counter.key} over limit: count={counter.count}, limit={counter.limit} (excess={counter.count - counter.limit})",
+                identifier=counter.key,
+            )
+            if violation:
+                violations.append(violation)
+
+            # Ghost allowing: limit is 0 but remaining > 0 (requests being allowed with no limit)
             is_ghost = counter.limit == 0 and counter.remaining > 0
-            current_ghost_keys.add(counter.key) if is_ghost else None
+            if is_ghost:
+                current_ghost_keys.add(counter.key)
 
             violation = self._check_with_grace_period(
                 config=GHOST_ALLOWING_CONFIG,
@@ -365,12 +389,14 @@ class RateLimiterInvariantChecker:
             if violation:
                 violations.append(violation)
 
-        # Clear tracking for keys that no longer have ghost allowing
+        # Clear tracking for keys that no longer have violations
         keys_to_clear = [
             key
             for key in self._first_seen
-            if key.startswith(f"{GHOST_ALLOWING_CONFIG.name}:")
-            and key.split(":", 1)[1] not in current_ghost_keys
+            if (key.startswith(f"{OVER_LIMIT_CONFIG.name}:")
+                and key.split(":", 1)[1] not in current_over_limit_keys)
+            or (key.startswith(f"{GHOST_ALLOWING_CONFIG.name}:")
+                and key.split(":", 1)[1] not in current_ghost_keys)
         ]
         for key in keys_to_clear:
             self._first_seen.pop(key, None)

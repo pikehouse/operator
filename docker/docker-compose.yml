@@ -15,6 +15,8 @@ configs:
 services:
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -32,6 +34,7 @@ services:
       - RATELIMITER_NODE_ID=node-1
       - RATELIMITER_NODE_HOST=ratelimiter-1
       - RATELIMITER_NODE_PORT=8000
+      - RATELIMITER_DEFAULT_LIMIT=10
     ports:
       - "${RATELIMITER_1_PORT:-8001}:8000"
     depends_on:
@@ -55,6 +58,7 @@ services:
       - RATELIMITER_NODE_ID=node-2
       - RATELIMITER_NODE_HOST=ratelimiter-2
       - RATELIMITER_NODE_PORT=8000
+      - RATELIMITER_DEFAULT_LIMIT=10
     ports:
       - "${RATELIMITER_2_PORT:-8002}:8000"
     depends_on:
@@ -78,6 +82,7 @@ services:
       - RATELIMITER_NODE_ID=node-3
       - RATELIMITER_NODE_HOST=ratelimiter-3
       - RATELIMITER_NODE_PORT=8000
+      - RATELIMITER_DEFAULT_LIMIT=10
     ports:
       - "${RATELIMITER_3_PORT:-8003}:8000"
     depends_on:
