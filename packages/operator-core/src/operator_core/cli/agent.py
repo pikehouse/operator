@@ -8,6 +8,7 @@ Per RESEARCH.md patterns:
 - Use envvar parameter for environment variable fallback
 - Uses factory pattern for subject creation (no direct TiKV imports)
 - Wire up subject and AgentRunner via factory
+- Reads OPERATOR_SAFETY_MODE and OPERATOR_APPROVAL_MODE from environment
 """
 
 import asyncio
@@ -16,6 +17,10 @@ from pathlib import Path
 
 import typer
 
+from operator_core.actions.audit import ActionAuditor
+from operator_core.actions.executor import ActionExecutor
+from operator_core.actions.registry import ActionRegistry
+from operator_core.actions.safety import SafetyController, SafetyMode
 from operator_core.agent.runner import AgentRunner
 from operator_core.cli.subject_factory import AVAILABLE_SUBJECTS, create_subject
 from operator_core.db.tickets import TicketDB
@@ -113,6 +118,20 @@ def start_agent(
     print(f"  Poll interval: {interval}s")
     print(f"  Database: {db_path}")
     print(f"  Model: {model}")
+
+    # Read safety mode from environment (OBSERVE is default, EXECUTE enables actions)
+    safety_mode_str = os.environ.get("OPERATOR_SAFETY_MODE", "observe").lower()
+    if safety_mode_str == "execute":
+        safety_mode = SafetyMode.EXECUTE
+    else:
+        safety_mode = SafetyMode.OBSERVE
+
+    # Read approval mode from environment (false = autonomous, true = requires approval)
+    approval_mode_str = os.environ.get("OPERATOR_APPROVAL_MODE", "false").lower()
+    approval_mode = approval_mode_str == "true"
+
+    print(f"  Safety mode: {safety_mode.value.upper()}")
+    print(f"  Approval mode: {approval_mode}")
     print()
     print("Press Ctrl+C to stop")
     print()
@@ -125,11 +144,30 @@ def start_agent(
                 **factory_kwargs,
             )
 
+            # Create executor if in EXECUTE mode
+            executor = None
+            if safety_mode == SafetyMode.EXECUTE:
+                # Set up action execution infrastructure
+                auditor = ActionAuditor(db_path)
+                registry = ActionRegistry.from_subject(subject_instance)
+                safety = SafetyController(db_path, auditor, mode=safety_mode)
+                executor = ActionExecutor(
+                    db_path=db_path,
+                    registry=registry,
+                    safety=safety,
+                    auditor=auditor,
+                    approval_mode=approval_mode,
+                )
+                print(f"Agent starting in {safety_mode.value.upper()} mode (approval_mode={approval_mode})")
+            else:
+                print("Agent starting in OBSERVE mode (actions disabled)")
+
             runner = AgentRunner(
                 subject=subject_instance,
                 db_path=db_path,
                 poll_interval=interval,
                 model=model,
+                executor=executor,
             )
 
             await runner.run()
