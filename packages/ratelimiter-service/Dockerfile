@@ -6,14 +6,12 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency specification first for layer caching
+# Copy source files needed for package build
 COPY pyproject.toml .
+COPY src/ ./src/
 
 # Install the package
 RUN pip install --no-cache-dir .
-
-# Copy source code
-COPY src/ ./src/
 
 # Expose port
 EXPOSE 8000
