@@ -70,12 +70,10 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
 
     return Chapter(
         title="Stage 2: Setup",
-        narration=f"""Setting up rate limiter demo...
+        narration=f"""Creating baseline traffic ({limit} req/{window_sec}s limit)
+Watch Workload panel → healthy counters appearing
 
-- Configuring rate limit: {limit} requests per {window_sec}s
-- Creating baseline traffic for workload display
-
-[dim]Watch the Workload panel for healthy counters...[/dim]""",
+[dim]Auto-advancing...[/dim]""",
         on_enter=setup,
         auto_advance=True,
     )
@@ -104,21 +102,14 @@ def create_counter_drift_chapter() -> Chapter:
         demo_status.set("[green]Redis pause complete[/green]")
 
     return Chapter(
-        title="Stage 3: Counter Drift Chaos",
-        narration=f"""
-[bold yellow]{COUNTER_DRIFT_CONFIG.name}[/bold yellow]
+        title="Stage 3: Injecting Chaos",
+        narration=f"""[bold yellow]Counter Drift[/bold yellow] - Creating over-limit counter
+Simulates Redis sync failure causing counter inconsistency
 
-{COUNTER_DRIFT_CONFIG.description}
-
-Redis will be paused for {COUNTER_DRIFT_CONFIG.duration_sec}s. During this time,
-rate limiter nodes cannot update counters in Redis, but they continue
-accepting requests. This creates counter drift between nodes and Redis.
-
-[dim]Countdown will begin automatically...[/dim]
-        """.strip(),
+[dim]Injecting...[/dim]""",
         on_enter=inject_chaos,
         blocks_advance=True,
-        key_hint="[dim]Chaos in progress... please wait[/dim]",
+        key_hint="[dim]Chaos in progress...[/dim]",
     )
 
 
@@ -156,165 +147,83 @@ def create_ghost_allowing_chapter(key: str, limit: int) -> Chapter:
         )
 
     return Chapter(
-        title="Stage 7: Ghost Allowing Chaos",
-        narration=f"""
-[bold yellow]{GHOST_ALLOWING_CONFIG.name}[/bold yellow]
+        title="Stage 7: Injecting Chaos",
+        narration=f"""[bold yellow]Ghost Allowing[/bold yellow] - Burst traffic (2x limit)
+Simulates race condition allowing requests past limit
 
-{GHOST_ALLOWING_CONFIG.description}
-
-Sending {limit * GHOST_ALLOWING_CONFIG.burst_multiplier} concurrent requests (2x limit) to trigger
-ghost allowing. This creates a race condition where the distributed
-counter becomes inconsistent, potentially allowing requests when limit is 0.
-
-[dim]Countdown will begin automatically...[/dim]
-        """.strip(),
+[dim]Injecting...[/dim]""",
         on_enter=inject_chaos,
         blocks_advance=True,
-        key_hint="[dim]Chaos in progress... please wait[/dim]",
+        key_hint="[dim]Chaos in progress...[/dim]",
     )
 
 
-# Rate limiter demo chapters
+# Rate limiter demo chapters - keep narrations SHORT (3-4 lines max)
 RATELIMITER_CHAPTERS = [
     Chapter(
         title="Welcome",
-        narration="""
-[bold cyan]Rate Limiter Chaos Demo[/bold cyan]
+        narration="""[bold cyan]Rate Limiter Chaos Demo[/bold cyan]
 
-This demo showcases the operator's ability to diagnose rate limiter
-anomalies using generic invariant checking and AI reasoning.
+Demonstrating AI diagnosis of: [bold]Counter Drift[/bold] and [bold]Ghost Allowing[/bold]
 
-We'll demonstrate TWO distinct failure modes:
-1. [bold]Counter Drift[/bold] - Redis pause causes distributed counter inconsistency
-2. [bold]Ghost Allowing[/bold] - Burst traffic triggers allowing with limit=0
-
-The operator will detect and diagnose both anomalies without any
-rate limiter-specific prompts in the core reasoning engine.
-
-[dim]Press SPACE to begin...[/dim]
-        """.strip(),
+[dim]Press SPACE to begin...[/dim]""",
     ),
     Chapter(
         title="Stage 1: Cluster Health",
-        narration="""
-[bold]Checking Rate Limiter Cluster[/bold]
+        narration="""3 rate limiter nodes + Redis + Prometheus
+Watch the Cluster panel → all nodes should be [green]Up[/green]
 
-The cluster consists of:
-- 3 rate limiter nodes (ports 8001-8003)
-- 1 Redis instance (shared state)
-- Prometheus for metrics
-
-Each node maintains a distributed counter for rate limiting using
-a sliding window algorithm backed by Redis sorted sets.
-
-[dim]Press SPACE to continue...[/dim]
-        """.strip(),
+[dim]Press SPACE to continue...[/dim]""",
     ),
     # Stage 2: Setup (auto-advances)
     create_setup_chapter(DEMO_KEY, DEMO_LIMIT, DEMO_WINDOW),
     # Stage 3: Counter Drift Chaos (blocks advance, on_enter)
     create_counter_drift_chapter(),
     Chapter(
-        title="Stage 4: Counter Drift Detection",
-        narration="""
-[bold]Waiting for Counter Drift Detection[/bold]
+        title="Stage 4: Detection",
+        narration="""Watch Monitor panel → should show [bold red]violation(s) detected[/bold red]
+Watch Workload panel → counter should show [bold red]OVER LIMIT[/bold red]
 
-The operator's invariant checker is monitoring for counter drift between
-nodes and Redis. Counter drift occurs when:
-- Nodes report different counter values than Redis
-- Drift exceeds threshold after grace period
-
-Watch the health panel for counter inconsistencies...
-
-[dim]Press SPACE when anomaly is detected...[/dim]
-        """.strip(),
+[dim]Press SPACE when you see the violation...[/dim]""",
     ),
     Chapter(
-        title="Stage 5: Counter Drift Diagnosis",
-        narration="""
-[bold]AI Diagnosis: Counter Drift[/bold]
+        title="Stage 5: AI Diagnosis",
+        narration="""Watch Agent panel → AI analyzing the anomaly
+The AI sees: counters, nodes, metrics, violation details
 
-The AI will now analyze the counter drift anomaly and provide a diagnosis.
-
-The AI has access to:
-- Node counter values from management API
-- Redis counter values from direct Redis queries
-- Recent metric history from Prometheus
-- Invariant violation details
-
-[dim]AI diagnosis will appear here...[/dim]
-
-[dim]Press SPACE to continue...[/dim]
-        """.strip(),
+[dim]Press SPACE to continue...[/dim]""",
     ),
     Chapter(
         title="Stage 6: Recovery",
-        narration="""
-[bold]Waiting for Recovery[/bold]
+        narration="""System recovering... counters resyncing with Redis
 
-Redis CLIENT PAUSE expires automatically after the configured duration.
-Counters will resync as nodes resume writing to Redis.
-
-[dim]Waiting for system to stabilize...[/dim]
-        """.strip(),
+[dim]Auto-advancing...[/dim]""",
         auto_advance=True,
     ),
     # Stage 7: Ghost Allowing Chaos (blocks advance, on_enter)
     create_ghost_allowing_chapter(DEMO_KEY, DEMO_LIMIT),
     Chapter(
-        title="Stage 8: Ghost Allowing Detection",
-        narration="""
-[bold]Waiting for Ghost Allowing Detection[/bold]
+        title="Stage 8: Detection",
+        narration="""Watch Monitor panel → new violation detected
+Counter exceeds limit due to burst traffic race condition
 
-The operator's invariant checker is monitoring for ghost allowing.
-Ghost allowing occurs when:
-- Counter value is 0 or very low
-- Requests are still being allowed (not denied)
-
-This indicates a race condition in the distributed counter logic.
-
-[dim]Press SPACE when anomaly is detected...[/dim]
-        """.strip(),
+[dim]Press SPACE when you see the violation...[/dim]""",
     ),
     Chapter(
-        title="Stage 9: Ghost Allowing Diagnosis",
-        narration="""
-[bold]AI Diagnosis: Ghost Allowing[/bold]
+        title="Stage 9: AI Diagnosis",
+        narration="""Watch Agent panel → AI diagnosing ghost allowing
+Same generic reasoning, different anomaly type
 
-The AI will now analyze the ghost allowing anomaly and provide a diagnosis.
-
-The AI has access to:
-- Current counter state across all nodes
-- Recent request patterns from metrics
-- Allowed vs denied request counts
-- Invariant violation details
-
-[dim]AI diagnosis will appear here...[/dim]
-
-[dim]Press SPACE to continue...[/dim]
-        """.strip(),
+[dim]Press SPACE to continue...[/dim]""",
     ),
     Chapter(
-        title="Demo Complete",
-        narration="""
-[bold green]Rate Limiter Chaos Demo Complete![/bold green]
+        title="Complete",
+        narration="""[bold green]Demo Complete![/bold green]
 
-You've witnessed the operator detect and diagnose TWO distinct
-rate limiter anomalies:
+AI diagnosed both anomalies using generic invariant checking.
+No rate-limiter-specific prompts needed.
 
-1. [bold]Counter Drift[/bold] - Caused by Redis pause, detected via counter inconsistency
-2. [bold]Ghost Allowing[/bold] - Caused by burst traffic, detected via allowing with low limit
-
-Both were diagnosed using:
-- Generic invariant checking (no rate limiter-specific logic in core)
-- AI reasoning over observations (no system-specific prompts)
-- Protocol-based abstractions (same patterns as TiKV)
-
-This demonstrates that the operator can reason about novel distributed
-systems without hardcoded knowledge of their internals.
-
-[dim]Press Q to quit[/dim]
-        """.strip(),
+[dim]Press Q to quit[/dim]""",
     ),
 ]
 
