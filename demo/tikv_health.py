@@ -165,7 +165,7 @@ class TiKVHealthPoller(HealthPollerProtocol):
                 timeout=5.0,
             )
             async with prom_client:
-                query = 'sum(rate(grpc_server_handled_total[30s]))'
+                query = 'sum(rate(tikv_storage_engine_async_request_total[30s]))'
                 resp = await prom_client.get(
                     "/api/v1/query",
                     params={"query": query},

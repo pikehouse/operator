@@ -120,6 +120,7 @@ async def start_ycsb_load(compose_file: Path) -> bool:
             ],
             remove=True,
             detach=True,
+            tty=False,
             name="ycsb-run",
         )
         return True
