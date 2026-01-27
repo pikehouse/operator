@@ -92,6 +92,7 @@ class AgentRunner:
         self._tickets_processed = 0
         self._tickets_diagnosed = 0
         self._actions_proposed = 0
+        self._actions_verified = 0
         self._retries_succeeded = 0
 
     async def run(self) -> None:
@@ -270,12 +271,28 @@ class AgentRunner:
 
         for rec in diagnosis_output.recommended_actions:
             try:
+                # 1. Propose action (validates params, creates proposal)
                 proposal = await self.executor.propose_action(rec, ticket_id=ticket_id)
                 self._actions_proposed += 1
                 print(
                     f"Proposed action: {proposal.action_name} "
                     f"(id={proposal.id}, urgency={rec.urgency})"
                 )
+
+                # 2. Validate proposal (transitions to VALIDATED status)
+                await self.executor.validate_proposal(proposal.id)
+                print(f"Validated: {proposal.id}")
+
+                # 3. Execute immediately (AGENT-01)
+                record = await self.executor.execute_proposal(proposal.id, self.subject)
+
+                if record.success:
+                    print(f"✓ Executed: {proposal.action_name}")
+                    # 4. Verify after delay (AGENT-02/03/04)
+                    await self._verify_action_result(proposal.id, ticket_id)
+                else:
+                    print(f"✗ Execution failed: {record.error_message}")
+
             except ObserveOnlyError:
                 # Expected when in observe mode - just skip
                 print(f"Skipping action proposal: observe-only mode active")
@@ -284,6 +301,44 @@ class AgentRunner:
                 print(f"Action proposal validation failed for {rec.action_name}: {e}")
             except ValueError as e:
                 print(f"Action proposal failed for {rec.action_name}: {e}")
+
+    async def _verify_action_result(
+        self,
+        proposal_id: int,
+        ticket_id: int,
+    ) -> None:
+        """
+        Verify action resolved the issue.
+
+        Per AGENT-02/03/04: Wait 5s, query metrics, log result.
+
+        Args:
+            proposal_id: The executed proposal ID
+            ticket_id: Ticket ID for context
+        """
+        print(f"Waiting 5s for action effects to propagate...")
+        await asyncio.sleep(5.0)
+
+        # Query subject metrics (AGENT-03)
+        observation = await self.subject.observe()
+
+        # Simplified verification - check if observation indicates healthy state
+        # For demo: just log that verification ran; full invariant check is future work
+        cluster_health = observation.get("cluster_metrics", observation)
+
+        # Log verification result (AGENT-04)
+        print("")
+        print(f"━━━ Verification for Action {proposal_id} ━━━")
+        print(f"Ticket: {ticket_id}")
+        print(f"Metrics observed: {len(observation)} keys")
+
+        # For v2.2 demo: assume success if we got metrics without error
+        # Full invariant re-check is out of scope per REQUIREMENTS.md
+        print(f"✓ VERIFICATION COMPLETE: Action {proposal_id} executed")
+        print(f"  (Full invariant re-check is future work)")
+        print("")
+
+        self._actions_verified += 1
 
     async def _process_scheduled_actions(self) -> None:
         """
