@@ -68,7 +68,7 @@ if [[ "$SUBJECT" == "tikv" ]]; then
 elif [[ "$SUBJECT" == "ratelimiter" ]]; then
     COMPOSE_FILE="docker/docker-compose.yml"
     # Rate limiter endpoints for monitor/agent subprocesses
-    export RATELIMITER_ENDPOINTS="http://localhost:8001,http://localhost:8002,http://localhost:8003"
+    export RATELIMITER_URL="http://localhost:8001"
     export REDIS_URL="redis://localhost:6379"
     export PROMETHEUS_URL="http://localhost:9090"
 

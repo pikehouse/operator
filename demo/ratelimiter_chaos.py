@@ -138,12 +138,12 @@ async def setup_rate_limit(
         )
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.post(
-            f"{target_url}/limit",
+        # PUT /api/limits/{key} with limit and window_ms
+        response = await client.put(
+            f"{target_url}/api/limits/{key}",
             json={
-                "key": key,
                 "limit": limit,
-                "window_sec": window_sec,
+                "window_ms": window_sec * 1000,
             },
         )
         response.raise_for_status()
