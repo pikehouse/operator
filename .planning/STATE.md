@@ -109,6 +109,12 @@ See: .planning/MILESTONES.md
 - Fire-and-forget reset_counter operation
 - Graceful fallback for missing Prometheus metrics (return 0/None)
 
+**Key decisions from v2.1 (Phase 19-02):**
+- RateLimiterSubject mirrors TiKVSubject structure for consistency (RLPKG-02-01)
+- Grace periods for latency (60s) and drift (30s) invariants to prevent false alarms (RLPKG-02-02)
+- Counter drift as helper method only (not in check() due to performance) (RLPKG-02-03)
+- Fire-and-forget semantics for reset_counter and update_limit actions
+
 **Key decisions from v2.1 (Phase 19-03):**
 - Per-key limit storage in Redis hash keys at "ratelimit:limit:{key}" (RLPKG-09)
 - Reset endpoint returns 200 for both existing and nonexistent keys (idempotent) (RLPKG-10)
@@ -165,8 +171,9 @@ Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). 
 
 ## Phase 19 Progress
 
-Plans 01 and 03 of 05 completed:
+Plans 01-03 of 05 completed:
 - 19-01: Created operator-ratelimiter package foundation (HTTP, Redis, Prometheus clients)
+- 19-02: Implemented RateLimiterSubject and RateLimiterInvariantChecker with 5 invariant types
 - 19-03: Added management API actions (reset_counter, update_limit)
 
 Files created:
@@ -176,13 +183,15 @@ Files created:
 - packages/operator-ratelimiter/src/operator_ratelimiter/ratelimiter_client.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/redis_client.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/prom_client.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/subject.py
+- packages/operator-ratelimiter/src/operator_ratelimiter/invariants.py
 - packages/ratelimiter-service/tests/test_management_api.py
 
-Next: 19-02 (RateLimiterSubject implementation) or 19-04 (Action definitions)
+Next: 19-04 (CLI integration) or 19-05 (Testing)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-27 (Phase 19 plan 03 complete)*
+*State updated: 2026-01-27 (Phase 19 plans 01-03 complete)*
