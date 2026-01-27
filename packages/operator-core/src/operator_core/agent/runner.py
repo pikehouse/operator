@@ -312,6 +312,8 @@ class AgentRunner:
                 print(f"Action proposal validation failed for {rec.action_name}: {e}")
             except ValueError as e:
                 print(f"Action proposal failed for {rec.action_name}: {e}")
+            except Exception as e:
+                print(f"Unexpected error proposing {rec.action_name}: {type(e).__name__}: {e}")
 
     async def _verify_action_result(
         self,
