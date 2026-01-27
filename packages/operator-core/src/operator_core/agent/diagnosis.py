@@ -32,8 +32,8 @@ class ActionRecommendation(BaseModel):
         ..., description="Action name from Available Actions (e.g., 'reset_counter', 'transfer_leader')"
     )
     parameters: dict[str, Any] = Field(
-        default_factory=dict,
-        description="REQUIRED: All parameters from Available Actions must be filled. E.g., for reset_counter: {'key': 'counter-drift-demo'}",
+        ...,
+        description="Parameters for the action from Available Actions. E.g., {'key': 'counter-drift-demo'} for reset_counter",
     )
     reason: str = Field(
         ..., description="Why this action is recommended (ties to diagnosis)"
