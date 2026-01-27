@@ -28,8 +28,8 @@
 **Plans:** 2 plans
 
 Plans:
-- [ ] 21-01-PLAN.md — AgentRunner agentic execution with immediate validate/execute and verification
-- [ ] 21-02-PLAN.md — Demo configuration for EXECUTE mode and autonomous execution
+- [x] 21-01-PLAN.md — AgentRunner agentic execution with immediate validate/execute and verification
+- [x] 21-02-PLAN.md — Demo configuration for EXECUTE mode and autonomous execution
 
 **Success Criteria:**
 1. Agent executes recommended action without human approval in EXECUTE mode
@@ -103,7 +103,7 @@ Archived in milestones/v2.1-ROADMAP.md
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
-| 21 | v2.2 | 0/2 | Planned | — |
+| 21 | v2.2 | 2/2 | Complete | 2026-01-27 |
 | 22 | v2.2 | 0/? | Pending | — |
 
 ---
@@ -114,3 +114,4 @@ Archived in milestones/v2.1-ROADMAP.md
 *v2.1 archived: 2026-01-27*
 *v2.2 phases added: 2026-01-27*
 *Phase 21 planned: 2026-01-27*
+*Phase 21 completed: 2026-01-27*

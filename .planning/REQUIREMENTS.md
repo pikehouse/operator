@@ -9,14 +9,14 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 
 ### Demo Configuration
 
-- [ ] **DEMO-01**: Demo runs in EXECUTE mode (autonomous execution, no approval workflow)
+- [x] **DEMO-01**: Demo runs in EXECUTE mode (autonomous execution, no approval workflow)
 
 ### Agent Agentic Loop
 
-- [ ] **AGENT-01**: Agent executes recommended action immediately after diagnosis
-- [ ] **AGENT-02**: Agent waits fixed delay (5s) after action execution before verification
-- [ ] **AGENT-03**: Agent queries subject metrics to verify fix after delay
-- [ ] **AGENT-04**: Agent outputs verification result (success/failure) to log
+- [x] **AGENT-01**: Agent executes recommended action immediately after diagnosis
+- [x] **AGENT-02**: Agent waits fixed delay (5s) after action execution before verification
+- [x] **AGENT-03**: Agent queries subject metrics to verify fix after delay
+- [x] **AGENT-04**: Agent outputs verification result (success/failure) to log
 
 ### TiKV Demo Chapters
 
@@ -57,11 +57,11 @@ Requirements for agentic remediation demo. Builds on v2.0 action framework and v
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEMO-01 | 21 | Pending |
-| AGENT-01 | 21 | Pending |
-| AGENT-02 | 21 | Pending |
-| AGENT-03 | 21 | Pending |
-| AGENT-04 | 21 | Pending |
+| DEMO-01 | 21 | Complete |
+| AGENT-01 | 21 | Complete |
+| AGENT-02 | 21 | Complete |
+| AGENT-03 | 21 | Complete |
+| AGENT-04 | 21 | Complete |
 | TIKV-01 | 22 | Pending |
 | TIKV-02 | 22 | Pending |
 | TIKV-03 | 22 | Pending |

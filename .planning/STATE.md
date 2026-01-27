@@ -34,7 +34,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 21 | Agent Agentic Loop | DEMO-01, DEMO-02, DEMO-03, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (7) | Complete |
+| 21 | Agent Agentic Loop | DEMO-01, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (5) | Complete |
 | 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | Pending |
 
 ## Archives
@@ -89,7 +89,7 @@ See: .planning/MILESTONES.md
 
 **Last session:** 2026-01-27
 **Stopped at:** Completed 21-02-PLAN.md (Phase 21 complete)
-**Resume with:** `/gsd:execute-phase 22`
+**Resume with:** `/gsd:plan-phase 22`
 
 ## Open Issues
 
