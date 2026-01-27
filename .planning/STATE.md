@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** Between milestones
-**Phase:** —
+**Milestone:** v2.3 Infrastructure Actions & Script Execution
+**Phase:** Not started (defining requirements)
 **Plan:** —
-**Status:** v2.2 shipped, planning next milestone
-**Last activity:** 2026-01-27 - v2.2 milestone completed
+**Status:** Defining requirements
+**Last activity:** 2026-01-27 — Milestone v2.3 started
 
-Progress: [██████████] 100% (v2.2 complete)
+Progress: [░░░░░░░░░░] 0%
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now complete agentic loop with auto-remediation.
 
-**Current focus:** v2.2 shipped — ready for next milestone.
+**Current focus:** v2.3 — expanding action capabilities to infrastructure control and script execution.
 
 ## Milestones
 
@@ -102,4 +102,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (v2.2 shipped)*
+*State updated: 2026-01-27 (v2.3 started)*

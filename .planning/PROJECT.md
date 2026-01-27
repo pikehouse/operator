@@ -8,6 +8,21 @@ An AI-powered operator for distributed systems that monitors clusters, diagnoses
 
 AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
 
+## Current Milestone: v2.3 Infrastructure Actions & Script Execution
+
+**Goal:** The action agent can remediate issues by controlling Docker infrastructure, modifying host files/processes, and generating/executing custom scripts in sandboxed containers — with output fed back for iterative reasoning.
+
+**Target features:**
+- Docker actions: start, stop, restart, kill containers; connect/disconnect networks; exec commands; access logs
+- Host actions: read/write files, signal processes, modify network config
+- Script execution: Agent generates Python/bash scripts, executes in sandboxed Docker container, receives output for analysis
+- Safety model: Per-action risk levels (low/medium/high), approval mode configuration by risk level
+- Output feedback: Script/command output captured and returned to agent for iterative remediation
+
+**Demo scenarios:**
+1. Container recovery: Crashed container → agent detects → restarts container → verifies health
+2. Config repair: Misconfiguration detected → agent writes fix script → executes in sandbox → verifies resolution
+
 ## Current State
 
 **Shipped:** v2.2 (2026-01-27)
@@ -110,7 +125,25 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Parameter inference fallback for TiKV/rate limiter actions — v2.2
 - Updated demo narratives for agentic flow — v2.2
 
+### Active
+
+- [ ] Docker container lifecycle actions (start, stop, restart, kill)
+- [ ] Docker network actions (connect, disconnect)
+- [ ] Docker exec and log access actions
+- [ ] Host file read/write actions
+- [ ] Host process signal actions
+- [ ] Host network configuration actions
+- [ ] Script generation by agent (Python/bash)
+- [ ] Sandboxed script execution (Docker container)
+- [ ] Script output capture and feedback to agent
+- [ ] Per-action risk level classification
+- [ ] Risk-based approval configuration
+- [ ] Container recovery demo scenario
+- [ ] Config repair demo scenario
+
 ### Future
+
+- Cloud API actions (AWS/GCP/Azure) — v2.4
 
 ### Out of Scope
 
@@ -118,7 +151,7 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Production AWS deployment — local simulation first
 - Complex rate limiter features — intentionally simple to prove abstraction
 - Web dashboard — CLI and logs
-- Free-form command execution — structured action types only
+- Direct host script execution (all scripts sandboxed for safety)
 
 ## Context
 
@@ -184,4 +217,4 @@ The goal is proving the operator works on systems Claude hasn't seen in training
 | Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
 
 ---
-*Last updated: 2026-01-27 after v2.2 milestone*
+*Last updated: 2026-01-27 after v2.3 milestone start*
