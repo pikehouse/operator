@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
-**Phase:** 20 of 20 (E2E Demo & Chaos)
-**Plan:** 05 of 05 completed
-**Status:** MILESTONE COMPLETE
-**Last activity:** 2026-01-27 - Completed 20-05-PLAN.md (E2E Validation - Human Verified)
+**Phase:** Complete
+**Plan:** —
+**Status:** SHIPPED
+**Last activity:** 2026-01-27 - Milestone v2.1 archived
 
-Progress: [##########] 100% (5/5 phases complete)
+Progress: [##########] 100% (21/21 plans complete)
 
 ## Project Reference
 
@@ -25,7 +25,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 | v1.0 | SHIPPED | 2026-01-25 |
 | v1.1 | SHIPPED | 2026-01-25 |
 | v2.0 | SHIPPED | 2026-01-26 |
-| v2.1 | IN PROGRESS | — |
+| v2.1 | SHIPPED | 2026-01-27 |
 
 See: .planning/MILESTONES.md
 
@@ -167,8 +167,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Milestone v2.1 complete
-**Resume with:** `/gsd:complete-milestone` to archive v2.1
+**Stopped at:** Milestone v2.1 shipped and archived
+**Resume with:** `/gsd:new-milestone` to start next milestone
 
 ## Phase 16 Completion Summary
 

@@ -1,5 +1,32 @@
 # Project Milestones: Operator
 
+## v2.1 Multi-Subject Support (Shipped: 2026-01-27)
+
+**Delivered:** Protocol-based abstractions enabling any Subject to be monitored by the same operator-core. Second subject (custom distributed rate limiter) proves the AI can diagnose novel systems without system-specific prompts.
+
+**Phases completed:** 16-20 (21 plans total)
+
+**Key accomplishments:**
+- Protocol-based abstractions (SubjectProtocol, InvariantCheckerProtocol) in zero-dependency operator-protocols package
+- Custom rate limiter service (3+ nodes, Redis backend, atomic Lua scripts, Prometheus metrics)
+- operator-ratelimiter package with 5 invariant types (node_down, redis_disconnected, high_latency, counter_drift, ghost_allowing)
+- Multi-subject CLI with --subject flag for selecting tikv or ratelimiter
+- Unified demo framework with same TUI layout for both subjects
+- AI diagnosis quality validated: Claude reasons about rate limiter anomalies without rate-limiter-specific prompts in operator-core
+
+**Stats:**
+- 146 files changed
+- ~18,000 lines added (net)
+- 5 phases, 21 plans
+- 87 commits
+- 2 days from start to ship
+
+**Git range:** `bb2b7a9` (feat(16-01)) → `4711c78` (chore: remove debug prints)
+
+**What's next:** Additional subjects, production hardening, or extended actions
+
+---
+
 ## v2.0 Agent Actions (Shipped: 2026-01-26)
 
 **Delivered:** Action execution framework enabling the AI agent to execute recommendations via PD API with safety controls, approval workflows, and workflow chaining.

@@ -10,20 +10,31 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ## Current State
 
-**Shipped:** v2.0 (2026-01-26)
-**Code:** ~12,200 lines Python across 2 packages (operator-core, operator-tikv)
-**Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Rich TUI, Pydantic
+**Shipped:** v2.1 (2026-01-27)
+**Code:** ~30,000 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
+**Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Redis, FastAPI, Rich TUI, Pydantic
 
 ### What Works
 
-- `./scripts/run-tui.sh` — Rich TUI demo with live panels, key-press chapters, fault injection
-- `operator demo chaos` — Full E2E demo with fault injection and AI diagnosis
-- `operator monitor run` — Continuous invariant checking with ticket creation
+- `./scripts/run-demo.sh tikv` — TiKV demo with node kill chaos and AI diagnosis
+- `./scripts/run-demo.sh ratelimiter` — Rate limiter demo with counter drift and ghost allowing chaos
+- `operator monitor run --subject tikv|ratelimiter` — Continuous invariant checking for either subject
 - `operator agent start` — AI diagnosis daemon processing tickets (can propose actions)
 - `operator tickets list/show/resolve/hold` — Ticket management CLI
 - `operator actions list/show/approve/reject` — Action management CLI
 - 6-node TiKV/PD cluster with Prometheus + Grafana in Docker
-- go-ycsb load generator for traffic simulation
+- 3-node rate limiter cluster with Redis and Prometheus in Docker
+- go-ycsb and Python load generators for traffic simulation
+
+### v2.1 Capabilities
+
+- **Protocol-based Abstractions**: SubjectProtocol and InvariantCheckerProtocol in zero-dependency operator-protocols package
+- **Multi-Subject Support**: Same operator-core works for TiKV and custom rate limiter
+- **Rate Limiter Service**: Custom 3-node distributed rate limiter with Redis backend, atomic Lua scripts, Prometheus metrics
+- **5 Rate Limiter Invariants**: node_down, redis_disconnected, high_latency, counter_drift, ghost_allowing
+- **CLI Subject Selection**: `--subject tikv|ratelimiter` flag
+- **Unified Demo Framework**: Same TUI layout for both subjects with subject-specific health polling and chaos injection
+- **AI Diagnosis Quality**: Claude reasons about rate limiter anomalies without rate-limiter-specific prompts in operator-core
 
 ### v2.0 Capabilities
 
@@ -71,16 +82,19 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Scheduled action execution — v2.0
 - Retry with exponential backoff — v2.0
 
-### Active
+**v2.1:**
+- Protocol-based abstractions (SubjectProtocol, InvariantCheckerProtocol) — v2.1
+- Zero-dependency operator-protocols package — v2.1
+- Custom distributed rate limiter (3+ nodes, Redis backend) — v2.1
+- Docker Compose environment for rate limiter cluster — v2.1
+- operator-ratelimiter package implementing Subject Protocol — v2.1
+- 5 rate limiter invariants (node_down, redis_disconnected, high_latency, counter_drift, ghost_allowing) — v2.1
+- Rate limiter actions (reset_counter, update_limit) — v2.1
+- Multi-subject CLI with --subject flag — v2.1
+- Unified demo framework for both subjects — v2.1
+- AI diagnosis for out-of-distribution system (validated) — v2.1
 
-**v2.1 — Multi-Subject Support (Rate Limiter):**
-- Custom distributed rate limiter (3+ nodes, Redis backend)
-- Docker Compose environment for rate limiter cluster
-- `operator-ratelimiter` subject package implementing Subject Protocol
-- Rate limiting invariant monitoring (requests within limits, consistency)
-- Anomaly detection (rate leaks, false blocks, cross-node inconsistencies)
-- AI diagnosis for out-of-distribution system
-- Basic actions (reset counters, adjust limits)
+### Future
 
 ### Out of Scope
 
@@ -154,4 +168,4 @@ The goal is proving the operator works on systems Claude hasn't seen in training
 | Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
 
 ---
-*Last updated: 2026-01-26 after starting v2.1 milestone*
+*Last updated: 2026-01-27 after shipping v2.1 milestone*
