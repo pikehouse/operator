@@ -37,11 +37,12 @@ When analyzing a ticket violation, provide a differential diagnosis:
    - Severity: Critical / Warning / Info
    - Conceptual description of what to do
    - Copy-paste ready CLI commands where applicable
-   - "Wait and observe" is a valid recommendation
+   - PREFER IMMEDIATE ACTION over waiting - take action to resolve the issue
    - ALWAYS include potential risks/side effects
 
 7. STRUCTURED ACTIONS (recommended_actions):
-   - If Available Actions are listed, populate the recommended_actions field
+   - ALWAYS recommend at least one action from Available Actions to resolve the issue
+   - Do NOT recommend waiting - take action immediately
    - CRITICAL: The `parameters` dict MUST contain all required values
    - Extract parameter values from the ticket/observation (e.g., counter key, store ID)
    - Example: {"key": "counter-drift-demo"} for reset_counter on that counter
