@@ -62,7 +62,7 @@ async def main() -> None:
 
     # Import subject-specific modules
     if subject == "tikv":
-        from demo.tikv import COMPOSE_FILE, TIKV_CHAPTERS, create_fault_chapter, create_recovery_chapter
+        from demo.tikv import COMPOSE_FILE, TIKV_CHAPTERS, create_fault_chapter, create_load_chapter, create_recovery_chapter
         from demo.tikv_health import TiKVHealthPoller
         from demo.tui_integration import TUIDemoController
 
@@ -72,16 +72,16 @@ async def main() -> None:
             poll_interval=2.0,
         )
 
-        # Assemble chapters with fault and recovery
+        # Assemble chapters with load, fault, and recovery
         chapters = [
             TIKV_CHAPTERS[0],  # Welcome
             TIKV_CHAPTERS[1],  # Cluster Health
-            TIKV_CHAPTERS[2],  # Load Generation
-            create_fault_chapter(COMPOSE_FILE),  # Fault Injection (with callback)
-            TIKV_CHAPTERS[3],  # Detection
-            TIKV_CHAPTERS[4],  # AI Diagnosis
-            create_recovery_chapter(COMPOSE_FILE),  # Recovery (with callback)
-            TIKV_CHAPTERS[5],  # Complete
+            create_load_chapter(COMPOSE_FILE),  # Load Generation (starts YCSB)
+            create_fault_chapter(COMPOSE_FILE),  # Fault Injection (kills node)
+            TIKV_CHAPTERS[2],  # Detection
+            TIKV_CHAPTERS[3],  # AI Diagnosis
+            create_recovery_chapter(COMPOSE_FILE),  # Recovery (restarts node)
+            TIKV_CHAPTERS[4],  # Complete
         ]
 
         # Create and run TUI demo
