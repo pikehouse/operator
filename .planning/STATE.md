@@ -4,11 +4,11 @@
 
 **Milestone:** v2.1 Multi-Subject Support (Rate Limiter)
 **Phase:** 19 of 20 (operator-ratelimiter Package)
-**Plan:** 04 of 05 completed
-**Status:** In progress
-**Last activity:** 2026-01-27 - Completed 19-04-PLAN.md (Factory function and CLI integration)
+**Plan:** 05 of 05 completed
+**Status:** Phase complete
+**Last activity:** 2026-01-27 - Completed 19-05-PLAN.md (Testing)
 
-Progress: [########..] 84% (4.6/5 phases complete)
+Progress: [########..] 88% (4.8/5 phases complete)
 
 ## Project Reference
 
@@ -16,7 +16,7 @@ See: .planning/PROJECT.md (updated 2026-01-26)
 
 **Core value:** AI demonstrates real diagnostic reasoning about distributed systems — proving the abstraction works for novel, out-of-distribution systems.
 
-**Current focus:** Phase 19 started - Building operator-ratelimiter package (1/5 plans complete)
+**Current focus:** Phase 19 COMPLETE - operator-ratelimiter package fully tested. Ready for Phase 20.
 
 ## Milestones
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | 16 | Core Abstraction Refactoring | CORE-01 through CORE-05 (5) | COMPLETE |
 | 17 | Rate Limiter Service Foundation | RLSVC-01 through RLSVC-04 (4) | VERIFIED |
 | 18 | Docker Compose Environment | RLSVC-05, DEMO-01 (2) | COMPLETE |
-| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | IN PROGRESS (4/5) |
+| 19 | operator-ratelimiter Package | RLPKG-*, MON-*, ACT-* (11) | COMPLETE (5/5) |
 | 20 | E2E Demo & Chaos | DEMO-02 through DEMO-04 (3) | — |
 
 ## Archives
@@ -128,6 +128,11 @@ See: .planning/MILESTONES.md
 - Lazy import in subject_factory.py prevents loading operator-ratelimiter unless --subject ratelimiter used
 - AVAILABLE_SUBJECTS list now includes both "tikv" and "ratelimiter"
 
+**Key decisions from v2.1 (Phase 19-05):**
+- All tests use mocked clients - no external Redis/HTTP dependencies (19-05-01)
+- Protocol compliance tests mirror operator-tikv patterns for consistency (19-05-02)
+- Grace period testing via manual _first_seen manipulation (19-05-03)
+
 **Research flags for v2.1:**
 - Phase 16 (Core Refactoring): COMPLETE - abstraction validated with 86 passing tests
 - Phase 17 (Lua Scripts): VERIFIED - atomic patterns prevent race conditions (20 concurrent requests, exactly 10 allowed/blocked)
@@ -135,8 +140,8 @@ See: .planning/MILESTONES.md
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** Completed 19-04-PLAN.md (Factory function and CLI integration) - Phase 19 plan 4/5 complete
-**Resume with:** 19-05-PLAN.md (Testing)
+**Stopped at:** Completed 19-05-PLAN.md (Testing) - Phase 19 COMPLETE
+**Resume with:** Phase 20 (E2E Demo & Chaos)
 
 ## Phase 16 Completion Summary
 
@@ -175,13 +180,14 @@ Files created:
 
 Verified: 6 services orchestrated (redis, 3 ratelimiters, prometheus, loadgen). Load generator produces ~10 RPS with burst spikes.
 
-## Phase 19 Progress
+## Phase 19 Completion Summary
 
-Plans 01-04 of 05 completed:
+All 5 plans of Phase 19 completed:
 - 19-01: Created operator-ratelimiter package foundation (HTTP, Redis, Prometheus clients)
 - 19-02: Implemented RateLimiterSubject and RateLimiterInvariantChecker with 5 invariant types
 - 19-03: Added management API actions (reset_counter, update_limit)
 - 19-04: Factory function and CLI integration (--subject ratelimiter)
+- 19-05: Comprehensive unit tests (65 tests) with mocked clients
 
 Files created:
 - packages/operator-ratelimiter/pyproject.toml
@@ -193,13 +199,16 @@ Files created:
 - packages/operator-ratelimiter/src/operator_ratelimiter/subject.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/invariants.py
 - packages/operator-ratelimiter/src/operator_ratelimiter/factory.py
-- packages/ratelimiter-service/tests/test_management_api.py
+- packages/operator-ratelimiter/tests/__init__.py
+- packages/operator-ratelimiter/tests/test_subject.py
+- packages/operator-ratelimiter/tests/test_invariants.py
+- packages/operator-ratelimiter/tests/test_protocol_compliance.py
 
-Next: 19-05 (Testing)
+Total tests: 65 (11 subject + 35 invariants + 19 protocol compliance)
 
 ## Open Issues
 
 *None*
 
 ---
-*State updated: 2026-01-27 (Phase 19 plans 01-04 complete)*
+*State updated: 2026-01-27 (Phase 19 COMPLETE - 5/5 plans done)*
