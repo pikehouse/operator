@@ -21,7 +21,7 @@ Requirements for Multi-Subject Support milestone. Each maps to roadmap phases.
 - [x] **RLSVC-02**: Sliding window counter implemented with atomic Lua scripts
 - [x] **RLSVC-03**: HTTP management API exposes node list, counters, and limits
 - [x] **RLSVC-04**: Prometheus metrics exported from each node
-- [ ] **RLSVC-05**: Docker Compose environment with Redis, nodes, Prometheus
+- [x] **RLSVC-05**: Docker Compose environment with Redis, nodes, Prometheus
 
 ### operator-ratelimiter Package
 
@@ -45,7 +45,7 @@ Requirements for Multi-Subject Support milestone. Each maps to roadmap phases.
 
 ### Demo & Validation
 
-- [ ] **DEMO-01**: Load generator creates realistic traffic patterns
+- [x] **DEMO-01**: Load generator creates realistic traffic patterns
 - [ ] **DEMO-02**: Chaos injection causes counter drift anomaly
 - [ ] **DEMO-03**: Chaos injection causes ghost allowing anomaly
 - [ ] **DEMO-04**: AI diagnosis identifies root cause without rate-limiter-specific prompts
@@ -99,7 +99,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RLSVC-02 | Phase 17 | Complete |
 | RLSVC-03 | Phase 17 | Complete |
 | RLSVC-04 | Phase 17 | Complete |
-| RLSVC-05 | Phase 18 | Pending |
+| RLSVC-05 | Phase 18 | Complete |
 | RLPKG-01 | Phase 19 | Pending |
 | RLPKG-02 | Phase 19 | Pending |
 | RLPKG-03 | Phase 19 | Pending |
@@ -111,7 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MON-05 | Phase 19 | Pending |
 | ACT-01 | Phase 19 | Pending |
 | ACT-02 | Phase 19 | Pending |
-| DEMO-01 | Phase 18 | Pending |
+| DEMO-01 | Phase 18 | Complete |
 | DEMO-02 | Phase 20 | Pending |
 | DEMO-03 | Phase 20 | Pending |
 | DEMO-04 | Phase 20 | Pending |
@@ -123,4 +123,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-26*
-*Last updated: 2026-01-26 (Phase 17 complete)*
+*Last updated: 2026-01-26 (Phase 18 complete)*
