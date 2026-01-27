@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from operator_protocols import InvariantCheckerProtocol, SubjectProtocol
 
 # Hardcoded list of available subjects
-AVAILABLE_SUBJECTS = ["tikv"]
+AVAILABLE_SUBJECTS = ["tikv", "ratelimiter"]
 
 
 async def create_subject(
@@ -32,9 +32,18 @@ async def create_subject(
         ValueError: If subject_name is not recognized
 
     Example:
+        # TiKV subject
         subject, checker = await create_subject(
             "tikv",
             pd_endpoint="http://pd:2379",
+            prometheus_url="http://prometheus:9090",
+        )
+
+        # Rate limiter subject
+        subject, checker = await create_subject(
+            "ratelimiter",
+            ratelimiter_url="http://ratelimiter:8000",
+            redis_url="redis://localhost:6379",
             prometheus_url="http://prometheus:9090",
         )
     """
@@ -43,7 +52,11 @@ async def create_subject(
         from operator_tikv.factory import create_tikv_subject_and_checker
 
         return create_tikv_subject_and_checker(**kwargs)
-    # Future: elif subject_name == "ratelimiter": ...
+    elif subject_name == "ratelimiter":
+        # Lazy import to avoid loading ratelimiter package unless needed
+        from operator_ratelimiter.factory import create_ratelimiter_subject_and_checker
+
+        return create_ratelimiter_subject_and_checker(**kwargs)
     else:
         raise ValueError(
             f"Unknown subject '{subject_name}'. "
