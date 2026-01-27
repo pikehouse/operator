@@ -34,6 +34,7 @@ class DiagnosisContext:
         observation: Current cluster state from subject.observe()
         log_tail: Last N lines from affected component (None in v1)
         similar_tickets: Past diagnoses for same invariant
+        action_definitions: Available actions the agent can recommend
     """
 
     ticket: Ticket
@@ -41,6 +42,7 @@ class DiagnosisContext:
     observation: dict[str, Any]
     log_tail: str | None
     similar_tickets: list[Ticket]
+    action_definitions: list[Any] | None = None
 
 
 class ContextGatherer:
@@ -92,12 +94,18 @@ class ContextGatherer:
         # Similar ticket history (past diagnoses for same invariant)
         similar_tickets = await self._find_similar_tickets(ticket)
 
+        # Get available actions from subject (for structured recommendations)
+        action_definitions = None
+        if hasattr(self.subject, "get_action_definitions"):
+            action_definitions = self.subject.get_action_definitions()
+
         return DiagnosisContext(
             ticket=ticket,
             metric_snapshot=metric_snapshot,
             observation=observation,
             log_tail=log_tail,
             similar_tickets=similar_tickets,
+            action_definitions=action_definitions,
         )
 
     async def _fetch_log_tail(self, store_id: str | None) -> str | None:

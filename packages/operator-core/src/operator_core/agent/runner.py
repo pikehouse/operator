@@ -175,6 +175,9 @@ class AgentRunner:
         print(f"Diagnosing ticket {ticket.id}: {ticket.invariant_name}")
         self._tickets_processed += 1
 
+        # Hold ticket to prevent auto-resolve during diagnosis/action
+        await db.hold_ticket(ticket.id)
+
         try:
             # Gather context
             gatherer = ContextGatherer(self.subject, db)
@@ -239,6 +242,10 @@ class AgentRunner:
                 ticket.id,
                 f"# Diagnosis Error\n\n{type(e).__name__}: {e}",
             )
+
+        finally:
+            # Unhold ticket after diagnosis/action complete (allow auto-resolve)
+            await db.unhold_ticket(ticket.id)
 
     async def _propose_actions_from_diagnosis(
         self,

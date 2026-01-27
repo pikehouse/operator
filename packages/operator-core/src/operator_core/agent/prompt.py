@@ -175,4 +175,19 @@ def build_diagnosis_prompt(context: DiagnosisContext) -> str:
                 sections.append("- **Diagnosis:** None")
             sections.append("")
 
+    # Available actions (for structured recommendations)
+    if context.action_definitions:
+        sections.append("## Available Actions\n")
+        sections.append("When recommending actions, use these exact action names and parameters:\n")
+        for action in context.action_definitions:
+            sections.append(f"### `{action.name}`")
+            sections.append(f"- **Description:** {action.description}")
+            if action.parameters:
+                sections.append("- **Parameters:**")
+                for param_name, param_def in action.parameters.items():
+                    required = "required" if param_def.required else "optional"
+                    sections.append(f"  - `{param_name}` ({param_def.type}, {required}): {param_def.description}")
+            sections.append(f"- **Risk Level:** {action.risk_level}")
+            sections.append("")
+
     return "\n".join(sections)
