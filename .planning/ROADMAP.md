@@ -25,6 +25,12 @@
 - AGENT-03: Agent queries subject metrics to verify fix
 - AGENT-04: Agent outputs verification result to log
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — AgentRunner agentic execution with immediate validate/execute and verification
+- [ ] 21-02-PLAN.md — Demo configuration for EXECUTE mode and autonomous execution
+
 **Success Criteria:**
 1. Agent executes recommended action without human approval in EXECUTE mode
 2. Agent waits configurable delay (5s) then queries subject for verification metrics
@@ -97,7 +103,7 @@ Archived in milestones/v2.1-ROADMAP.md
 | 7-11 | v1.1 | 9/9 | Complete | 2026-01-25 |
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
-| 21 | v2.2 | 0/? | Pending | — |
+| 21 | v2.2 | 0/2 | Planned | — |
 | 22 | v2.2 | 0/? | Pending | — |
 
 ---
@@ -107,3 +113,4 @@ Archived in milestones/v2.1-ROADMAP.md
 *v2.0 archived: 2026-01-26*
 *v2.1 archived: 2026-01-27*
 *v2.2 phases added: 2026-01-27*
+*Phase 21 planned: 2026-01-27*
