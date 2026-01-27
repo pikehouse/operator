@@ -352,6 +352,39 @@ class TestTiKVParameterInference:
         assert result is None
 
 
+class MockTiKVSubject:
+    """Mock TiKV subject for testing."""
+
+    def get_action_definitions(self):
+        return [
+            ActionDefinition(
+                name="drain_store",
+                description="Evict all leaders from a store",
+                action_type=ActionType.SUBJECT,
+                parameters={
+                    "store_id": ParamDef(
+                        type="str",
+                        description="Store ID to drain",
+                        required=True,
+                    )
+                },
+                risk_level="high",
+            )
+        ]
+
+    async def observe(self):
+        return {
+            "stores": [
+                {"id": "1", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-2:20160", "state": "Down"},
+                {"id": "6", "address": "tikv-6:20160", "state": "Up"},
+            ]
+        }
+
+    async def drain_store(self, store_id: str):
+        pass
+
+
 class TestParameterInferenceIntegration:
     """Integration tests for parameter inference in action flow."""
 
@@ -436,3 +469,69 @@ class TestParameterInferenceIntegration:
 
         assert record.success
         assert calls == ["counter-drift-demo"]
+
+    @pytest.mark.asyncio
+    async def test_tikv_drain_store_empty_params_inferred(self, tmp_path):
+        """TiKV drain_store with empty params should succeed via inference."""
+        from operator_core.actions.safety import SafetyController, SafetyMode
+        from operator_core.actions.audit import ActionAuditor
+
+        tikv_subject = MockTiKVSubject()
+
+        # Track calls
+        calls = []
+
+        async def track_drain_store(store_id: str):
+            calls.append(store_id)
+
+        tikv_subject.drain_store = track_drain_store
+
+        # Create executor
+        db_path = tmp_path / "tikv_test.db"
+        auditor = ActionAuditor(db_path)
+        registry = ActionRegistry(tikv_subject)
+        safety = SafetyController(db_path, auditor, mode=SafetyMode.EXECUTE)
+
+        executor = ActionExecutor(
+            db_path=db_path,
+            registry=registry,
+            safety=safety,
+            auditor=auditor,
+            approval_mode=False,
+        )
+
+        # Create runner with executor
+        runner = AgentRunner(
+            subject=tikv_subject,
+            db_path=db_path,
+            executor=executor,
+        )
+
+        # Create recommendation with EMPTY params (simulating Claude's behavior)
+        rec = ActionRecommendation(
+            action_name="drain_store",
+            parameters={},  # Empty - should be inferred
+            reason="Store is down",
+            expected_outcome="Store drained",
+        )
+
+        # Get observation for inference
+        observation = await tikv_subject.observe()
+
+        # Test inference
+        inferred = runner._infer_action_parameters(rec.action_name, observation)
+        assert inferred == {"store_id": "2"}
+
+        # Update rec with inferred params
+        rec.parameters = inferred
+
+        # Proposal should succeed
+        proposal = await executor.propose_action(rec, ticket_id=1)
+        assert proposal.parameters == {"store_id": "2"}
+
+        # Execute should work
+        await executor.validate_proposal(proposal.id)
+        record = await executor.execute_proposal(proposal.id, tikv_subject)
+
+        assert record.success
+        assert calls == ["2"]
