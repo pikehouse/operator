@@ -1,0 +1,22 @@
+services:
+  agent:
+    build:
+      context: ../..
+      dockerfile: docker/agent/Dockerfile
+    container_name: operator-agent
+    networks:
+      - tikv_default
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${HOME}/.operator:/root/.operator
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPERATOR_SAFETY_MODE=execute
+      - PROMETHEUS_URL=http://prometheus:9090
+      - PYTHONUNBUFFERED=1
+    working_dir: /app
+    command: ["python", "-m", "operator_core.agent_lab", "/root/.operator/tickets.db"]
+
+networks:
+  tikv_default:
+    external: true
