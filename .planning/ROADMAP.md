@@ -67,7 +67,7 @@ Plans:
 
 **Completed:** 2026-01-28
 
-### Phase 25: Host Actions
+### Phase 25: Host Actions ✓
 
 **Goal:** Agent can control systemd services and send signals to processes for host-level remediation.
 
@@ -75,19 +75,21 @@ Plans:
 
 **Requirements:** HOST-01, HOST-02, HOST-03, HOST-04, HOST-05, HOST-06, HOST-07 (7)
 
-**Plans:** 3 plans
+**Plans:** 3 plans (3/3 complete)
 
 Plans:
-- [ ] 25-01-PLAN.md — HostActionExecutor with systemd service methods and ServiceWhitelist validation
-- [ ] 25-02-PLAN.md — Process kill with graceful SIGTERM -> SIGKILL escalation and PID validation
-- [ ] 25-03-PLAN.md — Tool registration and framework integration
+- [x] 25-01-PLAN.md — HostActionExecutor with systemd service methods and ServiceWhitelist validation
+- [x] 25-02-PLAN.md — Process kill with graceful SIGTERM -> SIGKILL escalation and PID validation
+- [x] 25-03-PLAN.md — Tool registration and framework integration
 
 **Success Criteria:**
-1. Agent can start/stop/restart systemd services with validation
-2. Agent can send graceful SIGTERM to processes, escalating to SIGKILL after 5s if needed
-3. Service name whitelist prevents operations on unauthorized services
-4. PID validation prevents operations on PID 1 or kernel threads
-5. All host actions use asyncio.create_subprocess_exec without shell=True (command injection prevented)
+1. ✓ Agent can start/stop/restart systemd services with validation
+2. ✓ Agent can send graceful SIGTERM to processes, escalating to SIGKILL after 5s if needed
+3. ✓ Service name whitelist prevents operations on unauthorized services
+4. ✓ PID validation prevents operations on PID 1 or kernel threads
+5. ✓ All host actions use asyncio.create_subprocess_exec without shell=True (command injection prevented)
+
+**Completed:** 2026-01-28
 
 ### Phase 26: Script Execution & Validation
 
@@ -210,7 +212,7 @@ Archived in milestones/v2.2-ROADMAP.md
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
 | 23 | v2.3 | 4/4 | Complete | 2026-01-28 |
 | 24 | v2.3 | 3/3 | Complete | 2026-01-28 |
-| 25 | v2.3 | 0/3 | Pending | — |
+| 25 | v2.3 | 3/3 | Complete | 2026-01-28 |
 | 26 | v2.3 | 0/? | Pending | — |
 | 27 | v2.3 | 0/? | Pending | — |
 | 28 | v2.3 | 0/? | Pending | — |
@@ -228,3 +230,4 @@ Archived in milestones/v2.2-ROADMAP.md
 *Phase 23 complete: 2026-01-28*
 *Phase 24 planned: 2026-01-28*
 *Phase 24 complete: 2026-01-28*
+*Phase 25 complete: 2026-01-28*

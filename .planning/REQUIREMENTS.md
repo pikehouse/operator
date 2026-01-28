@@ -31,15 +31,15 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 - [x] **DOCK-09**: All Docker actions use async executor wrapping (run_in_executor)
 - [x] **DOCK-10**: Docker actions register as ActionType.TOOL in get_general_tools()
 
-### Host Actions
+### Host Actions (Phase 25) ✓
 
-- [ ] **HOST-01**: host_service_start action starts a systemd service
-- [ ] **HOST-02**: host_service_stop action stops a systemd service
-- [ ] **HOST-03**: host_service_restart action restarts a systemd service
-- [ ] **HOST-04**: host_kill_process action sends signal to process (SIGTERM or SIGKILL)
-- [ ] **HOST-05**: Process kill uses graceful pattern: SIGTERM → wait 5s → SIGKILL if still running
-- [ ] **HOST-06**: Host actions validate inputs (service name whitelist, PID > 1 check)
-- [ ] **HOST-07**: Host actions use asyncio.create_subprocess_exec (never shell=True)
+- [x] **HOST-01**: host_service_start action starts a systemd service
+- [x] **HOST-02**: host_service_stop action stops a systemd service
+- [x] **HOST-03**: host_service_restart action restarts a systemd service
+- [x] **HOST-04**: host_kill_process action sends signal to process (SIGTERM or SIGKILL)
+- [x] **HOST-05**: Process kill uses graceful pattern: SIGTERM → wait 5s → SIGKILL if still running
+- [x] **HOST-06**: Host actions validate inputs (service name whitelist, PID > 1 check)
+- [x] **HOST-07**: Host actions use asyncio.create_subprocess_exec (never shell=True)
 
 ### Script Execution
 
@@ -132,13 +132,13 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 | DOCK-08 | Phase 24 | Complete |
 | DOCK-09 | Phase 24 | Complete |
 | DOCK-10 | Phase 24 | Complete |
-| HOST-01 | Phase 25 | Pending |
-| HOST-02 | Phase 25 | Pending |
-| HOST-03 | Phase 25 | Pending |
-| HOST-04 | Phase 25 | Pending |
-| HOST-05 | Phase 25 | Pending |
-| HOST-06 | Phase 25 | Pending |
-| HOST-07 | Phase 25 | Pending |
+| HOST-01 | Phase 25 | Complete |
+| HOST-02 | Phase 25 | Complete |
+| HOST-03 | Phase 25 | Complete |
+| HOST-04 | Phase 25 | Complete |
+| HOST-05 | Phase 25 | Complete |
+| HOST-06 | Phase 25 | Complete |
+| HOST-07 | Phase 25 | Complete |
 | SCRP-01 | Phase 26 | Pending |
 | SCRP-02 | Phase 26 | Pending |
 | SCRP-03 | Phase 26 | Pending |
@@ -174,4 +174,4 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-28 — Phase 24 complete (DOCK-01 through DOCK-10)*
+*Last updated: 2026-01-28 — Phase 25 complete (HOST-01 through HOST-07)*
