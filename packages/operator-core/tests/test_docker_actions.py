@@ -582,3 +582,143 @@ async def test_execute_command_with_workdir():
             tty=False,
             interactive=False,
         )
+
+
+# ===== Integration Tests =====
+
+
+class TestDockerActionIntegration:
+    """Tests for Docker action integration with action framework."""
+
+    def test_docker_tools_in_general_tools(self):
+        """Docker tools should appear in get_general_tools()."""
+        from operator_core.actions.tools import get_general_tools
+
+        tools = get_general_tools()
+        docker_tools = [t for t in tools if t.name.startswith("docker_")]
+
+        assert len(docker_tools) == 8
+        docker_names = {t.name for t in docker_tools}
+        assert "docker_start_container" in docker_names
+        assert "docker_stop_container" in docker_names
+        assert "docker_logs" in docker_names
+        assert "docker_exec" in docker_names
+
+    def test_docker_tools_have_correct_action_type(self):
+        """All Docker tools should have ActionType.TOOL."""
+        from operator_core.actions.tools import get_general_tools
+        from operator_core.actions.types import ActionType
+
+        tools = get_general_tools()
+        docker_tools = [t for t in tools if t.name.startswith("docker_")]
+
+        for tool in docker_tools:
+            assert tool.action_type == ActionType.TOOL
+
+    def test_docker_executors_in_tool_executors(self):
+        """All Docker actions should have executors registered."""
+        from operator_core.actions.tools import TOOL_EXECUTORS
+
+        expected_docker_actions = [
+            "docker_start_container",
+            "docker_stop_container",
+            "docker_restart_container",
+            "docker_logs",
+            "docker_inspect_container",
+            "docker_network_connect",
+            "docker_network_disconnect",
+            "docker_exec",
+        ]
+
+        for action_name in expected_docker_actions:
+            assert action_name in TOOL_EXECUTORS, f"Missing executor for {action_name}"
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_dispatches_to_docker(self):
+        """execute_tool should dispatch Docker actions to DockerActionExecutor."""
+        from operator_core.actions.tools import execute_tool
+
+        with patch('operator_core.docker.actions.docker') as mock_docker:
+            mock_container = MagicMock()
+            mock_container.id = "test123"
+            mock_container.name = "test-container"
+            mock_container.state.status = "running"
+            mock_container.state.running = True
+            mock_container.state.paused = False
+            mock_container.state.exit_code = 0
+            mock_container.state.started_at = None
+            mock_container.config.image = "test-image"
+            mock_container.network_settings.networks = {}
+            mock_docker.container.inspect.return_value = mock_container
+
+            result = await execute_tool(
+                "docker_inspect_container",
+                {"container_id": "test-container"}
+            )
+
+            assert result["id"] == "test123"
+            assert result["name"] == "test-container"
+
+    def test_docker_logs_is_low_risk(self):
+        """docker_logs should be LOW risk (read-only)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        logs_tool = next(t for t in get_docker_tools() if t.name == "docker_logs")
+        assert logs_tool.risk_level == "low"
+        assert logs_tool.requires_approval is False
+
+    def test_docker_inspect_is_low_risk(self):
+        """docker_inspect_container should be LOW risk (read-only)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        inspect_tool = next(t for t in get_docker_tools() if t.name == "docker_inspect_container")
+        assert inspect_tool.risk_level == "low"
+        assert inspect_tool.requires_approval is False
+
+    def test_docker_stop_is_high_risk(self):
+        """docker_stop_container should be HIGH risk (availability impact)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        stop_tool = next(t for t in get_docker_tools() if t.name == "docker_stop_container")
+        assert stop_tool.risk_level == "high"
+        assert stop_tool.requires_approval is True
+
+    def test_docker_restart_is_high_risk(self):
+        """docker_restart_container should be HIGH risk (availability impact)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        restart_tool = next(t for t in get_docker_tools() if t.name == "docker_restart_container")
+        assert restart_tool.risk_level == "high"
+        assert restart_tool.requires_approval is True
+
+    def test_docker_exec_is_high_risk(self):
+        """docker_exec should be HIGH risk (arbitrary execution)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        exec_tool = next(t for t in get_docker_tools() if t.name == "docker_exec")
+        assert exec_tool.risk_level == "high"
+        assert exec_tool.requires_approval is True
+
+    def test_docker_start_is_medium_risk(self):
+        """docker_start_container should be MEDIUM risk (state change but recoverable)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        start_tool = next(t for t in get_docker_tools() if t.name == "docker_start_container")
+        assert start_tool.risk_level == "medium"
+        assert start_tool.requires_approval is True
+
+    def test_docker_network_connect_is_medium_risk(self):
+        """docker_network_connect should be MEDIUM risk (state change but recoverable)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        connect_tool = next(t for t in get_docker_tools() if t.name == "docker_network_connect")
+        assert connect_tool.risk_level == "medium"
+        assert connect_tool.requires_approval is True
+
+    def test_docker_network_disconnect_is_medium_risk(self):
+        """docker_network_disconnect should be MEDIUM risk (state change but recoverable)."""
+        from operator_core.docker.actions import get_docker_tools
+
+        disconnect_tool = next(t for t in get_docker_tools() if t.name == "docker_network_disconnect")
+        assert disconnect_tool.risk_level == "medium"
+        assert disconnect_tool.requires_approval is True

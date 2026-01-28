@@ -17,7 +17,6 @@ from typing import Any
 
 from operator_core.actions.registry import ActionDefinition, ParamDef
 from operator_core.actions.types import ActionType
-from operator_core.docker.actions import DockerActionExecutor
 
 
 def get_general_tools() -> list[ActionDefinition]:
@@ -144,12 +143,14 @@ async def execute_log_message(
     }
 
 
-# Lazy initialization of Docker executor to avoid import issues
-_docker_executor: DockerActionExecutor | None = None
+# Lazy initialization of Docker executor to avoid circular import issues
+_docker_executor = None
 
 
-def _get_docker_executor() -> DockerActionExecutor:
+def _get_docker_executor():
     """Get or create the shared Docker executor instance."""
+    from operator_core.docker.actions import DockerActionExecutor
+
     global _docker_executor
     if _docker_executor is None:
         _docker_executor = DockerActionExecutor()
