@@ -50,6 +50,13 @@ Plans:
 
 **Requirements:** DOCK-01, DOCK-02, DOCK-03, DOCK-04, DOCK-05, DOCK-06, DOCK-07, DOCK-08, DOCK-09, DOCK-10 (10)
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — DockerActionExecutor with container lifecycle (start/stop/restart/inspect)
+- [ ] 24-02-PLAN.md — Logs, network, and exec operations
+- [ ] 24-03-PLAN.md — Tool registration and framework integration
+
 **Success Criteria:**
 1. Agent can start/stop/restart containers with outcomes logged and verified
 2. Agent can retrieve container logs with tail limits (max 10000 lines)
@@ -193,7 +200,7 @@ Archived in milestones/v2.2-ROADMAP.md
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
 | 23 | v2.3 | 4/4 | Complete | 2026-01-28 |
-| 24 | v2.3 | 0/? | Pending | — |
+| 24 | v2.3 | 0/3 | Planned | — |
 | 25 | v2.3 | 0/? | Pending | — |
 | 26 | v2.3 | 0/? | Pending | — |
 | 27 | v2.3 | 0/? | Pending | — |
@@ -210,3 +217,4 @@ Archived in milestones/v2.2-ROADMAP.md
 *v2.3 phases added: 2026-01-27*
 *Phase 23 planned: 2026-01-27*
 *Phase 23 complete: 2026-01-28*
+*Phase 24 planned: 2026-01-28*
