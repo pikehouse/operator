@@ -1,9 +1,13 @@
-"""Service validation for host actions.
+"""Validation utilities for host actions.
 
-Provides service name whitelist to prevent unauthorized operations on critical system services.
+Provides service name whitelist and PID validation to prevent unauthorized
+or dangerous operations.
+
 Per HOST-06: Service name whitelist prevents operations on unauthorized services.
+Per HOST-06: PID > 1 validation prevents signaling init process.
 """
 
+import os
 from typing import Set
 
 
@@ -100,3 +104,39 @@ class ServiceWhitelist:
             raise ValueError(f"Invalid service name: contains path separator '/'")
         if ".." in service_name:
             raise ValueError(f"Invalid service name: contains path traversal '..'")
+
+
+def validate_pid(pid: int) -> None:
+    """Validate PID for signaling operations.
+
+    Args:
+        pid: Process ID to validate
+
+    Raises:
+        ValueError: If PID invalid (<=1, kernel thread)
+        ProcessLookupError: If process doesn't exist
+        PermissionError: If insufficient privileges to signal
+
+    Note:
+        Per HOST-06: PID > 1 check prevents signaling init.
+        Additional kernel thread check (PID < 300) prevents system instability.
+    """
+    if not isinstance(pid, int):
+        raise ValueError(f"PID must be integer, got {type(pid).__name__}")
+
+    # Prevent signaling init (PID 1) or invalid PIDs
+    if pid <= 1:
+        raise ValueError(
+            f"Cannot signal PID {pid}: PID 1 is init process, PID 0/negative invalid"
+        )
+
+    # Prevent signaling kernel threads (conservative threshold)
+    # Kernel threads typically have low PIDs (< 300 on most systems)
+    if pid < 300:
+        raise ValueError(
+            f"Cannot signal PID {pid}: likely kernel thread. "
+            "Only user processes (PID >= 300) can be signaled."
+        )
+
+    # Validate PID exists and we have permission (signal 0 = null signal)
+    os.kill(pid, 0)  # Raises ProcessLookupError or PermissionError
