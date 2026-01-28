@@ -274,3 +274,83 @@ class HostActionExecutor:
             "still_running": still_running,
             "success": not still_running,
         }
+
+
+def get_host_tools() -> list["ActionDefinition"]:
+    """
+    Get host action tool definitions.
+
+    Returns list of ActionDefinition for systemd and process operations.
+    All host actions register as ActionType.TOOL for agent discovery.
+    """
+    from operator_core.actions.registry import ActionDefinition, ParamDef
+    from operator_core.actions.types import ActionType
+
+    return [
+        ActionDefinition(
+            name="host_service_start",
+            description="Start a systemd service (requires whitelist authorization)",
+            parameters={
+                "service_name": ParamDef(
+                    type="str",
+                    description="Service name (e.g., 'nginx', 'redis-server'). Must be in whitelist.",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",  # State change but recoverable
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="host_service_stop",
+            description="Stop a systemd service gracefully",
+            parameters={
+                "service_name": ParamDef(
+                    type="str",
+                    description="Service name to stop. Must be in whitelist.",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",  # Availability impact
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="host_service_restart",
+            description="Restart a systemd service (stop then start)",
+            parameters={
+                "service_name": ParamDef(
+                    type="str",
+                    description="Service name to restart. Must be in whitelist.",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",  # Temporary disruption but recoverable
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="host_kill_process",
+            description="Send signal to process (SIGTERM for graceful, escalates to SIGKILL after 5s if needed)",
+            parameters={
+                "pid": ParamDef(
+                    type="int",
+                    description="Process ID to signal (must be >= 300, not kernel thread)",
+                    required=True,
+                ),
+                "signal": ParamDef(
+                    type="str",
+                    description="Signal type: 'SIGTERM' (default, graceful) or 'SIGKILL' (force)",
+                    required=False,
+                ),
+                "graceful_timeout": ParamDef(
+                    type="int",
+                    description="Seconds to wait before SIGKILL escalation (default: 5)",
+                    required=False,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",  # Process termination impacts availability
+            requires_approval=True,
+        ),
+    ]
