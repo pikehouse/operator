@@ -4,6 +4,8 @@ services:
       context: ../..
       dockerfile: docker/agent/Dockerfile
     container_name: operator-agent
+    env_file:
+      - ../../.env
     networks:
       - tikv_default
     volumes:
