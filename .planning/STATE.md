@@ -4,9 +4,9 @@
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
 **Phase:** Phase 26 - Script Execution & Validation (IN PROGRESS)
-**Plan:** 01 of 3 complete
+**Plan:** 02 of 3 complete
 **Status:** In progress
-**Last activity:** 2026-01-28 — Completed 26-01-PLAN.md (script validation)
+**Last activity:** 2026-01-28 — Completed 26-02-PLAN.md (script execution)
 
 Progress: [████████░░] 50% (Phase 4 of 7 in progress)
 
@@ -38,7 +38,7 @@ See: .planning/MILESTONES.md
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Complete ✓ |
-| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | In Progress (Plan 01/3) |
+| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | In Progress (Plan 02/3) |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
 | 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
 | 29 | Demo Scenarios | DEMO-01, DEMO-02 (2) | Pending |
@@ -187,10 +187,18 @@ See: .planning/MILESTONES.md
 - 10000 character limit for script size (VALD-05)
 - ValidationResult includes layer field for debugging which validation failed
 
+**Key decisions from v2.3 (Phase 26 Plan 02):**
+- Bash syntax validation with bash -n subprocess at execution time (async)
+- Timeout clamped to MAX_TIMEOUT (300s) to prevent infinite resource consumption
+- ExecutionResult includes timeout flag separate from success field
+- Docker exceptions captured in stderr field (not re-raised)
+- Exit code extraction from Docker error messages with fallback to 1
+- Temporary file cleanup with Path.unlink(missing_ok=True) for robustness
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 26-01-PLAN.md (script validation) - Phase 26 in progress
+**Stopped at:** Completed 26-02-PLAN.md (script execution) - Phase 26 in progress
 **Resume file:** None
 
 ## Open Issues
@@ -204,4 +212,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 26 Plan 01 complete)*
+*State updated: 2026-01-28 (Phase 26 Plan 02 complete)*
