@@ -180,4 +180,41 @@ AFTER UPDATE ON workflows
 BEGIN
     UPDATE workflows SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Agent session audit tables for Phase 31
+CREATE TABLE IF NOT EXISTS agent_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL UNIQUE,        -- Format: {timestamp}-{uuid[:8]}
+    ticket_id INTEGER,                      -- FK to tickets (NULL if not ticket-related)
+    status TEXT NOT NULL DEFAULT 'running', -- running, completed, failed, escalated
+    started_at TEXT NOT NULL,               -- ISO8601 timestamp
+    ended_at TEXT,                          -- ISO8601 timestamp when session ended
+    outcome_summary TEXT,                   -- Claude's final summary (Haiku-summarized)
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ticket_id) REFERENCES tickets(id)
+);
+
+CREATE TABLE IF NOT EXISTS agent_log_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,               -- FK to agent_sessions.session_id
+    entry_type TEXT NOT NULL,               -- reasoning, tool_call, tool_result
+    content TEXT NOT NULL,                  -- The summarized content
+    raw_content TEXT,                       -- Optional: full content before summarization
+    tool_name TEXT,                         -- For tool_call/tool_result entries
+    tool_params TEXT,                       -- JSON for tool_call
+    exit_code INTEGER,                      -- For tool_result entries
+    timestamp TEXT NOT NULL,                -- ISO8601 timestamp
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES agent_sessions(session_id)
+);
+
+-- Indexes for agent audit tables
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_ticket
+ON agent_sessions(ticket_id);
+
+CREATE INDEX IF NOT EXISTS idx_agent_sessions_status
+ON agent_sessions(status);
+
+CREATE INDEX IF NOT EXISTS idx_agent_log_entries_session
+ON agent_log_entries(session_id);
 """
