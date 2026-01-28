@@ -4,9 +4,9 @@
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
 **Phase:** Phase 24 - Docker Actions
-**Plan:** 01 of 4
+**Plan:** 02 of 4
 **Status:** In progress
-**Last activity:** 2026-01-28 — Completed 24-01-PLAN.md
+**Last activity:** 2026-01-28 — Completed 24-02-PLAN.md
 
 Progress: [█████░░░░░] 57% (Phase 1 of 7 complete)
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
-| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | In progress (Plan 01 complete) |
+| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | In progress (Plans 01-02 complete) |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
@@ -146,10 +146,19 @@ See: .planning/MILESTONES.md
 - Datetime fields serialized with .isoformat() for JSON compatibility
 - Graceful handling of None values in optional fields (started_at)
 
+**Key decisions from v2.3 (Phase 24 Plan 02):**
+- Default tail 100 lines for get_container_logs (sufficient for most debugging)
+- MAX_TAIL 10000 lines enforced silently (prevents memory exhaustion attacks)
+- Never use follow=True in logs (blocks indefinitely, unsuitable for async)
+- Always include timestamps in logs (essential for debugging)
+- Network validation before connect (better error messages than docker exception)
+- execute_command catches all exceptions (returns in error field, not raised)
+- Non-interactive exec mode (tty=False, interactive=False for programmatic access)
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 24-01-PLAN.md (Docker lifecycle actions)
+**Stopped at:** Completed 24-02-PLAN.md (Docker logs, network, and exec operations)
 **Resume file:** None
 
 ## Open Issues
@@ -163,4 +172,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 24 Plan 01 complete)*
+*State updated: 2026-01-28 (Phase 24 Plan 02 complete)*
