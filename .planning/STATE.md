@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.0 Operator Laboratory
-**Phase:** Phase 30 - Core Agent (PENDING)
-**Plan:** Not started
-**Status:** New milestone created
-**Last activity:** 2026-01-28 — Pivot from v2.3 to v3.0 Laboratory approach
+**Phase:** Phase 30 - Core Agent (IN PROGRESS)
+**Plan:** 30-01 complete (1 of 1)
+**Status:** Phase 30 complete - ready for Phase 31
+**Last activity:** 2026-01-28 — Completed 30-01-PLAN.md (agent container, shell tool, audit logging)
 
-Progress: [░░░░░░░░░░] 0% (Phase 0 of 3 complete)
+Progress: [███░░░░░░░] 33% (Phase 1 of 3 complete)
 
 ## Project Reference
 
@@ -100,21 +100,30 @@ See: .planning/MILESTONES.md
 
 ## v3.0 Design Decisions
 
-**The Three Tools:**
-1. `shell(command, reasoning)` — Execute any bash command, log everything
-2. `web_search(query, reasoning)` — Search for documentation/solutions
-3. `web_fetch(url, reasoning)` — Fetch and extract content from a URL
+**The Tool:**
+1. `shell(command, reasoning)` — Execute any bash command, pure execution function (agent loop handles logging)
 
 **Container environment:**
-- Python 3.12 base image
-- Docker CLI (socket mounted)
-- Standard tools: curl, wget, jq, vim, git, netcat, dig, ping, htop
-- Python packages: anthropic, httpx, redis, pyyaml
+- Python 3.12 base image (python:3.12-slim)
+- Docker CLI (docker.io package)
+- Standard tools: curl, wget, jq, vim, git, netcat, dig, ping, htop, tcpdump, traceroute, nmap
+- Python packages: anthropic, httpx, redis, pyyaml, pandas, numpy, prometheus-client
+
+**Audit logging:**
+- SessionAuditor class logs full conversation history to JSON
+- Session ID format: {timestamp}-{uuid4[:8]}
+- Integration point: agent loop calls SessionAuditor.log_tool_call() after each shell() execution
 
 **Safety model:**
 - Container is the sandbox
 - If Claude breaks everything, docker-compose down/up resets
 - Audit everything, restrict nothing
+
+**Architecture decisions (Phase 30):**
+- shell() is a pure execution function with no internal logging
+- Phase 31 agent loop owns conversation management and audit logging
+- No command sanitization - direct subprocess execution ("let Claude cook")
+- 120 second default timeout for longer operations like docker pulls
 
 **Path to production:**
 - Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
@@ -122,9 +131,10 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-28
-**Stopped at:** Created v3.0 milestone, archived v2.3
+**Last session:** 2026-01-28T09:43:05Z
+**Stopped at:** Completed 30-01-PLAN.md - agent container, shell() tool, SessionAuditor
 **Resume file:** None
+**Next:** Phase 31 - Agent Loop implementation
 
 ## Open Issues
 
