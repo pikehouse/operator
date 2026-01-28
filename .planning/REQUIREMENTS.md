@@ -7,16 +7,16 @@
 
 Requirements for Infrastructure Actions & Script Execution milestone.
 
-### Safety Enhancement (Phase 0)
+### Safety Enhancement (Phase 23) ✓
 
-- [ ] **SAFE-01**: Approval workflow re-verifies state immediately before execution (TOCTOU resistance)
-- [ ] **SAFE-02**: Approval tokens expire after 60 seconds
-- [ ] **SAFE-03**: Requester identity maintained through action chain (not just agent identity)
-- [ ] **SAFE-04**: Dual authorization model: requester permission AND agent capability
-- [ ] **SAFE-05**: Audit logs include both requester ID and agent ID
-- [ ] **SAFE-06**: Audit logs redact secrets before logging (API_KEY=, password=, token= patterns)
-- [ ] **SAFE-07**: Session-level cumulative risk tracking across action chains
-- [ ] **SAFE-08**: Kill switch can force-terminate in-flight operations (not just block new ones)
+- [x] **SAFE-01**: Approval workflow re-verifies state immediately before execution (TOCTOU resistance)
+- [x] **SAFE-02**: Approval tokens expire after 60 seconds
+- [x] **SAFE-03**: Requester identity maintained through action chain (not just agent identity)
+- [x] **SAFE-04**: Dual authorization model: requester permission AND agent capability
+- [x] **SAFE-05**: Audit logs include both requester ID and agent ID
+- [x] **SAFE-06**: Audit logs redact secrets before logging (API_KEY=, password=, token= patterns)
+- [x] **SAFE-07**: Session-level cumulative risk tracking across action chains
+- [x] **SAFE-08**: Kill switch can force-terminate in-flight operations (not just block new ones)
 
 ### Docker Actions
 
@@ -114,14 +114,14 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SAFE-01 | Phase 23 | Pending |
-| SAFE-02 | Phase 23 | Pending |
-| SAFE-03 | Phase 23 | Pending |
-| SAFE-04 | Phase 23 | Pending |
-| SAFE-05 | Phase 23 | Pending |
-| SAFE-06 | Phase 23 | Pending |
-| SAFE-07 | Phase 23 | Pending |
-| SAFE-08 | Phase 23 | Pending |
+| SAFE-01 | Phase 23 | Complete |
+| SAFE-02 | Phase 23 | Complete |
+| SAFE-03 | Phase 23 | Complete |
+| SAFE-04 | Phase 23 | Complete |
+| SAFE-05 | Phase 23 | Complete |
+| SAFE-06 | Phase 23 | Complete |
+| SAFE-07 | Phase 23 | Complete |
+| SAFE-08 | Phase 23 | Complete |
 | DOCK-01 | Phase 24 | Pending |
 | DOCK-02 | Phase 24 | Pending |
 | DOCK-03 | Phase 24 | Pending |
@@ -174,4 +174,4 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 after initial definition*
+*Last updated: 2026-01-28 — Phase 23 complete (SAFE-01 through SAFE-08)*
