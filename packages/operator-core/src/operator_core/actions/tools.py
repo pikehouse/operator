@@ -21,7 +21,7 @@ from operator_core.actions.types import ActionType
 
 def get_general_tools() -> list[ActionDefinition]:
     """
-    Get list of general-purpose tool definitions including Docker and Host actions.
+    Get list of general-purpose tool definitions including Docker, Host, and Script actions.
 
     These tools are available regardless of subject and can be used
     in any workflow for common operations.
@@ -31,6 +31,7 @@ def get_general_tools() -> list[ActionDefinition]:
     """
     from operator_core.docker.actions import get_docker_tools
     from operator_core.host.actions import get_host_tools
+    from operator_core.scripts import get_script_tools
 
     base_tools = [
         ActionDefinition(
@@ -75,8 +76,9 @@ def get_general_tools() -> list[ActionDefinition]:
 
     docker_tools = get_docker_tools()
     host_tools = get_host_tools()
+    script_tools = get_script_tools()
 
-    return base_tools + docker_tools + host_tools
+    return base_tools + docker_tools + host_tools + script_tools
 
 
 async def execute_wait(seconds: int, reason: str | None = None) -> dict[str, Any]:
@@ -173,6 +175,20 @@ def _get_host_executor():
     return _host_executor
 
 
+# Lazy initialization of Script executor to avoid circular import issues
+_script_executor = None
+
+
+def _get_script_executor():
+    """Get or create the shared Script executor instance."""
+    from operator_core.scripts import ScriptExecutor
+
+    global _script_executor
+    if _script_executor is None:
+        _script_executor = ScriptExecutor()
+    return _script_executor
+
+
 # Map tool names to their execution functions
 TOOL_EXECUTORS = {
     "wait": execute_wait,
@@ -191,6 +207,8 @@ TOOL_EXECUTORS = {
     "host_service_stop": lambda **kw: _get_host_executor().stop_service(**kw),
     "host_service_restart": lambda **kw: _get_host_executor().restart_service(**kw),
     "host_kill_process": lambda **kw: _get_host_executor().kill_process(**kw),
+    # Script tools
+    "execute_script": lambda **kw: _get_script_executor().execute(**kw),
 }
 
 
