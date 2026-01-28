@@ -25,6 +25,14 @@
 
 **Requirements:** SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, SAFE-06, SAFE-07, SAFE-08 (8)
 
+**Plans:** 4 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — Identity & dual authorization foundation (requester_id, agent_id fields)
+- [ ] 23-02-PLAN.md — Secret redaction in audit logs (detect-secrets integration)
+- [ ] 23-03-PLAN.md — TOCTOU-resistant approval workflow with token expiration
+- [ ] 23-04-PLAN.md — Session risk tracking & enhanced kill switch
+
 **Success Criteria:**
 1. User approves action, system state changes, approval workflow detects mismatch and blocks execution (TOCTOU resistance verified)
 2. Audit logs show both requester identity and agent identity for all actions
@@ -169,7 +177,7 @@ Archived in milestones/v2.1-ROADMAP.md
 
 Archived in milestones/v2.2-ROADMAP.md
 
-**Summary:** 2 phases, 3 plans total. Complete agentic loop (detect → diagnose → act → verify), parameter inference fallback, EXECUTE mode configuration, demo narratives updated for remediation flow.
+**Summary:** 2 phases, 3 plans total. Complete agentic loop (detect -> diagnose -> act -> verify), parameter inference fallback, EXECUTE mode configuration, demo narratives updated for remediation flow.
 
 </details>
 
@@ -182,7 +190,7 @@ Archived in milestones/v2.2-ROADMAP.md
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
-| 23 | v2.3 | 0/? | Pending | — |
+| 23 | v2.3 | 0/4 | Planned | — |
 | 24 | v2.3 | 0/? | Pending | — |
 | 25 | v2.3 | 0/? | Pending | — |
 | 26 | v2.3 | 0/? | Pending | — |
@@ -198,3 +206,4 @@ Archived in milestones/v2.2-ROADMAP.md
 *v2.1 archived: 2026-01-27*
 *v2.2 archived: 2026-01-27*
 *v2.3 phases added: 2026-01-27*
+*Phase 23 planned: 2026-01-27*
