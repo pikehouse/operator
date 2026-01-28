@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.0 Operator Laboratory
-**Phase:** Phase 30 - Core Agent (IN PROGRESS)
-**Plan:** 30-01 complete (1 of 1)
-**Status:** Phase 30 complete - ready for Phase 31
-**Last activity:** 2026-01-28 — Completed 30-01-PLAN.md (agent container, shell tool, audit logging)
+**Phase:** Phase 31 - Agent Loop (IN PROGRESS)
+**Plan:** 31-01 complete (1 of 1)
+**Status:** Phase 31 complete - ready for Phase 32
+**Last activity:** 2026-01-28 — Completed 31-01-PLAN.md (agent loop with tool_runner, Haiku summarization, database audit)
 
-Progress: [███░░░░░░░] 33% (Phase 1 of 3 complete)
+Progress: [██████░░░░] 67% (Phase 2 of 3 complete)
 
 ## Project Reference
 
@@ -37,7 +37,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Status |
 |-------|------|--------|
 | 30 | Core Agent | ✓ Complete |
-| 31 | Agent Loop | Pending |
+| 31 | Agent Loop | ✓ Complete |
 | 32 | Integration & Demo | Pending |
 
 **Total:** 3 phases
@@ -49,12 +49,14 @@ See: .planning/MILESTONES.md
 - `web_fetch(url, reasoning)` — read specific pages
 - Audit log format (JSON, per-session)
 
-### Phase 31: Agent Loop
-- Health check trigger (poll Prometheus or receive alerts)
-- Claude conversation loop with tool execution
-- Session management (start, execute, save audit log)
-- System prompt for SRE agent
-- Core loop < 200 lines
+### Phase 31: Agent Loop ✓
+- Core ~170 line agent loop using tool_runner
+- Polls database for tickets every 1 second
+- Synchronous shell() with @beta_tool decorator
+- Haiku summarization for audit logs
+- Database audit logging (agent_sessions, agent_log_entries)
+- SRE system prompt for autonomous operation
+- Ticket status updates (resolved/escalated)
 
 ### Phase 32: Integration & Demo
 - Docker Compose with agent container alongside subjects
@@ -125,16 +127,23 @@ See: .planning/MILESTONES.md
 - No command sanitization - direct subprocess execution ("let Claude cook")
 - 120 second default timeout for longer operations like docker pulls
 
+**Architecture decisions (Phase 31):**
+- Synchronous shell() for tool_runner compatibility (tool_runner requires sync tools)
+- Haiku summarization before database logging for concise audit trail
+- 1-second polling interval balances responsiveness and database load
+- Database audit logging instead of JSON files for queryability
+- Separate sync and async shell functions (async in tools.py for compatibility, sync in loop.py for tool_runner)
+
 **Path to production:**
 - Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
 - The audit layer carries forward unchanged
 
 ## Session Continuity
 
-**Last session:** 2026-01-28T09:43:05Z
-**Stopped at:** Completed 30-01-PLAN.md - agent container, shell() tool, SessionAuditor
+**Last session:** 2026-01-28T18:54:05Z
+**Stopped at:** Completed 31-01-PLAN.md - agent loop with tool_runner, Haiku summarization, database audit
 **Resume file:** None
-**Next:** Phase 31 - Agent Loop implementation
+**Next:** Phase 32 - Integration & Demo
 
 ## Open Issues
 
@@ -147,4 +156,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 30 complete)*
+*State updated: 2026-01-28 (Phase 31 complete)*
