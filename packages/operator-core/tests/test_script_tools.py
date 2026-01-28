@@ -115,9 +115,10 @@ async def test_execute_tool_calls_script_executor():
         )
 
         # Verify ScriptExecutor.execute was called with correct parameters
+        # Lambda wrapper maps script_content -> content
         mock_execute.assert_called_once()
         call_args = mock_execute.call_args
-        assert call_args[1]["script_content"] == "print('Hello from script')"
+        assert call_args[1]["content"] == "print('Hello from script')"
         assert call_args[1]["script_type"] == "python"
         assert call_args[1]["timeout"] == 30
 
@@ -150,11 +151,10 @@ async def test_execute_tool_uses_default_timeout():
         )
 
         # Verify ScriptExecutor.execute was called
-        # Note: Default timeout is handled by ScriptExecutor, not the tool
-        # The lambda wrapper just passes through the parameters
+        # Lambda wrapper maps script_content -> content
         mock_execute.assert_called_once()
         call_args = mock_execute.call_args
-        assert call_args[1]["script_content"] == "echo 'test'"
+        assert call_args[1]["content"] == "echo 'test'"
         assert call_args[1]["script_type"] == "bash"
 
 

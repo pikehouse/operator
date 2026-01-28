@@ -208,7 +208,11 @@ TOOL_EXECUTORS = {
     "host_service_restart": lambda **kw: _get_host_executor().restart_service(**kw),
     "host_kill_process": lambda **kw: _get_host_executor().kill_process(**kw),
     # Script tools
-    "execute_script": lambda **kw: _get_script_executor().execute(**kw),
+    "execute_script": lambda **kw: _get_script_executor().execute(
+        content=kw.pop("script_content"),
+        script_type=kw.pop("script_type"),
+        **kw,
+    ),
 }
 
 
