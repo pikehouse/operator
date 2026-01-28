@@ -29,5 +29,11 @@ RUN pip install --no-cache-dir \
     numpy \
     prometheus-client
 
+# Copy and install operator packages (protocols first, then core)
+COPY packages/operator-protocols /app/packages/operator-protocols
+COPY packages/operator-core /app/packages/operator-core
+RUN pip install --no-cache-dir -e /app/packages/operator-protocols
+RUN pip install --no-cache-dir -e /app/packages/operator-core
+
 # Create audit logs directory
 RUN mkdir -p /app/audit_logs
