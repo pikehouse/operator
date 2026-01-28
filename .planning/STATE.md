@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.0 Operator Laboratory
-**Phase:** Phase 31 - Agent Loop (COMPLETE)
-**Plan:** 31-02 complete (2 of 2)
-**Status:** Phase 31 complete - ready for Phase 32
-**Last activity:** 2026-01-28 — Completed 31-02-PLAN.md (tool call and result audit logging)
+**Phase:** Phase 32 - Integration & Demo (IN PROGRESS)
+**Plan:** 32-03 complete (3 of 4)
+**Status:** Phase 32 in progress
+**Last activity:** 2026-01-28 — Completed 32-03-PLAN.md (TUI agent_lab integration)
 
-Progress: [██████░░░░] 67% (Phase 2 of 3 complete)
+Progress: [███████░░░] 75% (Phase 2 of 3 complete, Phase 3 in progress)
 
 ## Project Reference
 
@@ -59,11 +59,12 @@ See: .planning/MILESTONES.md
 - SRE system prompt for autonomous operation
 - Ticket status updates (resolved/escalated)
 
-### Phase 32: Integration & Demo
+### Phase 32: Integration & Demo (In Progress)
 - Docker Compose with agent container alongside subjects
 - Agent can reach Prometheus, subjects, internet
 - TiKV failure scenario validated
 - Audit log review tooling
+- ✓ 32-03: TUI spawns agent_lab subprocess with real-time streaming
 
 ## What's Being Eliminated
 
@@ -137,16 +138,22 @@ See: .planning/MILESTONES.md
 - Global state for tool result capture (_last_shell_result) since tool_runner doesn't yield results separately
 - Tool calls logged on ToolUseBlock detection, results logged after execution completes
 
+**Architecture decisions (Phase 32-03):**
+- TUI spawns agent_lab module directly (not CLI wrapper) for cleaner integration
+- Increased agent buffer size to 100 lines for verbose reasoning/tool output
+- Demo chapters emphasize autonomous operation (no playbook, no approval)
+- Agent panel streams real-time Claude reasoning and tool execution
+
 **Path to production:**
 - Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
 - The audit layer carries forward unchanged
 
 ## Session Continuity
 
-**Last session:** 2026-01-28T19:24:59Z
-**Stopped at:** Completed 31-02-PLAN.md - tool call and result audit logging
+**Last session:** 2026-01-28T20:43:01Z
+**Stopped at:** Completed 32-03-PLAN.md - TUI agent_lab integration
 **Resume file:** None
-**Next:** Phase 32 - Integration & Demo
+**Next:** 32-04 - Docker Compose integration
 
 ## Open Issues
 
@@ -159,4 +166,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 31 complete)*
+*State updated: 2026-01-28 (Phase 32 in progress - 32-03 complete)*
