@@ -20,12 +20,18 @@ Per project patterns:
 - Log all lifecycle events via auditor
 """
 
+import asyncio
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from operator_core.actions.audit import ActionAuditor
+from operator_core.actions.exceptions import (
+    ApprovalExpiredError,
+    InvalidTokenError,
+    StateChangedError,
+)
 from operator_core.actions.registry import ActionDefinition, ActionRegistry
 from operator_core.actions.retry import RetryConfig
 from operator_core.actions.safety import ObserveOnlyError, SafetyController
@@ -117,6 +123,9 @@ class ActionExecutor:
         else:
             self._approval_mode = approval_mode
 
+        # TOCTOU defense: asyncio.Lock prevents concurrent execution (SAFE-01)
+        self._execution_lock = asyncio.Lock()
+
     def _requires_approval(self, proposal: ActionProposal) -> bool:
         """
         Check if a proposal requires human approval before execution.
@@ -135,6 +144,26 @@ class ActionExecutor:
             True if approval is required, False otherwise
         """
         return self._approval_mode
+
+    def _is_approval_expired(self, proposal: ActionProposal) -> tuple[bool, float]:
+        """
+        Check if approval token has expired (SAFE-02).
+
+        Approval tokens expire after 60 seconds to prevent stale approvals.
+
+        Args:
+            proposal: The proposal to check
+
+        Returns:
+            Tuple of (is_expired, age_seconds)
+        """
+        if proposal.approved_at is None:
+            return (False, 0.0)  # Not approved yet
+
+        age_seconds = (datetime.now() - proposal.approved_at).total_seconds()
+        is_expired = age_seconds > 60.0
+
+        return (is_expired, age_seconds)
 
     def get_all_definitions(self) -> list[ActionDefinition]:
         """
@@ -353,16 +382,21 @@ class ActionExecutor:
         self,
         proposal_id: int,
         subject: "Subject",
+        approval_token: str | None = None,
     ) -> ActionRecord:
         """
-        Execute a validated proposal against the subject.
+        Execute a validated proposal against the subject with TOCTOU resistance.
 
-        Note: This method exists for foundation completeness. Actual
-        execution is triggered by the approval workflow in Phase 14.
+        Implements double-check pattern with optimistic locking:
+        1. Check outside lock (fast path for rejecting invalid states)
+        2. Acquire lock (serialize concurrent execution attempts)
+        3. Re-check inside lock (detect concurrent modifications)
+        4. Update with version check (atomic state transition)
 
         Args:
             proposal_id: ID of the proposal to execute
             subject: Subject instance to execute action against
+            approval_token: Approval token (required if approval mode enabled)
 
         Returns:
             ActionRecord with execution results
@@ -370,6 +404,9 @@ class ActionExecutor:
         Raises:
             ObserveOnlyError: If safety mode is OBSERVE
             ApprovalRequiredError: If approval mode is on but proposal not approved
+            ApprovalExpiredError: If approval older than 60 seconds
+            InvalidTokenError: If approval_token doesn't match stored token
+            StateChangedError: If proposal state changed between approval and execution
             ValueError: If proposal not found or not validated
         """
         # Check safety - execution blocked in observe mode
@@ -378,16 +415,12 @@ class ActionExecutor:
         # Lazy import to avoid circular import
         from operator_core.db.actions import ActionDB
 
+        # PHASE 1: Pre-check outside lock (fast rejection)
         async with ActionDB(self.db_path) as db:
             proposal = await db.get_proposal(proposal_id)
 
             if proposal is None:
                 raise ValueError(f"Proposal {proposal_id} not found")
-
-            # Check if approval is required
-            if self._requires_approval(proposal):
-                if not proposal.is_approved:
-                    raise ApprovalRequiredError(proposal.id, proposal.action_name)
 
             if proposal.status != ActionStatus.VALIDATED:
                 raise ValueError(
@@ -395,74 +428,134 @@ class ActionExecutor:
                     "expected 'validated'"
                 )
 
-            # Update status to executing
-            await db.update_proposal_status(proposal_id, ActionStatus.EXECUTING)
+            # Check if approval is required
+            if self._requires_approval(proposal):
+                if not proposal.is_approved:
+                    raise ApprovalRequiredError(proposal.id, proposal.action_name)
 
-            # Log execution started
-            await self._auditor.log_execution_started(proposal_id)
+                # Check approval expiration (SAFE-02)
+                is_expired, age_seconds = self._is_approval_expired(proposal)
+                if is_expired:
+                    raise ApprovalExpiredError(proposal.id, age_seconds)
 
-            # Create execution record
-            record = ActionRecord(
-                proposal_id=proposal_id,
-                started_at=datetime.now(),
-            )
-            record = await db.create_record(record)
+                # Check approval token match (SAFE-02)
+                if approval_token != proposal.approval_token:
+                    raise InvalidTokenError(proposal.id)
 
-            # Execute the action
-            start_time = datetime.now()
-            success = False
-            error_message: str | None = None
-            result_data: dict[str, Any] | None = None
+            # Remember version for optimistic lock check
+            read_version = proposal.version
 
-            try:
-                if proposal.action_type == ActionType.TOOL:
-                    # Execute general tool
-                    result = await execute_tool(
-                        proposal.action_name,
-                        proposal.parameters,
+        # PHASE 2: Acquire lock to serialize execution attempts (SAFE-01)
+        async with self._execution_lock:
+            # PHASE 3: Re-check inside lock (detect concurrent modifications)
+            async with ActionDB(self.db_path) as db:
+                # Re-read proposal to detect concurrent changes
+                proposal = await db.get_proposal(proposal_id)
+
+                if proposal is None:
+                    raise StateChangedError(proposal_id, "proposal deleted")
+
+                if proposal.status != ActionStatus.VALIDATED:
+                    raise StateChangedError(
+                        proposal_id,
+                        f"status changed to {proposal.status.value}"
                     )
-                else:
-                    # Execute subject method dynamically
-                    method = getattr(subject, proposal.action_name, None)
-                    if method is None:
-                        raise ValueError(
-                            f"Subject has no method '{proposal.action_name}'"
+
+                # Check if approval is still valid
+                if self._requires_approval(proposal):
+                    if not proposal.is_approved:
+                        raise StateChangedError(proposal_id, "approval revoked")
+
+                    # Re-check expiration in case time passed while waiting for lock
+                    is_expired, age_seconds = self._is_approval_expired(proposal)
+                    if is_expired:
+                        raise ApprovalExpiredError(proposal.id, age_seconds)
+
+                    # Re-check token
+                    if approval_token != proposal.approval_token:
+                        raise InvalidTokenError(proposal.id)
+
+                # PHASE 4: Atomic state transition with version check
+                success = await db.update_proposal_status_with_version(
+                    proposal_id, ActionStatus.EXECUTING, read_version
+                )
+
+                if not success:
+                    # Version mismatch = concurrent modification
+                    raise StateChangedError(
+                        proposal_id,
+                        "concurrent modification detected (version mismatch)"
+                    )
+
+                # Log execution started with dual identity (SAFE-04, SAFE-05)
+                await self._auditor.log_execution_started(
+                    proposal_id,
+                    requester_id=proposal.requester_id,
+                    agent_id=proposal.agent_id,
+                )
+
+                # Create execution record
+                record = ActionRecord(
+                    proposal_id=proposal_id,
+                    started_at=datetime.now(),
+                )
+                record = await db.create_record(record)
+
+                # Execute the action
+                start_time = datetime.now()
+                success = False
+                error_message: str | None = None
+                result_data: dict[str, Any] | None = None
+
+                try:
+                    if proposal.action_type == ActionType.TOOL:
+                        # Execute general tool
+                        result = await execute_tool(
+                            proposal.action_name,
+                            proposal.parameters,
                         )
-                    result = await method(**proposal.parameters)
+                    else:
+                        # Execute subject method dynamically
+                        method = getattr(subject, proposal.action_name, None)
+                        if method is None:
+                            raise ValueError(
+                                f"Subject has no method '{proposal.action_name}'"
+                            )
+                        result = await method(**proposal.parameters)
 
-                success = True
-                result_data = {"result": result} if result is not None else None
+                    success = True
+                    result_data = {"result": result} if result is not None else None
 
-            except Exception as e:
-                error_message = f"{type(e).__name__}: {e}"
+                except Exception as e:
+                    error_message = f"{type(e).__name__}: {e}"
 
-            # Calculate duration
-            end_time = datetime.now()
-            duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                # Calculate duration
+                end_time = datetime.now()
+                duration_ms = int((end_time - start_time).total_seconds() * 1000)
 
-            # Update record with results
-            await db.update_record(
-                record.id,
-                success=success,
-                error_message=error_message,
-                result_data=result_data,
-            )
+                # Update record with results
+                await db.update_record(
+                    record.id,
+                    success=success,
+                    error_message=error_message,
+                    result_data=result_data,
+                )
 
-            # Update proposal status
-            final_status = ActionStatus.COMPLETED if success else ActionStatus.FAILED
-            await db.update_proposal_status(proposal_id, final_status)
+                # Update proposal status
+                final_status = ActionStatus.COMPLETED if success else ActionStatus.FAILED
+                await db.update_proposal_status(proposal_id, final_status)
 
-            # Log completion
-            await self._auditor.log_execution_completed(
-                proposal_id,
-                success=success,
-                error=error_message,
-                duration_ms=duration_ms,
-                result=result_data,
-            )
+                # Log completion
+                await self._auditor.log_execution_completed(
+                    proposal_id,
+                    success=success,
+                    error=error_message,
+                    duration_ms=duration_ms,
+                    result=result_data,
+                )
 
-            # Fetch final record
-            final_record = await db.get_record(record.id)
+                # Fetch final record
+                final_record = await db.get_record(record.id)
 
         return final_record
 
