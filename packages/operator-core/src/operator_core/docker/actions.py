@@ -10,6 +10,9 @@ from typing import Any
 from python_on_whales import docker
 from python_on_whales.exceptions import NoSuchContainer, NoSuchNetwork
 
+from operator_core.actions.registry import ActionDefinition, ParamDef
+from operator_core.actions.types import ActionType
+
 # Maximum number of log lines to retrieve (prevent memory exhaustion)
 MAX_TAIL = 10000
 
@@ -376,3 +379,184 @@ class DockerActionExecutor:
                 }
 
         return await loop.run_in_executor(None, _blocking_execute)
+
+
+def get_docker_tools() -> list[ActionDefinition]:
+    """
+    Get Docker action tool definitions.
+
+    Returns list of ActionDefinition for all Docker container operations.
+    Per DOCK-10: All Docker actions register as ActionType.TOOL.
+    """
+    return [
+        ActionDefinition(
+            name="docker_start_container",
+            description="Start a stopped Docker container",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to start",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="docker_stop_container",
+            description="Stop a running Docker container gracefully (SIGTERM then SIGKILL after timeout)",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to stop",
+                    required=True,
+                ),
+                "timeout": ParamDef(
+                    type="int",
+                    description="Seconds to wait for graceful shutdown before SIGKILL (default: 10)",
+                    required=False,
+                    default=10,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="docker_restart_container",
+            description="Restart a Docker container (stop then start)",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to restart",
+                    required=True,
+                ),
+                "timeout": ParamDef(
+                    type="int",
+                    description="Seconds to wait for graceful shutdown before SIGKILL (default: 10)",
+                    required=False,
+                    default=10,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="docker_logs",
+            description="Retrieve container logs with tail limit (max 10000 lines)",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to get logs from",
+                    required=True,
+                ),
+                "tail": ParamDef(
+                    type="int",
+                    description="Number of lines to retrieve (default: 100, max: 10000)",
+                    required=False,
+                ),
+                "since": ParamDef(
+                    type="str",
+                    description="Only return logs since this time (ISO format or relative)",
+                    required=False,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="low",
+            requires_approval=False,
+        ),
+        ActionDefinition(
+            name="docker_inspect_container",
+            description="Get container status and configuration (read-only)",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to inspect",
+                    required=True,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="low",
+            requires_approval=False,
+        ),
+        ActionDefinition(
+            name="docker_network_connect",
+            description="Connect container to a Docker network",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to connect",
+                    required=True,
+                ),
+                "network": ParamDef(
+                    type="str",
+                    description="Network name or ID to connect to",
+                    required=True,
+                ),
+                "alias": ParamDef(
+                    type="str",
+                    description="Optional network alias for the container",
+                    required=False,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="docker_network_disconnect",
+            description="Disconnect container from a Docker network",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to disconnect",
+                    required=True,
+                ),
+                "network": ParamDef(
+                    type="str",
+                    description="Network name or ID to disconnect from",
+                    required=True,
+                ),
+                "force": ParamDef(
+                    type="bool",
+                    description="Force disconnection even if container is running",
+                    required=False,
+                    default=False,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="medium",
+            requires_approval=True,
+        ),
+        ActionDefinition(
+            name="docker_exec",
+            description="Execute command inside a running container with output capture",
+            parameters={
+                "container_id": ParamDef(
+                    type="str",
+                    description="Container ID or name to execute in",
+                    required=True,
+                ),
+                "command": ParamDef(
+                    type="list",
+                    description="Command to execute as list of strings",
+                    required=True,
+                ),
+                "user": ParamDef(
+                    type="str",
+                    description="User to run command as (default: container's default user)",
+                    required=False,
+                ),
+                "workdir": ParamDef(
+                    type="str",
+                    description="Working directory for command (default: container's workdir)",
+                    required=False,
+                ),
+            },
+            action_type=ActionType.TOOL,
+            risk_level="high",
+            requires_approval=True,
+        ),
+    ]
