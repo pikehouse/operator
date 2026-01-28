@@ -470,6 +470,55 @@ class ActionDB:
             )
         await self._conn.commit()
 
+    async def update_proposal_status_with_version(
+        self,
+        proposal_id: int,
+        status: ActionStatus,
+        expected_version: int,
+    ) -> bool:
+        """
+        Update the status of an action proposal with optimistic locking.
+
+        This method implements optimistic concurrency control by checking
+        the version field in the WHERE clause. If the version has changed
+        since being read (concurrent modification), the update fails.
+
+        Args:
+            proposal_id: The proposal ID to update
+            status: The new status
+            expected_version: The version we read earlier (must match for update)
+
+        Returns:
+            True if update succeeded, False if version mismatch (concurrent modification)
+        """
+        # Update timestamp fields based on status transition
+        extra_updates = ""
+        params = []
+        if status == ActionStatus.VALIDATED:
+            extra_updates = ", validated_at = ?"
+            params.append(datetime.now().isoformat())
+        elif status == ActionStatus.CANCELLED:
+            extra_updates = ", cancelled_at = ?"
+            params.append(datetime.now().isoformat())
+
+        # Build query with version check in WHERE clause and version increment
+        query = f"""
+            UPDATE action_proposals SET
+                status = ?,
+                version = version + 1
+                {extra_updates}
+            WHERE id = ? AND version = ?
+        """
+
+        # Build params: status, [optional timestamp], proposal_id, expected_version
+        final_params = [status.value] + params + [proposal_id, expected_version]
+
+        cursor = await self._conn.execute(query, final_params)
+        await self._conn.commit()
+
+        # Check if row was updated (rowcount > 0 = success, 0 = version mismatch)
+        return cursor.rowcount > 0
+
     async def cancel_all_pending(self) -> int:
         """
         Cancel all pending (proposed or validated) proposals.
