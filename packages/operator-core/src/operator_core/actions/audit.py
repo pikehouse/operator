@@ -158,17 +158,30 @@ class ActionAuditor:
             timestamp=datetime.now(),
         ))
 
-    async def log_execution_started(self, proposal_id: int) -> None:
+    async def log_execution_started(
+        self,
+        proposal_id: int,
+        requester_id: str = "unknown",
+        agent_id: str | None = None,
+    ) -> None:
         """
-        Log that execution has started for a proposal.
+        Log that execution has started for a proposal with dual identity (SAFE-04, SAFE-05).
 
         Args:
             proposal_id: The proposal being executed
+            requester_id: Identity of the requester (resource owner)
+            agent_id: Identity of the agent executing (client)
         """
+        event_data = {
+            "requester_id": requester_id,
+        }
+        if agent_id is not None:
+            event_data["agent_id"] = agent_id
+
         await self.log_event(AuditEvent(
             proposal_id=proposal_id,
             event_type="executing",
-            event_data=None,
+            event_data=event_data,
             actor="system",
             timestamp=datetime.now(),
         ))
