@@ -6,7 +6,7 @@
 **Phase:** Phase 23 - Safety Enhancement
 **Plan:** 02 of 4
 **Status:** In progress
-**Last activity:** 2026-01-28 — Completed 23-04-PLAN.md (Session Risk Tracking & Enhanced Kill Switch)
+**Last activity:** 2026-01-28 — Completed 23-02-PLAN.md (Secret Redaction for Audit Logs)
 
 Progress: [██░░░░░░░░] 29% (Plan 2 of 7 complete)
 
@@ -131,11 +131,14 @@ See: .planning/MILESTONES.md
 - Overlapping pattern matches intentional (represent increasing risk)
 - Force-terminate Docker via subprocess (asyncio.Task.cancel limitation workaround)
 - Kill switch returns detailed dict instead of int (pending_proposals, docker_containers, asyncio_tasks)
+- Redact secrets BEFORE json.dumps() and database write, not after retrieval (defense-in-depth)
+- Structure-first processing in SecretRedactor: check dict/list types before key sensitivity
+- Dual detection strategy: key-based (field names) + pattern-based (env vars, Bearer tokens)
 
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 23-04-PLAN.md (Session Risk Tracking & Enhanced Kill Switch)
+**Stopped at:** Completed 23-02-PLAN.md (Secret Redaction for Audit Logs)
 **Resume file:** None
 
 ## Open Issues
@@ -149,4 +152,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Completed plan 23-04)*
+*State updated: 2026-01-28 (Completed plan 23-02)*
