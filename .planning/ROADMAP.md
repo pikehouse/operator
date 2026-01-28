@@ -43,7 +43,7 @@ Plans:
 
 **Completed:** 2026-01-28
 
-### Phase 31: Agent Loop
+### Phase 31: Agent Loop ✓
 
 **Goal:** The ~200 line core loop that runs Claude.
 
@@ -54,17 +54,20 @@ Plans:
 - Database audit logging (not JSON files)
 - System prompt for SRE agent
 
-**Plans:** 1 plan
+**Plans:** 2 plans (2/2 complete)
 
 Plans:
-- [ ] 31-01-PLAN.md — Core agent loop with tool_runner, database polling, Haiku summarization
+- [x] 31-01-PLAN.md — Core agent loop with tool_runner, database polling, Haiku summarization
+- [x] 31-02-PLAN.md — Tool call/result audit logging (gap closure)
 
 **Success Criteria:**
-1. Agent polls database for open tickets every 1 second
-2. Claude receives ticket and can call shell tool
-3. Tool results summarized by Haiku before logging
-4. Complete audit trail stored in database
-5. Core loop is < 200 lines
+1. ✓ Agent polls database for open tickets every 1 second
+2. ✓ Claude receives ticket and can call shell tool
+3. ✓ Tool results summarized by Haiku before logging
+4. ✓ Complete audit trail stored in database
+5. ✓ Core loop is < 200 lines (198 lines)
+
+**Completed:** 2026-01-28
 
 ### Phase 32: Integration & Demo
 
@@ -280,7 +283,7 @@ Archived in milestones/v2.3-ROADMAP.md
 | 23-26 | v2.3 | 13/13 | Archived | 2026-01-28 |
 | 27-29 | v2.3 | — | Superseded | — |
 | 30 | v3.0 | 1/1 | Complete | 2026-01-28 |
-| 31 | v3.0 | 0/1 | Pending | — |
+| 31 | v3.0 | 2/2 | Complete | 2026-01-28 |
 | 32 | v3.0 | 0/? | Pending | — |
 
 ---
