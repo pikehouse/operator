@@ -1,5 +1,36 @@
 # Project Milestones: Operator
 
+## v3.0 Operator Laboratory (Shipped: 2026-01-28)
+
+**Delivered:** Autonomous AI operator with full shell access, safety via container isolation, and complete audit trail. Claude autonomously diagnoses and fixes TiKV failures without predefined playbooks.
+
+**Phases completed:** 30-32 (7 plans total)
+
+**Key accomplishments:**
+- Agent container with Python 3.12, Docker CLI, and standard SRE tools
+- shell(command, reasoning) tool with 120s timeout — execute any command
+- Core agent loop (198 lines) using tool_runner with @beta_tool decorator
+- Database audit logging with reasoning, tool_call, and tool_result entries
+- Haiku summarization for concise audit trail
+- Docker Compose integration with TiKV network and Docker socket access
+- CLI audit commands (operator audit list/show) for session review
+- End-to-end validated: Claude diagnosed and fixed TiKV failure autonomously
+
+**Stats:**
+- 36 files modified
+- ~4,600 lines added
+- 3 phases, 7 plans
+- 35 commits
+- 4 days from v2.3 pivot to ship
+
+**Git range:** `98aaaa7` (feat(30-01): create agent container) → `3e40f0b` (docs(phase-32): complete integration)
+
+**Philosophy:** "Give Claude a full kitchen, not a menu of 10 dishes." Safety via container isolation, not action restrictions. Audit everything, approve nothing.
+
+**What's next:** Additional subject integrations, production approval layer, or v3.1 enhancements
+
+---
+
 ## v2.2 Agentic Remediations Demo (Shipped: 2026-01-27)
 
 **Delivered:** Complete agentic loop in both demos — fault injection leads to AI detection, diagnosis, auto-execute remediation action, and verification that the fix resolved the issue.

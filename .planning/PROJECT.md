@@ -2,72 +2,41 @@
 
 ## What This Is
 
-An AI-powered operator for distributed systems that monitors clusters, diagnoses issues with Claude, and executes remediation actions. The core is service-agnostic with pluggable Subject adapters. TiKV is the first subject (v1.0-v2.0); v2.1 adds a custom distributed rate limiter as the second subject to prove the abstraction works for novel, out-of-distribution systems.
+An AI-powered operator for distributed systems that monitors clusters, diagnoses issues with Claude, and autonomously executes remediation actions. v3.0 pivoted to "Operator Laboratory" — give Claude a full shell and let it figure things out, with safety via container isolation rather than action restrictions.
 
 ## Core Value
 
-AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: "here's what I recommend doing about it."
-
-## Current Milestone: v2.3 Infrastructure Actions & Script Execution
-
-**Goal:** The action agent can remediate issues by controlling Docker infrastructure, modifying host files/processes, and generating/executing custom scripts in sandboxed containers — with output fed back for iterative reasoning.
-
-**Target features:**
-- Docker actions: start, stop, restart, kill containers; connect/disconnect networks; exec commands; access logs
-- Host actions: read/write files, signal processes, modify network config
-- Script execution: Agent generates Python/bash scripts, executes in sandboxed Docker container, receives output for analysis
-- Safety model: Per-action risk levels (low/medium/high), approval mode configuration by risk level
-- Output feedback: Script/command output captured and returned to agent for iterative remediation
-
-**Demo scenarios:**
-1. Container recovery: Crashed container → agent detects → restarts container → verifies health
-2. Config repair: Misconfiguration detected → agent writes fix script → executes in sandbox → verifies resolution
+AI demonstrates real diagnostic reasoning about distributed systems — not just "something is wrong" but "here's what's happening, here are the options, here's why I'd choose this one." And now: autonomous action without predefined playbooks.
 
 ## Current State
 
-**Shipped:** v2.2 (2026-01-27)
-**Code:** ~30,000 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
+**Shipped:** v3.0 (2026-01-28)
+**Code:** ~21,500 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
 **Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Redis, FastAPI, Rich TUI, Pydantic
 
 ### What Works
 
-- `./scripts/run-demo.sh tikv` — TiKV demo with node kill chaos and AI diagnosis
-- `./scripts/run-demo.sh ratelimiter` — Rate limiter demo with counter drift and ghost allowing chaos
-- `operator monitor run --subject tikv|ratelimiter` — Continuous invariant checking for either subject
-- `operator agent start` — AI diagnosis daemon processing tickets (can propose actions)
-- `operator tickets list/show/resolve/hold` — Ticket management CLI
-- `operator actions list/show/approve/reject` — Action management CLI
+- `./scripts/run-demo.sh tikv` — TiKV demo with autonomous agent diagnosis and remediation
+- `operator monitor run --subject tikv|ratelimiter` — Continuous invariant checking
+- `operator audit list/show` — Review agent sessions and conversation logs
+- Agent container with Docker socket access for controlling sibling containers
 - 6-node TiKV/PD cluster with Prometheus + Grafana in Docker
 - 3-node rate limiter cluster with Redis and Prometheus in Docker
-- go-ycsb and Python load generators for traffic simulation
 
-### v2.2 Capabilities
+### v3.0 Capabilities
 
-- **Complete Agentic Loop**: Detect → diagnose → propose → validate → execute → verify
-- **Parameter Inference**: Fallback when Claude returns empty params (drain_store, reset_counter)
-- **EXECUTE Mode**: Demos run autonomously without approval workflow
-- **Updated Narratives**: Demo chapters describe agentic remediation flow
-- **Prompt Optimization**: Biased toward immediate action for demo responsiveness
+- **Autonomous Shell Access**: Claude has full shell() tool — execute any command
+- **Container Isolation**: Safety via Docker, not action restrictions
+- **Audit Everything**: Complete reasoning chain with tool calls and results
+- **Haiku Summarization**: Concise audit logs via claude-haiku
+- **198-line Core Loop**: Simple polling, tool_runner, ticket updates
+- **CLI Audit Review**: operator audit list/show for session inspection
 
-### v2.1 Capabilities
+### v2.x Capabilities (Retained)
 
-- **Protocol-based Abstractions**: SubjectProtocol and InvariantCheckerProtocol in zero-dependency operator-protocols package
-- **Multi-Subject Support**: Same operator-core works for TiKV and custom rate limiter
-- **Rate Limiter Service**: Custom 3-node distributed rate limiter with Redis backend, atomic Lua scripts, Prometheus metrics
-- **5 Rate Limiter Invariants**: node_down, redis_disconnected, high_latency, counter_drift, ghost_allowing
-- **CLI Subject Selection**: `--subject tikv|ratelimiter` flag
-- **Unified Demo Framework**: Same TUI layout for both subjects with subject-specific health polling and chaos injection
-- **AI Diagnosis Quality**: Claude reasons about rate limiter anomalies without rate-limiter-specific prompts in operator-core
-
-### v2.0 Capabilities
-
-- **Action Framework**: Typed parameters, validation, 6-state lifecycle (proposed→validated→executing→completed/failed/cancelled)
-- **TiKV Actions**: transfer-leader, transfer-peer, drain-store via PD API
-- **Safety Controls**: Kill switch, observe-only mode, audit logging
-- **Approval Workflow**: Configurable human approval gate (default: autonomous)
-- **Workflow Chaining**: Multi-action sequences with dependencies
-- **Scheduled Actions**: Execute at future time
-- **Retry Logic**: Exponential backoff with jitter
+- **Protocol-based Abstractions**: SubjectProtocol and InvariantCheckerProtocol
+- **Multi-Subject Support**: TiKV and custom rate limiter
+- **TUI Demo**: Rich-based live dashboard with real subprocess management
 
 ## Requirements
 
@@ -125,25 +94,26 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Parameter inference fallback for TiKV/rate limiter actions — v2.2
 - Updated demo narratives for agentic flow — v2.2
 
+**v3.0:**
+- Agent container with Python 3.12, Docker CLI, SRE tools — v3.0
+- shell(command, reasoning) tool with 120s timeout — v3.0
+- Core agent loop (198 lines) with tool_runner — v3.0
+- Database audit logging with reasoning, tool_call, tool_result entries — v3.0
+- Haiku summarization for concise audit trail — v3.0
+- Docker Compose integration with TiKV network — v3.0
+- Docker socket access for sibling container control — v3.0
+- CLI audit commands (operator audit list/show) — v3.0
+- Autonomous diagnosis and remediation (no playbook) — v3.0
+
 ### Active
 
-- [ ] Docker container lifecycle actions (start, stop, restart, kill)
-- [ ] Docker network actions (connect, disconnect)
-- [ ] Docker exec and log access actions
-- [ ] Host file read/write actions
-- [ ] Host process signal actions
-- [ ] Host network configuration actions
-- [ ] Script generation by agent (Python/bash)
-- [ ] Sandboxed script execution (Docker container)
-- [ ] Script output capture and feedback to agent
-- [ ] Per-action risk level classification
-- [ ] Risk-based approval configuration
-- [ ] Container recovery demo scenario
-- [ ] Config repair demo scenario
+(None — planning next milestone)
 
 ### Future
 
-- Cloud API actions (AWS/GCP/Azure) — v2.4
+- Cloud API actions (AWS/GCP/Azure)
+- Production approval layer (lab → prod: propose → approve → execute)
+- Additional subject integrations (Kafka, Postgres)
 
 ### Out of Scope
 
@@ -151,54 +121,37 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Production AWS deployment — local simulation first
 - Complex rate limiter features — intentionally simple to prove abstraction
 - Web dashboard — CLI and logs
-- Direct host script execution (all scripts sandboxed for safety)
 
 ## Context
 
-### Inspiration
+### v3.0 Philosophy Shift
 
-Based on the service-harness-demo pattern:
-- Monitor watches invariants, creates tickets on violations
-- AI agent picks up tickets, diagnoses, takes action
-- Structured logging of reasoning for transparency
+> "Give Claude a full kitchen, not a menu of 10 dishes."
 
-The leap here is **single service → distributed system**. A rate limiter has one process. TiKV has nodes, regions, leaders, replication, Raft consensus. The reasoning is fundamentally more complex.
+The v2.x approach built elaborate action frameworks with executors, approval workflows, and risk classification. v3.0 pivots to radical simplicity:
 
-### TiKV Concepts
+- **One tool**: shell(command, reasoning)
+- **Safety via isolation**: Container boundary, not action restrictions
+- **Audit everything**: Complete reasoning chain captured
+- **Approve nothing**: Let Claude cook, review afterward
 
-- **Store**: A TiKV node (physical server or container)
-- **Region**: A contiguous key range, replicated across 3 stores
-- **Leader**: The store that handles reads/writes for a region
-- **PD (Placement Driver)**: Cluster brain — scheduling, metadata, load balancing
-- **Raft**: Consensus protocol for region replication
+**What was eliminated:**
+- ActionRegistry, action definitions, parameter validation
+- DockerExecutor, HostExecutor, ScriptExecutor
+- Approval workflows, risk classification
+- Structured DiagnosisOutput schemas
 
-### Rate Limiter Concepts (v2.1)
+**What was kept:**
+- Audit logging (now database-based with Haiku summaries)
+- Monitor/alerting (need to know something's wrong)
+- Docker Compose environment (the lab itself)
+- Prometheus (metrics Claude can query)
 
-- **Rate Limiter Node**: A service instance enforcing rate limits
-- **Redis Backend**: Shared state store for distributed counters
-- **Window**: Time period over which requests are counted (e.g., 1 minute)
-- **Limit**: Maximum requests allowed per window per key
-- **Key**: Identifier for rate limiting scope (e.g., user ID, IP, API key)
+### Path to Production
 
-### Why a Custom Rate Limiter?
+Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
 
-The goal is proving the operator works on systems Claude hasn't seen in training. Using a well-known system (Kafka, Postgres) would let Claude rely on memorized knowledge. A custom rate limiter forces the AI to actually understand the system through observation — the invariants, the metrics, the failure modes.
-
-### Evaluation Criteria (What "Good" Looks Like)
-
-| Metric | Measures |
-|--------|----------|
-| Time to detect | How long after injection until AI notices |
-| Diagnosis accuracy | Did it correctly identify root cause |
-| Action appropriateness | Was the recommendation reasonable |
-| Explanation quality | Could a human follow the reasoning |
-| Action success rate | Did executed actions achieve intended outcome |
-
-## Constraints
-
-- **Language**: Python — matches harness-demo, good Anthropic SDK support
-- **Local env**: Docker Compose — reproducible, scriptable chaos injection
-- **Target audience**: Technical — engineers, conference talks, technical blogs
+The audit layer carries forward unchanged. Production adds an approval gate before execution.
 
 ## Key Decisions
 
@@ -206,15 +159,13 @@ The goal is proving the operator works on systems Claude hasn't seen in training
 |----------|-----------|---------|
 | Clean subject separation | Enables future subjects (Kafka, etc.) without rewriting core | Good — Protocol-based abstraction works cleanly |
 | Docker Compose over tiup playground | Full control over chaos injection, reproducible | Good — Reliable 6-node cluster |
-| Observe-only first | Get perception/diagnosis right before action; safer iteration | Good — AI diagnosis quality validated |
-| Python | Anthropic SDK, matches prior art, fast iteration | Good — 12K LOC in 3 milestones |
+| Observe-only first (v1.0) | Get perception/diagnosis right before action | Good — AI diagnosis quality validated |
 | Protocol-based abstractions | Subject and DeploymentTarget as Protocols | Good — Clean extensibility |
-| aiosqlite for database | Non-blocking operations in async event loop | Good — No blocking issues |
-| Pydantic for structured outputs | Schema validation for Claude responses and action types | Good — Reliable diagnosis and action format |
-| Active invariant checking in demo | Don't passively poll, actively check | Good — Detection within 2-4 seconds |
-| Safety-first action design | Kill switch, observe mode, approval gates | Good — Safe action execution |
-| Fire-and-forget PD API calls | Return on success, don't poll for completion | Good — Simple, PD handles async |
-| Exponential backoff with jitter | Prevent thundering herd on retries | Good — Robust retry behavior |
+| Pydantic for structured outputs | Schema validation for Claude responses | Good — Reliable diagnosis format |
+| v3.0 shell-only approach | Simpler than action framework, more flexible | Good — 198 lines vs ~10K lines |
+| Haiku summarization | Keep audit logs concise and readable | Good — Database queries fast |
+| Container isolation as safety | Simpler than approval workflows | Good — docker-compose down resets |
+| Database audit over JSON files | Better queryability, CLI integration | Good — operator audit commands work |
 
 ---
-*Last updated: 2026-01-27 after v2.3 milestone start*
+*Last updated: 2026-01-28 after v3.0 milestone*
