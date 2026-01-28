@@ -4,11 +4,11 @@
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
 **Phase:** Phase 23 - Safety Enhancement
-**Plan:** 02 of 4
+**Plan:** 03 of 4
 **Status:** In progress
-**Last activity:** 2026-01-28 — Completed 23-02-PLAN.md (Secret Redaction for Audit Logs)
+**Last activity:** 2026-01-28 — Completed 23-03-PLAN.md (TOCTOU-Resistant Approval Workflow)
 
-Progress: [██░░░░░░░░] 29% (Plan 2 of 7 complete)
+Progress: [███░░░░░░░] 43% (Plan 3 of 7 complete)
 
 ## Project Reference
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | In Progress (2/4 plans complete) |
+| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | In Progress (3/4 plans complete) |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Pending |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
@@ -134,11 +134,15 @@ See: .planning/MILESTONES.md
 - Redact secrets BEFORE json.dumps() and database write, not after retrieval (defense-in-depth)
 - Structure-first processing in SecretRedactor: check dict/list types before key sensitivity
 - Dual detection strategy: key-based (field names) + pattern-based (env vars, Bearer tokens)
+- Double-check pattern for TOCTOU defense (pre-check, lock, re-check, atomic update)
+- 60-second approval token expiration for stale approval prevention
+- Optimistic locking via version field incremented on every update
+- asyncio.Lock serializes execution attempts before atomic version-checked update
 
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 23-02-PLAN.md (Secret Redaction for Audit Logs)
+**Stopped at:** Completed 23-03-PLAN.md (TOCTOU-Resistant Approval Workflow)
 **Resume file:** None
 
 ## Open Issues
@@ -152,4 +156,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Completed plan 23-02)*
+*State updated: 2026-01-28 (Completed plan 23-03)*
