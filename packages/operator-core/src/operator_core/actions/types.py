@@ -98,6 +98,16 @@ class ActionProposal(BaseModel):
     Must be validated (parameters checked) and possibly approved
     before execution.
 
+    Identity Tracking (SAFE-03, SAFE-04):
+    This model tracks dual identity for authorization chains:
+    - requester_id: WHO initiated the request (user email, system name, or 'agent:autonomous')
+    - agent_id: WHICH AI component executes it (if delegated to an agent)
+    - requester_type: Type of requester ('user', 'system', or 'agent')
+
+    This follows OAuth delegation patterns where requester_id is the resource owner
+    and agent_id is the client acting on their behalf. Dual authorization verifies
+    both requester permission AND agent capability before execution.
+
     Attributes:
         id: Database ID (None before insert)
         ticket_id: Associated ticket (optional, for traceability)
@@ -108,6 +118,9 @@ class ActionProposal(BaseModel):
         status: Current lifecycle state
         proposed_at: When created
         proposed_by: "agent" or "user" (for future approval workflows)
+        requester_id: Identity of requester (user email, system name, or 'agent:autonomous')
+        requester_type: Type of requester: 'user', 'system', or 'agent'
+        agent_id: Identity of agent executing action (if delegated)
         approved_at: When the proposal was approved (None if not approved)
         approved_by: Who approved the proposal (typically "user")
         rejected_at: When the proposal was rejected (None if not rejected)
@@ -148,6 +161,21 @@ class ActionProposal(BaseModel):
     proposed_by: str = Field(
         default="agent", description="Who proposed: 'agent' or 'user'"
     )
+
+    # Identity tracking fields (SAFE-03, SAFE-04)
+    requester_id: str = Field(
+        default="unknown",
+        description="Identity of requester (user email, system name, or 'agent:autonomous')",
+    )
+    requester_type: str = Field(
+        default="agent",
+        description="Type of requester: 'user', 'system', or 'agent'",
+    )
+    agent_id: str | None = Field(
+        default=None,
+        description="Identity of agent executing action (if delegated)",
+    )
+
     approved_at: datetime | None = Field(
         default=None, description="When the proposal was approved"
     )
