@@ -2,59 +2,59 @@
 
 ## Milestones
 
-- ✅ **v1.0 MVP** - Phases 1-6 (shipped 2026-01-25)
-- ✅ **v1.1 TUI Demo** - Phases 7-11 (shipped 2026-01-25)
-- ✅ **v2.0 Actions** - Phases 12-15 (shipped 2026-01-26)
-- ✅ **v2.1 Protocols** - Phases 16-20 (shipped 2026-01-27)
-- ✅ **v2.2 Agentic Loop** - Phases 21-22 (shipped 2026-01-27)
-- ✅ **v3.0 Operator Laboratory** - Phases 30-32 (shipped 2026-01-28)
-- 🚧 **v3.1 Demo Update** - Phases 33-34 (in progress)
+- v1.0 MVP - Phases 1-6 (shipped 2026-01-25)
+- v1.1 TUI Demo - Phases 7-11 (shipped 2026-01-25)
+- v2.0 Actions - Phases 12-15 (shipped 2026-01-26)
+- v2.1 Protocols - Phases 16-20 (shipped 2026-01-27)
+- v2.2 Agentic Loop - Phases 21-22 (shipped 2026-01-27)
+- v3.0 Operator Laboratory - Phases 30-32 (shipped 2026-01-28)
+- v3.1 Demo Update - Phases 33-34 (in progress)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1-6) - SHIPPED 2026-01-25</summary>
+<summary>v1.0 MVP (Phases 1-6) - SHIPPED 2026-01-25</summary>
 
 See: .planning/milestones/v1.0-ROADMAP.md
 
 </details>
 
 <details>
-<summary>✅ v1.1 TUI Demo (Phases 7-11) - SHIPPED 2026-01-25</summary>
+<summary>v1.1 TUI Demo (Phases 7-11) - SHIPPED 2026-01-25</summary>
 
 See: .planning/milestones/v1.1-ROADMAP.md
 
 </details>
 
 <details>
-<summary>✅ v2.0 Actions (Phases 12-15) - SHIPPED 2026-01-26</summary>
+<summary>v2.0 Actions (Phases 12-15) - SHIPPED 2026-01-26</summary>
 
 See: .planning/milestones/v2.0-ROADMAP.md
 
 </details>
 
 <details>
-<summary>✅ v2.1 Protocols (Phases 16-20) - SHIPPED 2026-01-27</summary>
+<summary>v2.1 Protocols (Phases 16-20) - SHIPPED 2026-01-27</summary>
 
 See: .planning/milestones/v2.1-ROADMAP.md
 
 </details>
 
 <details>
-<summary>✅ v2.2 Agentic Loop (Phases 21-22) - SHIPPED 2026-01-27</summary>
+<summary>v2.2 Agentic Loop (Phases 21-22) - SHIPPED 2026-01-27</summary>
 
 See: .planning/milestones/v2.2-ROADMAP.md
 
 </details>
 
 <details>
-<summary>✅ v3.0 Operator Laboratory (Phases 30-32) - SHIPPED 2026-01-28</summary>
+<summary>v3.0 Operator Laboratory (Phases 30-32) - SHIPPED 2026-01-28</summary>
 
 See: .planning/milestones/v3.0-ROADMAP.md
 
 </details>
 
-### 🚧 v3.1 Demo Update (In Progress)
+### v3.1 Demo Update (In Progress)
 
 **Milestone Goal:** Fix TUI demo to work with v3.0 agent_lab architecture
 
@@ -69,18 +69,20 @@ See: .planning/milestones/v3.0-ROADMAP.md
   4. Agent subprocess handles SIGTERM gracefully (marks session as escalated, cleans up)
   5. Agent code (operator_core) contains no demo-specific logic (clean separation of concerns)
   6. Unit test verifies agent schema initialization works correctly
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 33-01: TBD
+- [ ] 33-01-PLAN.md - Create TicketOpsDB context manager with schema initialization
+- [ ] 33-02-PLAN.md - Add signal handling to agent loop with graceful shutdown
+- [ ] 33-03-PLAN.md - Unit tests for schema initialization (TEST-03)
 
 #### Phase 34: Demo End-to-End Validation
 **Goal**: Both demos run successfully with v3.0 agent
 **Depends on**: Phase 33
 **Requirements**: DEMO-04, DEMO-05, DEMO-06, TEST-01, TEST-02
 **Success Criteria** (what must be TRUE):
-  1. TiKV demo completes full flow: startup → fault injection → agent diagnosis → autonomous resolution
-  2. Rate limiter demo completes full flow: startup → fault injection → agent diagnosis → autonomous resolution
+  1. TiKV demo completes full flow: startup -> fault injection -> agent diagnosis -> autonomous resolution
+  2. Rate limiter demo completes full flow: startup -> fault injection -> agent diagnosis -> autonomous resolution
   3. Agent panel displays subprocess output in real-time (verify existing TUI behavior)
   4. Demo chapters advance correctly with proper timing and state transitions
   5. Integration tests verify TiKV demo runs without errors
@@ -93,7 +95,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 33 → 34
+Phases execute in numeric order: 33 -> 34
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -122,5 +124,5 @@ Phases execute in numeric order: 33 → 34
 | 30. Agent Container | v3.0 | 2/2 | Complete | 2026-01-28 |
 | 31. Shell Tool | v3.0 | 2/2 | Complete | 2026-01-28 |
 | 32. Audit System | v3.0 | 3/3 | Complete | 2026-01-28 |
-| 33. Agent Database Integration | v3.1 | 0/1 | Not started | - |
+| 33. Agent Database Integration | v3.1 | 0/3 | Not started | - |
 | 34. Demo End-to-End Validation | v3.1 | 0/1 | Not started | - |
