@@ -87,10 +87,11 @@ Plans:
   4. Demo chapters advance correctly with proper timing and state transitions
   5. Integration tests verify TiKV demo runs without errors
   6. Integration tests verify ratelimiter demo runs without errors
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 34-01: TBD
+- [ ] 34-01-PLAN.md - Manual validation of TiKV and rate limiter demos (DEMO-04, DEMO-05, DEMO-06)
+- [ ] 34-02-PLAN.md - Create pytest integration tests (TEST-01, TEST-02)
 
 ## Progress
 
@@ -125,4 +126,4 @@ Phases execute in numeric order: 33 -> 34
 | 31. Shell Tool | v3.0 | 2/2 | Complete | 2026-01-28 |
 | 32. Audit System | v3.0 | 3/3 | Complete | 2026-01-28 |
 | 33. Agent Database Integration | v3.1 | 3/3 | Complete | 2026-01-28 |
-| 34. Demo End-to-End Validation | v3.1 | 0/1 | Not started | - |
+| 34. Demo End-to-End Validation | v3.1 | 0/2 | Not started | - |
