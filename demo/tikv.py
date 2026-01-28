@@ -125,9 +125,9 @@ def create_recovery_chapter(compose_file: Path) -> Chapter:
     return Chapter(
         title="Stage 7: Recovery",
         narration=(
-            "Agent executed transfer_leader, verifying fix...\n"
-            "Watch the Agent panel for verification result.\n\n"
-            "Demo also restarts the killed node for visual recovery.\n"
+            "The agent may restart the container itself.\n"
+            "Watch the Agent panel for autonomous recovery.\n\n"
+            "Demo will also restart killed node for visual recovery.\n"
             "Workload should return to normal levels."
         ),
         on_enter=on_enter,
@@ -159,18 +159,20 @@ TIKV_CHAPTERS = [
         title="Stage 5: Detection",
         narration=(
             "The MONITOR is checking cluster health invariants.\n\n"
-            "Watch for violation detection in monitor output.\n"
-            "Next: Agent will diagnose and remediate automatically."
+            "When violation detected, a TICKET is created in the database.\n"
+            "The agent_lab polls for tickets and will pick this one up."
         ),
     ),
     Chapter(
         title="Stage 6: AI Remediation",
         narration=(
-            "Watch the Agent panel for the complete agentic loop:\n"
-            "1. Diagnosis: Claude analyzes the violation\n"
-            "2. Action: transfer_leader to redistribute regions\n"
-            "3. Verify: Agent checks metrics after action\n\n"
-            "[dim]Agent runs in EXECUTE mode (no approval needed).[/dim]"
+            "Watch the Agent panel for Claude's autonomous operation:\n\n"
+            "1. Receives ticket with violation details\n"
+            "2. Uses shell() to investigate (docker ps, curl prometheus)\n"
+            "3. Diagnoses root cause from metrics\n"
+            "4. Executes fix (docker start, etc.)\n"
+            "5. Verifies recovery\n\n"
+            "[dim]No playbook - Claude figures it out.[/dim]"
         ),
     ),
     # Recovery chapter added dynamically in main()
