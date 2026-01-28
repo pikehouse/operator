@@ -8,7 +8,7 @@
 - [x] **v2.1 Multi-Subject Support** - Phases 16-20 (shipped 2026-01-27)
 - [x] **v2.2 Agentic Remediations Demo** - Phases 21-22 (shipped 2026-01-27)
 - [ ] **v2.3 Infrastructure Actions & Script Execution** - Phases 23-26 (archived incomplete)
-- [ ] **v3.0 Operator Laboratory** - Phases 30-32 (in progress)
+- [ ] **v3.0 Operator Laboratory** - Phases 30-32 (ready for audit)
 
 ## v3.0 Operator Laboratory
 
@@ -69,7 +69,7 @@ Plans:
 
 **Completed:** 2026-01-28
 
-### Phase 32: Integration & Demo
+### Phase 32: Integration & Demo ✓
 
 **Goal:** End-to-end validation against real subjects.
 
@@ -79,12 +79,22 @@ Plans:
 - TiKV failure scenario validated
 - Audit log review tooling
 
+**Plans:** 4 plans (4/4 complete)
+
+Plans:
+- [x] 32-01-PLAN.md — Docker Compose for agent container (joins TiKV network)
+- [x] 32-02-PLAN.md — CLI audit commands (list sessions, show conversation)
+- [x] 32-03-PLAN.md — TUI demo integration (stream agent_lab output)
+- [x] 32-04-PLAN.md — End-to-end validation (fault injection test)
+
 **Success Criteria:**
-1. Agent container runs alongside TiKV cluster in Docker Compose
-2. Claude autonomously diagnoses TiKV failure (no predefined playbook)
-3. Claude fixes issue using shell commands (docker restart, etc.)
-4. Complete audit log shows reasoning chain
-5. Environment recoverable via docker-compose down/up
+1. ✓ Agent container runs alongside TiKV cluster in Docker Compose
+2. ✓ Claude autonomously diagnoses TiKV failure (no predefined playbook)
+3. ✓ Claude fixes issue using shell commands (docker restart, etc.)
+4. ✓ Complete audit log shows reasoning chain
+5. ✓ Environment recoverable via docker-compose down/up
+
+**Completed:** 2026-01-28
 
 ---
 
@@ -284,7 +294,7 @@ Archived in milestones/v2.3-ROADMAP.md
 | 27-29 | v2.3 | — | Superseded | — |
 | 30 | v3.0 | 1/1 | Complete | 2026-01-28 |
 | 31 | v3.0 | 2/2 | Complete | 2026-01-28 |
-| 32 | v3.0 | 0/? | Pending | — |
+| 32 | v3.0 | 4/4 | Complete | 2026-01-28 |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -295,3 +305,4 @@ Archived in milestones/v2.3-ROADMAP.md
 *v2.2 archived: 2026-01-27*
 *v2.3 archived incomplete: 2026-01-28*
 *v3.0 created: 2026-01-28*
+*Phase 32 complete: 2026-01-28*
