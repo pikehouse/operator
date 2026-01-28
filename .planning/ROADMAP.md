@@ -21,21 +21,25 @@
 
 ### Phase 30: Core Agent
 
-**Goal:** Agent container with three tools and audit logging.
+**Goal:** Agent container with shell tool and audit logging.
 
 **Deliverables:**
 - Agent container Dockerfile (Python 3.12, Docker CLI, curl, jq, standard Unix tools)
 - `shell(command, reasoning)` — execute any command, log with reasoning
-- `web_search(query, reasoning)` — search for docs/solutions
-- `web_fetch(url, reasoning)` — read specific pages
 - Audit log format (JSON, per-session)
+
+**Note:** Scope narrowed from original — no web_search or web_fetch tools. Claude uses curl directly.
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 30-01-PLAN.md — Agent Dockerfile, shell() tool, SessionAuditor
 
 **Success Criteria:**
 1. Agent container builds and runs with Docker socket access
-2. All three tools log to audit format before and after execution
-3. shell() can execute arbitrary commands with timeout
-4. web_search() returns formatted search results
-5. web_fetch() extracts and returns page content
+2. shell() tool logs to audit format before and after execution
+3. shell() can execute arbitrary commands with 120s timeout
+4. SessionAuditor saves complete conversation history to JSON
 
 ### Phase 31: Agent Loop
 
@@ -267,7 +271,7 @@ Archived in milestones/v2.3-ROADMAP.md
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
 | 23-26 | v2.3 | 13/13 | Archived | 2026-01-28 |
 | 27-29 | v2.3 | — | Superseded | — |
-| 30 | v3.0 | 0/? | Pending | — |
+| 30 | v3.0 | 0/1 | Pending | — |
 | 31 | v3.0 | 0/? | Pending | — |
 | 32 | v3.0 | 0/? | Pending | — |
 
