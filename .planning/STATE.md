@@ -3,10 +3,10 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 23 - Safety Enhancement
-**Plan:** 04 of 4 ✓
-**Status:** Phase complete
-**Last activity:** 2026-01-28 — Phase 23 verified (21/21 must-haves passed)
+**Phase:** Phase 24 - Docker Actions
+**Plan:** 01 of 4
+**Status:** In progress
+**Last activity:** 2026-01-28 — Completed 24-01-PLAN.md
 
 Progress: [█████░░░░░] 57% (Phase 1 of 7 complete)
 
@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
-| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Pending |
+| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | In progress (Plan 01 complete) |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
@@ -139,10 +139,17 @@ See: .planning/MILESTONES.md
 - Optimistic locking via version field incremented on every update
 - asyncio.Lock serializes execution attempts before atomic version-checked update
 
+**Key decisions from v2.3 (Phase 24 Plan 01):**
+- Default 10-second timeout for stop/restart operations (configurable via parameter)
+- Idempotent operations: start on running container succeeds, stop on stopped container succeeds
+- Exit code semantics: 143 = graceful SIGTERM shutdown, 137 = force killed (SIGKILL or OOM)
+- Datetime fields serialized with .isoformat() for JSON compatibility
+- Graceful handling of None values in optional fields (started_at)
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Phase 23 complete — all 4 plans executed, verification passed
+**Stopped at:** Completed 24-01-PLAN.md (Docker lifecycle actions)
 **Resume file:** None
 
 ## Open Issues
@@ -156,4 +163,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 23 complete)*
+*State updated: 2026-01-28 (Phase 24 Plan 01 complete)*
