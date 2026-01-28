@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** None active — v3.0 just shipped
-**Phase:** N/A
-**Plan:** N/A
-**Status:** Ready to plan next milestone
-**Last activity:** 2026-01-28 — Completed v3.0 Operator Laboratory
+**Milestone:** v3.1 Demo Update
+**Phase:** Not started (defining requirements)
+**Plan:** —
+**Status:** Defining requirements
+**Last activity:** 2026-01-28 — Milestone v3.1 started
 
-Progress: Ready for /gsd:new-milestone
+Progress: Defining requirements
 
 ## Project Reference
 
@@ -66,19 +66,15 @@ See: .planning/MILESTONES.md
 | milestones/v3.0-REQUIREMENTS.md | v3.0 requirements (14 total) |
 | milestones/v3.0-MILESTONE-AUDIT.md | v3.0 audit report |
 
-## Next Steps
+## Current Milestone: v3.1 Demo Update
 
-**Option A:** Start next milestone
-- Additional subject integrations (Kafka, Postgres)
-- Production approval layer (propose → approve → execute)
-- Cloud API actions (AWS/GCP/Azure)
+**Goal:** Fix TUI demo to work with v3.0 agent_lab architecture
 
-**Option B:** Iteration on v3.0
-- Performance optimization
-- Additional chaos scenarios
-- Rate limiter integration with agent_lab
-
-Run `/gsd:new-milestone` to start planning.
+**Target features:**
+- TUI demo works with v3.0 agent_lab (not old tickets table)
+- Agent panel shows autonomous agent output
+- Both TiKV and ratelimiter demos functional
+- Demo chapters flow correctly with new architecture
 
 ## Session Continuity
 
@@ -88,7 +84,7 @@ Run `/gsd:new-milestone` to start planning.
 **Next:** /gsd:new-milestone
 
 ---
-*State updated: 2026-01-28 (v3.0 shipped)*
+*State updated: 2026-01-28 (v3.1 started)*
 
 ## Open Issues
 

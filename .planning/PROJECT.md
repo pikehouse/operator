@@ -107,7 +107,12 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ### Active
 
-(None — planning next milestone)
+**v3.1 Demo Update:**
+- [ ] TUI demo works with v3.0 agent_lab architecture
+- [ ] Agent panel shows v3.0 autonomous agent output (not old tickets table)
+- [ ] Monitor panel works with v3.0's invariant checking
+- [ ] Both TiKV and ratelimiter demos functional
+- [ ] Demo chapters flow correctly with new architecture
 
 ### Future
 
@@ -168,4 +173,4 @@ The audit layer carries forward unchanged. Production adds an approval gate befo
 | Database audit over JSON files | Better queryability, CLI integration | Good — operator audit commands work |
 
 ---
-*Last updated: 2026-01-28 after v3.0 milestone*
+*Last updated: 2026-01-28 after v3.1 milestone start*
