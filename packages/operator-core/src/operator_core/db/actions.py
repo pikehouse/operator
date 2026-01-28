@@ -106,6 +106,28 @@ class ActionDB:
         except Exception:
             pass  # Column already exists
 
+        # Migration: Add identity tracking columns (SAFE-03, SAFE-04)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN requester_id TEXT NOT NULL DEFAULT 'unknown'"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN requester_type TEXT NOT NULL DEFAULT 'agent'"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN agent_id TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
         # Migration: Add workflow/scheduling/retry columns if they don't exist
         # Workflow columns (WRK-01)
         try:
@@ -202,6 +224,11 @@ class ActionDB:
             datetime.fromisoformat(row["next_retry_at"]) if row["next_retry_at"] else None
         )
 
+        # Handle identity fields with defaults for migration compatibility
+        requester_id = row["requester_id"] if "requester_id" in row.keys() else "unknown"
+        requester_type = row["requester_type"] if "requester_type" in row.keys() else "agent"
+        agent_id = row["agent_id"] if "agent_id" in row.keys() else None
+
         return ActionProposal(
             id=row["id"],
             ticket_id=row["ticket_id"],
@@ -212,6 +239,9 @@ class ActionDB:
             status=ActionStatus(row["status"]),
             proposed_at=proposed_at,
             proposed_by=row["proposed_by"],
+            requester_id=requester_id,
+            requester_type=requester_type,
+            agent_id=agent_id,
             approved_at=approved_at,
             approved_by=row["approved_by"],
             rejected_at=rejected_at,
@@ -294,9 +324,10 @@ class ActionDB:
             INSERT INTO action_proposals (
                 ticket_id, action_name, action_type, parameters, reason,
                 status, proposed_at, proposed_by,
+                requester_id, requester_type, agent_id,
                 workflow_id, execution_order, depends_on_proposal_id,
                 scheduled_at, retry_count, max_retries, next_retry_at, last_error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal.ticket_id,
@@ -307,6 +338,9 @@ class ActionDB:
                 proposal.status.value,
                 proposal.proposed_at.isoformat(),
                 proposal.proposed_by,
+                proposal.requester_id,
+                proposal.requester_type,
+                proposal.agent_id,
                 proposal.workflow_id,
                 proposal.execution_order,
                 proposal.depends_on_proposal_id,

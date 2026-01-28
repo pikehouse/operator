@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS action_proposals (
     status TEXT NOT NULL DEFAULT 'proposed', -- proposed, validated, executing, completed, failed, cancelled
     proposed_at TEXT NOT NULL,              -- ISO8601 timestamp
     proposed_by TEXT NOT NULL DEFAULT 'agent',  -- agent or user
+    requester_id TEXT NOT NULL DEFAULT 'unknown',  -- Identity of requester (SAFE-03)
+    requester_type TEXT NOT NULL DEFAULT 'agent',  -- Type: user, system, agent (SAFE-03)
+    agent_id TEXT,                          -- Identity of executing agent (SAFE-03)
     validated_at TEXT,                      -- When parameters were validated
     cancelled_at TEXT,                      -- When action was cancelled
     approved_at TEXT,                       -- ISO8601 timestamp when approved
