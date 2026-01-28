@@ -1,75 +1,68 @@
-"""Shell execution tool for autonomous agent."""
-import asyncio
-from asyncio.subprocess import PIPE
+"""Shell tool for agent with @beta_tool decorator."""
+
+import subprocess
+
+from anthropic import beta_tool
+
+# Global state for capturing shell execution results.
+# Needed because tool_runner doesn't yield results separately.
+_last_shell_result: dict | None = None
 
 
-async def shell(command: str, reasoning: str, timeout: float = 120.0) -> dict:
-    """Execute a shell command with timeout.
+def get_last_result() -> dict | None:
+    """Get and clear the last shell result."""
+    global _last_shell_result
+    result = _last_shell_result
+    _last_shell_result = None
+    return result
 
-    This is a pure execution function - it runs commands and returns results,
-    but does not perform any logging. The agent loop (Phase 31) is responsible
-    for logging tool calls via SessionAuditor.log_tool_call().
+
+@beta_tool
+def shell(command: str, reasoning: str) -> str:
+    """Execute a shell command.
 
     Args:
-        command: Shell command to execute (passed directly to shell, no sanitization)
-        reasoning: Why this command is being executed (logged by caller, not validated here)
-        timeout: Maximum execution time in seconds (default: 120.0)
+        command: The shell command to execute
+        reasoning: Why this command is being run (for audit trail)
 
     Returns:
-        dict with keys:
-            - stdout (str): Standard output, decoded as UTF-8, empty string if none
-            - stderr (str): Standard error, decoded as UTF-8, error message if timeout
-            - exit_code (int): Process return code, -1 if timeout
-            - timed_out (bool): True if command exceeded timeout
-
-    Note:
-        - Commands are NOT sanitized or validated - "let Claude cook"
-        - On timeout, process is killed and zombie prevention is handled
-        - Decode errors are handled gracefully with 'replace' error handling
+        Command output (stdout, or stdout+stderr on non-zero exit)
     """
+    global _last_shell_result
     try:
-        # Create subprocess with pipes for stdout/stderr
-        proc = await asyncio.create_subprocess_shell(
+        result = subprocess.run(
             command,
-            stdout=PIPE,
-            stderr=PIPE
+            shell=True,
+            capture_output=True,
+            timeout=120,
+            text=True,
         )
-
-        # Wait for completion with timeout
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=timeout
-            )
-
-            # Decode output
-            stdout = stdout_bytes.decode('utf-8', errors='replace') if stdout_bytes else ""
-            stderr = stderr_bytes.decode('utf-8', errors='replace') if stderr_bytes else ""
-
-            return {
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": proc.returncode,
-                "timed_out": False,
-            }
-
-        except asyncio.TimeoutError:
-            # Kill the process and wait for cleanup to prevent zombies
-            proc.kill()
-            await proc.wait()
-
-            return {
-                "stdout": "",
-                "stderr": f"Command timed out after {timeout} seconds",
-                "exit_code": -1,
-                "timed_out": True,
-            }
-
-    except Exception as e:
-        # Handle unexpected errors during process creation
-        return {
-            "stdout": "",
-            "stderr": f"Failed to execute command: {str(e)}",
-            "exit_code": -1,
-            "timed_out": False,
+        output = result.stdout
+        exit_code = result.returncode
+        if exit_code != 0:
+            output += f"\n\nSTDERR: {result.stderr}\nExit code: {exit_code}"
+        _last_shell_result = {
+            "output": output,
+            "exit_code": exit_code,
+            "command": command,
+            "reasoning": reasoning,
         }
+        return output
+    except subprocess.TimeoutExpired:
+        output = "Command timed out after 120 seconds"
+        _last_shell_result = {
+            "output": output,
+            "exit_code": 124,
+            "command": command,
+            "reasoning": reasoning,
+        }
+        return output
+    except Exception as e:
+        output = f"Error: {e}"
+        _last_shell_result = {
+            "output": output,
+            "exit_code": 1,
+            "command": command,
+            "reasoning": reasoning,
+        }
+        return output

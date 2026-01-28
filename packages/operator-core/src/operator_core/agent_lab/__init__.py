@@ -1,7 +1,18 @@
 """Agent Lab: v3.0 autonomous agent with shell access."""
-from .tools import shell as async_shell  # Phase 30 async version
-from .audit import SessionAuditor
-from .loop import run_agent_loop, shell  # Phase 31 sync version for tool_runner
-from .prompts import SYSTEM_PROMPT
 
-__all__ = ["async_shell", "shell", "SessionAuditor", "run_agent_loop", "SYSTEM_PROMPT"]
+from .loop import run_agent_loop
+from .prompts import SYSTEM_PROMPT
+from .summarize import summarize_with_haiku
+from .ticket_ops import poll_for_open_ticket, update_ticket_escalated, update_ticket_resolved
+from .tools import get_last_result, shell
+
+__all__ = [
+    "run_agent_loop",
+    "shell",
+    "get_last_result",
+    "summarize_with_haiku",
+    "poll_for_open_ticket",
+    "update_ticket_resolved",
+    "update_ticket_escalated",
+    "SYSTEM_PROMPT",
+]
