@@ -1,14 +1,18 @@
-"""Host action executor for systemd service management.
+"""Host action executor for systemd service and process management.
 
-Provides async wrappers for systemctl commands (start/stop/restart).
+Provides async wrappers for systemctl commands (start/stop/restart) and
+process signaling (SIGTERM/SIGKILL) with graceful escalation.
+
 All methods use asyncio.create_subprocess_exec to prevent command injection.
 Per HOST-07: Never use shell=True.
 """
 
 import asyncio
+import os
+import signal
 from typing import Any
 
-from operator_core.host.validation import ServiceWhitelist
+from operator_core.host.validation import ServiceWhitelist, validate_pid
 
 
 class HostActionExecutor:
@@ -199,3 +203,74 @@ class HostActionExecutor:
         stdout, _ = await proc.communicate()
         # is-active returns "active" on stdout if service is running
         return stdout.decode("utf-8").strip() == "active"
+
+    async def kill_process(
+        self,
+        pid: int,
+        signal_type: str = "SIGTERM",
+        graceful_timeout: int = 5,
+    ) -> dict[str, Any]:
+        """Send signal to process with graceful escalation.
+
+        Args:
+            pid: Process ID to signal (must be > 1, not kernel thread)
+            signal_type: 'SIGTERM' (graceful) or 'SIGKILL' (force). Default: SIGTERM
+            graceful_timeout: Seconds to wait before SIGKILL escalation (default: 5)
+
+        Returns:
+            Dict with pid, signal, escalated, still_running, success
+
+        Raises:
+            ValueError: If PID invalid (<=1, kernel thread)
+            ProcessLookupError: If process doesn't exist
+            PermissionError: If insufficient privileges
+
+        Note:
+            Per HOST-04: kill_process sends SIGTERM or SIGKILL to processes.
+            Per HOST-05: SIGTERM -> wait graceful_timeout -> SIGKILL if still running.
+            Per HOST-06: Validates PID > 1 and not kernel thread.
+        """
+        # Validate PID (HOST-06)
+        validate_pid(pid)
+
+        # Map signal string to constant
+        sig = signal.SIGTERM if signal_type == "SIGTERM" else signal.SIGKILL
+        escalated = False
+
+        # Send initial signal
+        os.kill(pid, sig)
+
+        # Graceful escalation pattern (HOST-05)
+        if signal_type == "SIGTERM" and graceful_timeout > 0:
+            # Wait for process to exit gracefully, checking every 100ms
+            for _ in range(graceful_timeout * 10):
+                await asyncio.sleep(0.1)
+
+                try:
+                    os.kill(pid, 0)  # Check if still exists
+                except ProcessLookupError:
+                    # Process exited gracefully
+                    break
+            else:
+                # Timeout expired, process still running, escalate to SIGKILL
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    escalated = True
+                    await asyncio.sleep(0.5)  # Brief wait for SIGKILL to take effect
+                except ProcessLookupError:
+                    pass  # Exited just before escalation
+
+        # Check final state
+        try:
+            os.kill(pid, 0)
+            still_running = True
+        except ProcessLookupError:
+            still_running = False
+
+        return {
+            "pid": pid,
+            "signal": signal_type,
+            "escalated": escalated,
+            "still_running": still_running,
+            "success": not still_running,
+        }
