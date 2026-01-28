@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 25 - Host Actions
-**Plan:** 02 of 3 complete
-**Status:** In progress
-**Last activity:** 2026-01-28 — Completed 25-02-PLAN.md (process kill)
+**Phase:** Phase 25 - Host Actions (COMPLETE)
+**Plan:** 03 of 3 complete
+**Status:** Phase complete
+**Last activity:** 2026-01-28 — Completed 25-03-PLAN.md (action registration)
 
-Progress: [██████░░░░] 33% (Phase 3 of 7 in progress)
+Progress: [███████░░░] 43% (Phase 3 of 7 complete)
 
 ## Project Reference
 
@@ -37,7 +37,7 @@ See: .planning/MILESTONES.md
 |-------|------|--------------|--------|
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
-| 25 | Host Actions | HOST-01 through HOST-07 (7) | In Progress (2/3) |
+| 25 | Host Actions | HOST-01 through HOST-07 (7) | Complete ✓ |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
 | 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
@@ -174,10 +174,16 @@ See: .planning/MILESTONES.md
 - Escalation happens only after timeout loop completes (not partial)
 - kill_process returns escalated=True only if SIGKILL was actually sent
 
+**Key decisions from v2.3 (Phase 25 Plan 03):**
+- Risk levels: MEDIUM for service start/restart (recoverable), HIGH for stop/kill_process (availability impact)
+- Lazy initialization of HostActionExecutor in _get_host_executor() to prevent circular import between tools.py and actions.py
+- All host actions require approval (no read-only host operations)
+- Lambda wrappers map tool names to executor methods (host_service_start -> start_service)
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 25-02-PLAN.md (process kill)
+**Stopped at:** Completed 25-03-PLAN.md (action registration) - Phase 25 complete
 **Resume file:** None
 
 ## Open Issues
@@ -191,4 +197,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (25-02 complete)*
+*State updated: 2026-01-28 (Phase 25 complete)*
