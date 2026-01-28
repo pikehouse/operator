@@ -222,17 +222,28 @@ class ActionAuditor:
             timestamp=datetime.now(),
         ))
 
-    async def log_kill_switch(self, cancelled_count: int) -> None:
+    async def log_kill_switch(
+        self,
+        cancelled_count: int,
+        docker_killed: int = 0,
+        tasks_cancelled: int = 0,
+    ) -> None:
         """
         Log a kill switch activation (system event).
 
         Args:
             cancelled_count: Number of proposals that were cancelled
+            docker_killed: Number of Docker containers force-terminated
+            tasks_cancelled: Number of asyncio tasks cancelled
         """
         await self.log_event(AuditEvent(
             proposal_id=None,  # System event
             event_type="kill_switch",
-            event_data={"cancelled_count": cancelled_count},
+            event_data={
+                "cancelled_count": cancelled_count,
+                "docker_killed": docker_killed,
+                "tasks_cancelled": tasks_cancelled,
+            },
             actor="system",
             timestamp=datetime.now(),
         ))
