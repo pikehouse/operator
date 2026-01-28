@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 24 - Docker Actions
-**Plan:** 03 of 3 ✓
-**Status:** Phase complete
-**Last activity:** 2026-01-28 — Phase 24 verified (6/6 success criteria, 10/10 requirements)
+**Phase:** Phase 25 - Host Actions
+**Plan:** 01 of 2 complete
+**Status:** In progress
+**Last activity:** 2026-01-28 — Completed 25-01-PLAN.md (service actions)
 
-Progress: [██████░░░░] 29% (Phase 2 of 7 complete)
+Progress: [██████░░░░] 33% (Phase 3 of 7 in progress)
 
 ## Project Reference
 
@@ -37,7 +37,7 @@ See: .planning/MILESTONES.md
 |-------|------|--------------|--------|
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
-| 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
+| 25 | Host Actions | HOST-01 through HOST-07 (7) | In Progress (1/2) |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
 | 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
@@ -161,10 +161,16 @@ See: .planning/MILESTONES.md
 - All Docker actions require approval except read-only operations (logs, inspect)
 - Docker actions registered as ActionType.TOOL for agent discovery through get_general_tools()
 
+**Key decisions from v2.3 (Phase 25 Plan 01):**
+- FORBIDDEN_SERVICES take precedence over whitelist (even if manually added, is_allowed returns False)
+- validate_service_name blocks path separators (/) and traversal (..) before whitelist check
+- All service methods verify state after operation (systemctl is-active) for accurate success status
+- Success requires both returncode=0 AND correct active state (start: active=True, stop: active=False)
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Phase 24 complete — all 3 plans executed, verification passed
+**Stopped at:** Completed 25-01-PLAN.md (service actions)
 **Resume file:** None
 
 ## Open Issues
@@ -178,4 +184,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 24 complete)*
+*State updated: 2026-01-28 (25-01 complete)*
