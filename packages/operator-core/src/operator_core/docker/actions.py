@@ -8,7 +8,10 @@ import asyncio
 from typing import Any
 
 from python_on_whales import docker
-from python_on_whales.exceptions import NoSuchContainer
+from python_on_whales.exceptions import NoSuchContainer, NoSuchNetwork
+
+# Maximum number of log lines to retrieve (prevent memory exhaustion)
+MAX_TAIL = 10000
 
 
 class DockerActionExecutor:
@@ -180,3 +183,196 @@ class DockerActionExecutor:
             }
 
         return await loop.run_in_executor(None, _blocking_inspect)
+
+    async def get_container_logs(
+        self,
+        container_id: str,
+        tail: int | None = None,
+        since: str | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve logs from a container.
+
+        Args:
+            container_id: Container ID or name to get logs from
+            tail: Number of lines to retrieve (default: 100, max: 10000)
+            since: Only return logs since this time (ISO format or relative)
+
+        Returns:
+            Dict with container_id, logs (string), line_count, tail_limit, and truncated (bool)
+
+        Raises:
+            NoSuchContainer: If container doesn't exist
+
+        Note:
+            Tail limit is silently capped at MAX_TAIL (10000) to prevent memory exhaustion.
+            Never uses follow=True (would block indefinitely).
+            Always includes timestamps for debugging.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _blocking_get_logs():
+            # Default tail to 100, cap at MAX_TAIL
+            effective_tail = tail if tail is not None else 100
+            if effective_tail > MAX_TAIL:
+                effective_tail = MAX_TAIL
+
+            # Get logs with timestamps, never follow
+            logs = self._docker.container.logs(
+                container_id,
+                tail=effective_tail,
+                since=since,
+                timestamps=True,
+                follow=False,
+            )
+
+            # Count lines in logs
+            line_count = len(logs.splitlines()) if logs else 0
+
+            return {
+                "container_id": container_id,
+                "logs": logs,
+                "line_count": line_count,
+                "tail_limit": effective_tail,
+                "truncated": tail is not None and tail > MAX_TAIL,
+            }
+
+        return await loop.run_in_executor(None, _blocking_get_logs)
+
+    async def connect_container_to_network(
+        self,
+        container_id: str,
+        network: str,
+        alias: str | None = None,
+    ) -> dict[str, Any]:
+        """Connect a container to a Docker network.
+
+        Args:
+            container_id: Container ID or name to connect
+            network: Network name or ID to connect to
+            alias: Optional network alias for the container
+
+        Returns:
+            Dict with container_id, network, alias, and connected=True
+
+        Raises:
+            NoSuchContainer: If container doesn't exist
+            ValueError: If network doesn't exist
+        """
+        loop = asyncio.get_running_loop()
+
+        def _blocking_connect():
+            # Validate container exists (provides better error message)
+            self._docker.container.inspect(container_id)
+
+            # Validate network exists
+            if not self._docker.network.exists(network):
+                raise ValueError(f"Network '{network}' not found")
+
+            # Connect container to network
+            self._docker.network.connect(
+                network,
+                container_id,
+                alias=alias,
+            )
+
+            return {
+                "container_id": container_id,
+                "network": network,
+                "alias": alias,
+                "connected": True,
+            }
+
+        return await loop.run_in_executor(None, _blocking_connect)
+
+    async def disconnect_container_from_network(
+        self,
+        container_id: str,
+        network: str,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Disconnect a container from a Docker network.
+
+        Args:
+            container_id: Container ID or name to disconnect
+            network: Network name or ID to disconnect from
+            force: Force disconnection even if container is running
+
+        Returns:
+            Dict with container_id, network, and disconnected=True
+
+        Raises:
+            NoSuchContainer: If container doesn't exist
+        """
+        loop = asyncio.get_running_loop()
+
+        def _blocking_disconnect():
+            # Disconnect container from network
+            self._docker.network.disconnect(
+                network,
+                container_id,
+                force=force,
+            )
+
+            return {
+                "container_id": container_id,
+                "network": network,
+                "disconnected": True,
+            }
+
+        return await loop.run_in_executor(None, _blocking_disconnect)
+
+    async def execute_command(
+        self,
+        container_id: str,
+        command: list[str],
+        user: str | None = None,
+        workdir: str | None = None,
+    ) -> dict[str, Any]:
+        """Execute a command inside a running container.
+
+        Args:
+            container_id: Container ID or name to execute in
+            command: Command to execute as list of strings
+            user: User to run command as (default: container's default user)
+            workdir: Working directory for command (default: container's workdir)
+
+        Returns:
+            Dict with container_id, command, success (bool), output (str), error (str or None)
+
+        Raises:
+            NoSuchContainer: If container doesn't exist
+
+        Note:
+            Runs with tty=False, interactive=False for programmatic access.
+            Errors are captured in the error field, not raised as exceptions.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _blocking_execute():
+            try:
+                output = self._docker.container.execute(
+                    container_id,
+                    command,
+                    user=user,
+                    workdir=workdir,
+                    tty=False,
+                    interactive=False,
+                )
+
+                return {
+                    "container_id": container_id,
+                    "command": command,
+                    "success": True,
+                    "output": output,
+                    "error": None,
+                }
+            except Exception as e:
+                return {
+                    "container_id": container_id,
+                    "command": command,
+                    "success": False,
+                    "output": "",
+                    "error": str(e),
+                }
+
+        return await loop.run_in_executor(None, _blocking_execute)
