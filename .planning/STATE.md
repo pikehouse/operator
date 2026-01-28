@@ -3,20 +3,20 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Not started (defining requirements)
+**Phase:** Phase 23 - Safety Enhancement
 **Plan:** —
-**Status:** Defining requirements
-**Last activity:** 2026-01-27 — Milestone v2.3 started
+**Status:** Ready for planning
+**Last activity:** 2026-01-27 — v2.3 roadmap created
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [░░░░░░░░░░] 0% (Phase 23 of 29)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-27)
 
-**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now complete agentic loop with auto-remediation.
+**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now infrastructure-level remediation with Docker control and script execution.
 
-**Current focus:** v2.3 — expanding action capabilities to infrastructure control and script execution.
+**Current focus:** v2.3 — expanding action capabilities to infrastructure control (Docker, host operations) and sandboxed script execution with iterative agent feedback.
 
 ## Milestones
 
@@ -27,15 +27,39 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 | v2.0 | SHIPPED | 2026-01-26 |
 | v2.1 | SHIPPED | 2026-01-27 |
 | v2.2 | SHIPPED | 2026-01-27 |
+| v2.3 | IN PROGRESS | — |
 
 See: .planning/MILESTONES.md
 
-## v2.2 Phase Overview
+## v2.3 Phase Overview
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 21 | Agent Agentic Loop | DEMO-01, AGENT-01, AGENT-02, AGENT-03, AGENT-04 (5) | Complete |
-| 22 | Demo Integration | TIKV-01, TIKV-02, TIKV-03, RLIM-01, RLIM-02, RLIM-03 (6) | Complete |
+| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Pending |
+| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Pending |
+| 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
+| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
+| 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
+| 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
+| 29 | Demo Scenarios | DEMO-01, DEMO-02 (2) | Pending |
+
+**Total:** 7 phases, 52 requirements
+
+## Performance Metrics
+
+**v2.2 (most recent):**
+- 2 phases, 3 plans
+- 8 files modified
+- ~400 lines added
+- 25 commits
+- 1 day from start to ship
+
+**v2.1:**
+- 5 phases, 21 plans
+- 146 files changed
+- ~18,000 lines added
+- 87 commits
+- 2 days from start to ship
 
 ## Archives
 
@@ -49,6 +73,7 @@ See: .planning/MILESTONES.md
 | milestones/v2.0-ROADMAP.md | v2.0 roadmap (4 phases) |
 | milestones/v2.0-REQUIREMENTS.md | v2.0 requirements (17 total) |
 | milestones/v2.1-ROADMAP.md | v2.1 roadmap (5 phases) |
+| milestones/v2.2-ROADMAP.md | v2.2 roadmap (2 phases) |
 
 ## Accumulated Context
 
@@ -56,7 +81,7 @@ See: .planning/MILESTONES.md
 - Observe-only first - proved AI diagnosis quality before action
 - Protocol-based abstractions - Subject and DeploymentTarget extensible
 - Subprocess isolation for TUI - daemons run as real processes
-- httpx, Pydantic, aiosqlite stack - proven across 4 milestones
+- httpx, Pydantic, aiosqlite stack - proven across 5 milestones
 
 **Key decisions from v2.0:**
 - Pydantic BaseModel for action types (validation + serialization)
@@ -85,11 +110,21 @@ See: .planning/MILESTONES.md
 - Explicit action names in narratives (transfer_leader, reset_counter) for viewer understanding
 - Consistent narration pattern: "Watch Agent panel for complete agentic loop" + numbered steps
 
+**v2.3 Architecture (from research):**
+- python-on-whales (existing) + asyncio.run_in_executor() pattern for async Docker operations
+- aiofiles 25.1.0 (NEW) for async host file operations
+- Three dedicated executor components: DockerActionExecutor, HostActionExecutor, ScriptSandbox
+- All infrastructure actions integrate via ActionType.TOOL (no framework changes)
+- Script execution two-phase: agent generates -> system validates -> sandbox executes -> output captured
+- Multi-layer validation: syntax check, secrets scanning, dangerous command detection
+- Sandbox isolation: --network=none, --memory=512m, --cpus=1.0, user=nobody, read-only FS
+- Safety-first build order: Phase 23 (Safety) before infrastructure capabilities
+
 ## Session Continuity
 
 **Last session:** 2026-01-27
-**Stopped at:** v2.2 shipped
-**Resume with:** `/gsd:new-milestone`
+**Stopped at:** v2.3 roadmap created
+**Resume with:** `/gsd:plan-phase 23`
 
 ## Open Issues
 
@@ -102,4 +137,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-27 (v2.3 started)*
+*State updated: 2026-01-27 (v2.3 roadmap created)*
