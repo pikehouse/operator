@@ -19,6 +19,8 @@ This module provides the data structures for action management:
 - ActionExecutor: Orchestrator for proposal and execution flow
 - ApprovalRequiredError: Exception when approval is required but not granted
 - RetryConfig: Configuration for exponential backoff retry behavior
+- SessionRiskTracker: Session-level risk tracking for multi-action patterns
+- RiskLevel: Risk level enum (LOW/MEDIUM/HIGH/CRITICAL)
 - get_general_tools: General tools available beyond subject actions
 - execute_tool: Execute a general tool by name
 - TOOL_EXECUTORS: Map of tool names to executor functions
@@ -41,6 +43,8 @@ Exports:
     ActionExecutor: Action proposal and execution orchestrator
     ApprovalRequiredError: Exception for unapproved execution attempts
     RetryConfig: Dataclass for retry configuration with exponential backoff
+    SessionRiskTracker: Session-level risk tracker
+    RiskLevel: Risk level enum
     get_general_tools: Function returning general tool definitions
     execute_tool: Function to execute a general tool
     TOOL_EXECUTORS: Dict mapping tool names to executor functions
@@ -61,6 +65,10 @@ from operator_core.actions.safety import (
     ObserveOnlyError,
     SafetyController,
     SafetyMode,
+)
+from operator_core.actions.session import (
+    RiskLevel,
+    SessionRiskTracker,
 )
 from operator_core.actions.tools import (
     TOOL_EXECUTORS,
@@ -92,8 +100,10 @@ __all__ = [
     "ObserveOnlyError",
     "ParamDef",
     "RetryConfig",
+    "RiskLevel",
     "SafetyController",
     "SafetyMode",
+    "SessionRiskTracker",
     "TOOL_EXECUTORS",
     "ValidationError",
     "execute_tool",
