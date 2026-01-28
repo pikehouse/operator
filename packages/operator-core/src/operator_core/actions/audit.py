@@ -21,6 +21,7 @@ import aiosqlite
 
 from pydantic import BaseModel, Field
 
+from operator_core.actions.secrets import SecretRedactor
 from operator_core.actions.types import ActionProposal
 from operator_core.db.schema import ACTIONS_SCHEMA_SQL, SCHEMA_SQL
 
@@ -81,6 +82,7 @@ class ActionAuditor:
             db_path: Path to the SQLite database file
         """
         self.db_path = db_path
+        self._redactor = SecretRedactor()
 
     async def _ensure_schema(self, conn: aiosqlite.Connection) -> None:
         """Create tables and indexes if they don't exist."""
@@ -95,7 +97,13 @@ class ActionAuditor:
         Args:
             event: The audit event to log
         """
-        event_data_json = json.dumps(event.event_data) if event.event_data else None
+        # Redact secrets BEFORE serialization and database write (SAFE-06)
+        redacted_data = (
+            self._redactor.redact_dict(event.event_data)
+            if event.event_data
+            else None
+        )
+        event_data_json = json.dumps(redacted_data) if redacted_data else None
 
         async with aiosqlite.connect(self.db_path) as conn:
             await self._ensure_schema(conn)
