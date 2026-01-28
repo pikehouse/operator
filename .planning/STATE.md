@@ -199,7 +199,7 @@ See: .planning/MILESTONES.md
 - Lazy initialization of ScriptExecutor in _get_script_executor() following Docker/Host pattern
 - execute_script classified as risk level "high" with requires_approval=True (arbitrary code execution)
 - Comprehensive tool description explains validation layers and sandbox constraints for agent guidance
-- Lambda wrapper in TOOL_EXECUTORS maps execute_script to ScriptExecutor.execute()
+- Lambda wrapper translates tool params to executor params (script_content → content)
 
 ## Session Continuity
 
