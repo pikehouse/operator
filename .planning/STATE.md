@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 25 - Host Actions (COMPLETE)
-**Plan:** 03 of 3 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-28 — Completed 25-03-PLAN.md (action registration)
+**Phase:** Phase 26 - Script Execution & Validation (IN PROGRESS)
+**Plan:** 01 of 3 complete
+**Status:** In progress
+**Last activity:** 2026-01-28 — Completed 26-01-PLAN.md (script validation)
 
-Progress: [███████░░░] 43% (Phase 3 of 7 complete)
+Progress: [████████░░] 50% (Phase 4 of 7 in progress)
 
 ## Project Reference
 
@@ -38,7 +38,7 @@ See: .planning/MILESTONES.md
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Complete ✓ |
-| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
+| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | In Progress (Plan 01/3) |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
 | 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
 | 29 | Demo Scenarios | DEMO-01, DEMO-02 (2) | Pending |
@@ -180,10 +180,17 @@ See: .planning/MILESTONES.md
 - All host actions require approval (no read-only host operations)
 - Lambda wrappers map tool names to executor methods (host_service_start -> start_service)
 
+**Key decisions from v2.3 (Phase 26 Plan 01):**
+- Bash syntax validation deferred to execution time (requires async subprocess)
+- Python syntax validation synchronous using ast.parse()
+- Secret patterns detect literal string assignments only (password=get_password() allowed)
+- 10000 character limit for script size (VALD-05)
+- ValidationResult includes layer field for debugging which validation failed
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 25-03-PLAN.md (action registration) - Phase 25 complete
+**Stopped at:** Completed 26-01-PLAN.md (script validation) - Phase 26 in progress
 **Resume file:** None
 
 ## Open Issues
@@ -197,4 +204,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 25 complete)*
+*State updated: 2026-01-28 (Phase 26 Plan 01 complete)*
