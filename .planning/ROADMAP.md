@@ -48,16 +48,22 @@ Plans:
 **Goal:** The ~200 line core loop that runs Claude.
 
 **Deliverables:**
-- Health check trigger (poll Prometheus or receive alerts)
-- Claude conversation loop with tool execution
-- Session management (start, execute tools, save audit log)
+- Database polling for tickets (1-second interval)
+- Claude conversation loop with tool_runner
+- Haiku summarization of reasoning and tool outputs
+- Database audit logging (not JSON files)
 - System prompt for SRE agent
 
+**Plans:** 1 plan
+
+Plans:
+- [ ] 31-01-PLAN.md — Core agent loop with tool_runner, database polling, Haiku summarization
+
 **Success Criteria:**
-1. Loop detects unhealthy state from Prometheus
-2. Claude receives system state and can call tools
-3. Tool results returned to Claude for continued reasoning
-4. Complete session saved as audit log JSON
+1. Agent polls database for open tickets every 1 second
+2. Claude receives ticket and can call shell tool
+3. Tool results summarized by Haiku before logging
+4. Complete audit trail stored in database
 5. Core loop is < 200 lines
 
 ### Phase 32: Integration & Demo
@@ -274,7 +280,7 @@ Archived in milestones/v2.3-ROADMAP.md
 | 23-26 | v2.3 | 13/13 | Archived | 2026-01-28 |
 | 27-29 | v2.3 | — | Superseded | — |
 | 30 | v3.0 | 1/1 | Complete | 2026-01-28 |
-| 31 | v3.0 | 0/? | Pending | — |
+| 31 | v3.0 | 0/1 | Pending | — |
 | 32 | v3.0 | 0/? | Pending | — |
 
 ---
