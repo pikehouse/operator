@@ -36,7 +36,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 30 | Core Agent | Pending |
+| 30 | Core Agent | ✓ Complete |
 | 31 | Agent Loop | Pending |
 | 32 | Integration & Demo | Pending |
 
@@ -147,4 +147,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (v3.0 milestone created, v2.3 archived)*
+*State updated: 2026-01-28 (Phase 30 complete)*

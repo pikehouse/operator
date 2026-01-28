@@ -19,7 +19,7 @@
 **Phases:** 3
 **Requirements:** Defined inline (simple milestone)
 
-### Phase 30: Core Agent
+### Phase 30: Core Agent ✓
 
 **Goal:** Agent container with shell tool and audit logging.
 
@@ -30,16 +30,18 @@
 
 **Note:** Scope narrowed from original — no web_search or web_fetch tools. Claude uses curl directly.
 
-**Plans:** 1 plan
+**Plans:** 1 plan (1/1 complete)
 
 Plans:
-- [ ] 30-01-PLAN.md — Agent Dockerfile, shell() tool, SessionAuditor
+- [x] 30-01-PLAN.md — Agent Dockerfile, shell() tool, SessionAuditor
 
 **Success Criteria:**
-1. Agent container builds and runs with Docker socket access
-2. shell() tool logs to audit format before and after execution
-3. shell() can execute arbitrary commands with 120s timeout
-4. SessionAuditor saves complete conversation history to JSON
+1. ✓ Agent container builds and runs with Docker socket access
+2. ✓ shell() tool logs to audit format before and after execution
+3. ✓ shell() can execute arbitrary commands with 120s timeout
+4. ✓ SessionAuditor saves complete conversation history to JSON
+
+**Completed:** 2026-01-28
 
 ### Phase 31: Agent Loop
 
@@ -271,7 +273,7 @@ Archived in milestones/v2.3-ROADMAP.md
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
 | 23-26 | v2.3 | 13/13 | Archived | 2026-01-28 |
 | 27-29 | v2.3 | — | Superseded | — |
-| 30 | v3.0 | 0/1 | Pending | — |
+| 30 | v3.0 | 1/1 | Complete | 2026-01-28 |
 | 31 | v3.0 | 0/? | Pending | — |
 | 32 | v3.0 | 0/? | Pending | — |
 
