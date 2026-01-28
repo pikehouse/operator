@@ -4,11 +4,11 @@
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
 **Phase:** Phase 23 - Safety Enhancement
-**Plan:** 01 of 1
+**Plan:** 02 of 4
 **Status:** In progress
-**Last activity:** 2026-01-28 — Completed 23-01-PLAN.md (Identity Tracking & Dual Authorization)
+**Last activity:** 2026-01-28 — Completed 23-04-PLAN.md (Session Risk Tracking & Enhanced Kill Switch)
 
-Progress: [█░░░░░░░░░] 14% (Plan 1 of 7 complete)
+Progress: [██░░░░░░░░] 29% (Plan 2 of 7 complete)
 
 ## Project Reference
 
@@ -35,7 +35,7 @@ See: .planning/MILESTONES.md
 
 | Phase | Goal | Requirements | Status |
 |-------|------|--------------|--------|
-| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | In Progress (1/1 plans complete) |
+| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | In Progress (2/4 plans complete) |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Pending |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Pending |
 | 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Pending |
@@ -126,11 +126,16 @@ See: .planning/MILESTONES.md
 - Authorization protocols (PermissionChecker, CapabilityChecker) enable pluggable implementations
 - Database migration uses individual try/except per column for clean migration of existing databases
 - OAuth delegation model: requester_id (resource owner) + agent_id (client acting on their behalf)
+- Session risk scoring: 5-minute time window, 30-second rapid threshold, 1.5x frequency multiplier
+- Four-tier risk levels: LOW (0-9), MEDIUM (10-24), HIGH (25-49), CRITICAL (50+)
+- Overlapping pattern matches intentional (represent increasing risk)
+- Force-terminate Docker via subprocess (asyncio.Task.cancel limitation workaround)
+- Kill switch returns detailed dict instead of int (pending_proposals, docker_containers, asyncio_tasks)
 
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 23-01-PLAN.md (Identity Tracking & Dual Authorization)
+**Stopped at:** Completed 23-04-PLAN.md (Session Risk Tracking & Enhanced Kill Switch)
 **Resume file:** None
 
 ## Open Issues
@@ -144,4 +149,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Completed plan 23-01)*
+*State updated: 2026-01-28 (Completed plan 23-04)*
