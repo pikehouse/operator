@@ -7,13 +7,83 @@
 - [x] **v2.0 Agent Actions** - Phases 12-15 (shipped 2026-01-26)
 - [x] **v2.1 Multi-Subject Support** - Phases 16-20 (shipped 2026-01-27)
 - [x] **v2.2 Agentic Remediations Demo** - Phases 21-22 (shipped 2026-01-27)
-- [ ] **v2.3 Infrastructure Actions & Script Execution** - Phases 23-29 (in progress)
+- [ ] **v2.3 Infrastructure Actions & Script Execution** - Phases 23-26 (archived incomplete)
+- [ ] **v3.0 Operator Laboratory** - Phases 30-32 (in progress)
 
-## v2.3 Infrastructure Actions & Script Execution
+## v3.0 Operator Laboratory
+
+**Goal:** Give Claude autonomy and a well-equipped environment rather than constraining it to predefined actions. Safety via isolation (Docker container), not restrictions. Audit everything, approve nothing.
+
+**Philosophy:** The difference between giving someone a menu of 10 dishes vs giving them a full kitchen. We want the kitchen.
+
+**Phases:** 3
+**Requirements:** Defined inline (simple milestone)
+
+### Phase 30: Core Agent
+
+**Goal:** Agent container with three tools and audit logging.
+
+**Deliverables:**
+- Agent container Dockerfile (Python 3.12, Docker CLI, curl, jq, standard Unix tools)
+- `shell(command, reasoning)` — execute any command, log with reasoning
+- `web_search(query, reasoning)` — search for docs/solutions
+- `web_fetch(url, reasoning)` — read specific pages
+- Audit log format (JSON, per-session)
+
+**Success Criteria:**
+1. Agent container builds and runs with Docker socket access
+2. All three tools log to audit format before and after execution
+3. shell() can execute arbitrary commands with timeout
+4. web_search() returns formatted search results
+5. web_fetch() extracts and returns page content
+
+### Phase 31: Agent Loop
+
+**Goal:** The ~200 line core loop that runs Claude.
+
+**Deliverables:**
+- Health check trigger (poll Prometheus or receive alerts)
+- Claude conversation loop with tool execution
+- Session management (start, execute tools, save audit log)
+- System prompt for SRE agent
+
+**Success Criteria:**
+1. Loop detects unhealthy state from Prometheus
+2. Claude receives system state and can call tools
+3. Tool results returned to Claude for continued reasoning
+4. Complete session saved as audit log JSON
+5. Core loop is < 200 lines
+
+### Phase 32: Integration & Demo
+
+**Goal:** End-to-end validation against real subjects.
+
+**Deliverables:**
+- Docker Compose with agent container alongside subjects
+- Agent can reach Prometheus, subjects, internet
+- TiKV failure scenario validated
+- Audit log review tooling
+
+**Success Criteria:**
+1. Agent container runs alongside TiKV cluster in Docker Compose
+2. Claude autonomously diagnoses TiKV failure (no predefined playbook)
+3. Claude fixes issue using shell commands (docker restart, etc.)
+4. Complete audit log shows reasoning chain
+5. Environment recoverable via docker-compose down/up
+
+---
+
+## v2.3 Infrastructure Actions & Script Execution (Archived)
+
+**Status:** Archived incomplete — superseded by v3.0 Operator Laboratory
+
+**Reason:** Pivot to simpler philosophy. v2.3 built elaborate action framework with executors, approval workflows, and risk classification. v3.0 replaces this with "give Claude a shell and let it figure things out."
+
+**Completed phases (23-26) remain in codebase but are not used by v3.0.**
 
 **Goal:** The action agent can remediate issues by controlling Docker infrastructure, modifying host processes, and generating/executing custom scripts in sandboxed containers — with output fed back for iterative reasoning.
 
-**Phases:** 7
+**Phases:** 7 (4 complete, 3 superseded)
 **Requirements:** 52 total
 **Coverage:** 52/52 mapped (100%)
 
@@ -118,50 +188,15 @@ Plans:
 
 **Completed:** 2026-01-28
 
-### Phase 27: Risk Classification
+### Phase 27-29: Superseded
 
-**Goal:** Actions classified by risk level (LOW/MEDIUM/HIGH/CRITICAL) with approval mode configurable per level.
+**Status:** Not implemented — superseded by v3.0
 
-**Dependencies:** Phases 24, 25, 26 (requires all action types defined)
+Phases 27 (Risk Classification), 28 (Agent Integration), and 29 (Demo Scenarios) were planned but never started. The v3.0 pivot renders them unnecessary:
 
-**Requirements:** RISK-01, RISK-02, RISK-03, RISK-04, RISK-05, RISK-06 (6)
-
-**Success Criteria:**
-1. docker_inspect and docker_logs classified as LOW risk
-2. docker_start, docker_restart, host_service_* classified as MEDIUM risk
-3. docker_stop, docker_network_*, host_kill_process classified as HIGH risk
-4. execute_script classified as CRITICAL risk
-5. Approval mode per risk level configurable (AUTO/REQUIRE/DENY)
-6. User can configure system to auto-approve LOW, require approval for MEDIUM/HIGH, deny CRITICAL
-
-### Phase 28: Agent Integration
-
-**Goal:** Agent can propose script generation, receive execution results, and iterate on failures based on output.
-
-**Dependencies:** Phase 26 (requires script execution capability)
-
-**Requirements:** AGNT-01, AGNT-02, AGNT-03, AGNT-04 (4)
-
-**Success Criteria:**
-1. Agent proposes execute_script with script_content parameter in diagnosis flow
-2. Script execution result (output, exit code, timeout flag) returned to agent
-3. Agent iterates on failed scripts based on stderr output and exit code
-4. Agent prompt includes guidance on when to use scripts vs direct Docker/host actions
-5. End-to-end flow validated: diagnosis -> generate script -> validate -> execute -> analyze result -> refine
-
-### Phase 29: Demo Scenarios
-
-**Goal:** Infrastructure actions validated through realistic demo scenarios showing container recovery and config repair.
-
-**Dependencies:** Phases 24, 26, 28 (requires Docker actions, script execution, and agent integration)
-
-**Requirements:** DEMO-01, DEMO-02 (2)
-
-**Success Criteria:**
-1. TiKV container recovery demo: crash detected -> docker_restart_container -> health verified
-2. Config repair demo: misconfiguration detected -> execute_script (inspect + fix) -> resolution verified
-3. Demo narratives updated to describe infrastructure action flows
-4. Both demos executable via ./scripts/run-demo.sh with EXECUTE mode
+- Risk classification → v3.0 has no approval workflow
+- Agent integration → v3.0 uses direct Claude tool calling
+- Demo scenarios → v3.0 Phase 32 covers end-to-end validation
 
 ## Archived Milestones
 
@@ -210,6 +245,17 @@ Archived in milestones/v2.2-ROADMAP.md
 
 </details>
 
+<details>
+<summary>v2.3 Infrastructure Actions (Phases 23-26) - ARCHIVED INCOMPLETE 2026-01-28</summary>
+
+Archived in milestones/v2.3-ROADMAP.md
+
+**Summary:** 4 of 7 phases complete, 13 plans total. Built DockerActionExecutor, HostActionExecutor, ScriptExecutor with safety controls, approval workflows, and sandboxed execution. Phases 27-29 (Risk Classification, Agent Integration, Demo Scenarios) superseded by v3.0 pivot.
+
+**Reason for archive:** Philosophy pivot. v3.0 "Operator Laboratory" replaces the action framework approach with "give Claude a shell and let it figure things out."
+
+</details>
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -219,13 +265,11 @@ Archived in milestones/v2.2-ROADMAP.md
 | 12-15 | v2.0 | 12/12 | Complete | 2026-01-26 |
 | 16-20 | v2.1 | 21/21 | Complete | 2026-01-27 |
 | 21-22 | v2.2 | 3/3 | Complete | 2026-01-27 |
-| 23 | v2.3 | 4/4 | Complete | 2026-01-28 |
-| 24 | v2.3 | 3/3 | Complete | 2026-01-28 |
-| 25 | v2.3 | 3/3 | Complete | 2026-01-28 |
-| 26 | v2.3 | 3/3 | Complete | 2026-01-28 |
-| 27 | v2.3 | 0/? | Pending | — |
-| 28 | v2.3 | 0/? | Pending | — |
-| 29 | v2.3 | 0/? | Pending | — |
+| 23-26 | v2.3 | 13/13 | Archived | 2026-01-28 |
+| 27-29 | v2.3 | — | Superseded | — |
+| 30 | v3.0 | 0/? | Pending | — |
+| 31 | v3.0 | 0/? | Pending | — |
+| 32 | v3.0 | 0/? | Pending | — |
 
 ---
 *Roadmap created: 2026-01-25*
@@ -234,11 +278,5 @@ Archived in milestones/v2.2-ROADMAP.md
 *v2.0 archived: 2026-01-26*
 *v2.1 archived: 2026-01-27*
 *v2.2 archived: 2026-01-27*
-*v2.3 phases added: 2026-01-27*
-*Phase 23 planned: 2026-01-27*
-*Phase 23 complete: 2026-01-28*
-*Phase 24 planned: 2026-01-28*
-*Phase 24 complete: 2026-01-28*
-*Phase 25 complete: 2026-01-28*
-*Phase 26 planned: 2026-01-28*
-*Phase 26 complete: 2026-01-28*
+*v2.3 archived incomplete: 2026-01-28*
+*v3.0 created: 2026-01-28*

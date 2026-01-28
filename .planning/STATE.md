@@ -2,21 +2,21 @@
 
 ## Current Position
 
-**Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 26 - Script Execution & Validation (COMPLETE)
-**Plan:** 3 of 3 complete
-**Status:** Phase complete
-**Last activity:** 2026-01-28 — Completed 26-03-PLAN.md (script tool registration)
+**Milestone:** v3.0 Operator Laboratory
+**Phase:** Phase 30 - Core Agent (PENDING)
+**Plan:** Not started
+**Status:** New milestone created
+**Last activity:** 2026-01-28 — Pivot from v2.3 to v3.0 Laboratory approach
 
-Progress: [████████░░] 57% (Phase 4 of 7 complete)
+Progress: [░░░░░░░░░░] 0% (Phase 0 of 3 complete)
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-01-27)
 
-**Core value:** AI demonstrates real diagnostic reasoning about distributed systems — and now infrastructure-level remediation with Docker control and script execution.
+**Philosophy shift:** Give Claude autonomy and a well-equipped environment, rather than constraining it to predefined actions. Safety via isolation (Docker), not restrictions. Audit everything, approve nothing.
 
-**Current focus:** v2.3 — expanding action capabilities to infrastructure control (Docker, host operations) and sandboxed script execution with iterative agent feedback.
+**Core principle:** The difference between giving someone a menu of 10 dishes vs giving them a full kitchen. We want the kitchen.
 
 ## Milestones
 
@@ -27,39 +27,61 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 | v2.0 | SHIPPED | 2026-01-26 |
 | v2.1 | SHIPPED | 2026-01-27 |
 | v2.2 | SHIPPED | 2026-01-27 |
-| v2.3 | IN PROGRESS | — |
+| v2.3 | ARCHIVED | 2026-01-28 |
+| v3.0 | IN PROGRESS | — |
 
 See: .planning/MILESTONES.md
 
-## v2.3 Phase Overview
+## v3.0 Phase Overview
 
-| Phase | Goal | Requirements | Status |
-|-------|------|--------------|--------|
-| 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
-| 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
-| 25 | Host Actions | HOST-01 through HOST-07 (7) | Complete ✓ |
-| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Complete ✓ |
-| 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
-| 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
-| 29 | Demo Scenarios | DEMO-01, DEMO-02 (2) | Pending |
+| Phase | Goal | Status |
+|-------|------|--------|
+| 30 | Core Agent | Pending |
+| 31 | Agent Loop | Pending |
+| 32 | Integration & Demo | Pending |
 
-**Total:** 7 phases, 52 requirements
+**Total:** 3 phases
 
-## Performance Metrics
+### Phase 30: Core Agent
+- Agent container Dockerfile (Python 3.12, Docker CLI, standard tools)
+- `shell(command, reasoning)` — execute any command, log with reasoning
+- `web_search(query, reasoning)` — search for docs/solutions
+- `web_fetch(url, reasoning)` — read specific pages
+- Audit log format (JSON, per-session)
 
-**v2.2 (most recent):**
-- 2 phases, 3 plans
-- 8 files modified
-- ~400 lines added
-- 25 commits
-- 1 day from start to ship
+### Phase 31: Agent Loop
+- Health check trigger (poll Prometheus or receive alerts)
+- Claude conversation loop with tool execution
+- Session management (start, execute, save audit log)
+- System prompt for SRE agent
+- Core loop < 200 lines
 
-**v2.1:**
-- 5 phases, 21 plans
-- 146 files changed
-- ~18,000 lines added
-- 87 commits
-- 2 days from start to ship
+### Phase 32: Integration & Demo
+- Docker Compose with agent container alongside subjects
+- Agent can reach Prometheus, subjects, internet
+- TiKV failure scenario validated
+- Audit log review tooling
+
+## What's Being Eliminated
+
+| Component | Reason |
+|-----------|--------|
+| ActionRegistry | Claude knows what commands exist |
+| Action definitions with schemas | Claude knows docker/bash syntax |
+| Parameter validation | Errors are feedback, not gates |
+| DockerExecutor, HostExecutor, ScriptExecutor | Just shell |
+| Approval workflows | Lab doesn't need approval |
+| Structured DiagnosisOutput | Claude explains in natural language |
+| SubjectProtocol abstraction | Claude queries metrics directly |
+
+## What's Being Kept
+
+| Component | Reason |
+|-----------|--------|
+| Audit logging | Visibility into what happened |
+| Monitor/alerting | Need to know something's wrong |
+| Docker Compose environment | The lab itself |
+| Prometheus | Metrics Claude can query |
 
 ## Archives
 
@@ -74,137 +96,34 @@ See: .planning/MILESTONES.md
 | milestones/v2.0-REQUIREMENTS.md | v2.0 requirements (17 total) |
 | milestones/v2.1-ROADMAP.md | v2.1 roadmap (5 phases) |
 | milestones/v2.2-ROADMAP.md | v2.2 roadmap (2 phases) |
+| milestones/v2.3-ROADMAP.md | v2.3 roadmap (7 phases, 4 complete) |
 
-## Accumulated Context
+## v3.0 Design Decisions
 
-**Decisions from prior milestones:**
-- Observe-only first - proved AI diagnosis quality before action
-- Protocol-based abstractions - Subject and DeploymentTarget extensible
-- Subprocess isolation for TUI - daemons run as real processes
-- httpx, Pydantic, aiosqlite stack - proven across 5 milestones
+**The Three Tools:**
+1. `shell(command, reasoning)` — Execute any bash command, log everything
+2. `web_search(query, reasoning)` — Search for documentation/solutions
+3. `web_fetch(url, reasoning)` — Fetch and extract content from a URL
 
-**Key decisions from v2.0:**
-- Pydantic BaseModel for action types (validation + serialization)
-- Default to OBSERVE mode (safe by default, explicit opt-in for execution)
-- Kill switch cancels pending AND switches to OBSERVE mode
-- Fire-and-forget action semantics for PD API calls
-- Tools use same ActionDefinition model with action_type=ActionType.TOOL
+**Container environment:**
+- Python 3.12 base image
+- Docker CLI (socket mounted)
+- Standard tools: curl, wget, jq, vim, git, netcat, dig, ping, htop
+- Python packages: anthropic, httpx, redis, pyyaml
 
-**Key decisions from v2.1:**
-- Protocol-based abstractions (SubjectProtocol, InvariantCheckerProtocol) in zero-dependency operator-protocols package
-- Factory returns tuple[Subject, Checker] for convenience
-- Lazy import in subject_factory.py prevents loading operator-ratelimiter unless needed
-- TiKVHealthPoller and RateLimiterHealthPoller return generic dict for framework flexibility
-- Both demos use same TUI layout (5 panels) via TUIDemoController
-- Monitor/agent subprocesses use --subject flag for subject selection
+**Safety model:**
+- Container is the sandbox
+- If Claude breaks everything, docker-compose down/up resets
+- Audit everything, restrict nothing
 
-**Key decisions from v2.2 (Phase 21):**
-- Fixed 5s delay for verification (not adaptive polling) - sufficient for demo
-- Simplified verification logs success if metrics observed (full invariant re-check is future work)
-- Propose -> Validate -> Execute -> Verify agentic flow in AgentRunner
-- Environment variables for mode configuration (OPERATOR_SAFETY_MODE, OPERATOR_APPROVAL_MODE)
-- SubprocessManager.spawn() accepts env dict, merges with os.environ
-
-**Key decisions from v2.2 (Phase 22):**
-- Renamed "AI Diagnosis" stages to "AI Remediation" to reflect full agentic loop
-- Explicit action names in narratives (transfer_leader, reset_counter) for viewer understanding
-- Consistent narration pattern: "Watch Agent panel for complete agentic loop" + numbered steps
-
-**v2.3 Architecture (from research):**
-- python-on-whales (existing) + asyncio.run_in_executor() pattern for async Docker operations
-- aiofiles 25.1.0 (NEW) for async host file operations
-- Three dedicated executor components: DockerActionExecutor, HostActionExecutor, ScriptSandbox
-- All infrastructure actions integrate via ActionType.TOOL (no framework changes)
-- Script execution two-phase: agent generates -> system validates -> sandbox executes -> output captured
-- Multi-layer validation: syntax check, secrets scanning, dangerous command detection
-- Sandbox isolation: --network=none, --memory=512m, --cpus=1.0, user=nobody, read-only FS
-- Safety-first build order: Phase 23 (Safety) before infrastructure capabilities
-
-**Key decisions from v2.3 (Phase 23):**
-- Identity fields use sensible defaults (requester_id='unknown', requester_type='agent', agent_id=None) for backwards compatibility
-- Default authorization checkers allow all requests (permissive for development, restrict in production)
-- Authorization protocols (PermissionChecker, CapabilityChecker) enable pluggable implementations
-- Database migration uses individual try/except per column for clean migration of existing databases
-- OAuth delegation model: requester_id (resource owner) + agent_id (client acting on their behalf)
-- Session risk scoring: 5-minute time window, 30-second rapid threshold, 1.5x frequency multiplier
-- Four-tier risk levels: LOW (0-9), MEDIUM (10-24), HIGH (25-49), CRITICAL (50+)
-- Overlapping pattern matches intentional (represent increasing risk)
-- Force-terminate Docker via subprocess (asyncio.Task.cancel limitation workaround)
-- Kill switch returns detailed dict instead of int (pending_proposals, docker_containers, asyncio_tasks)
-- Redact secrets BEFORE json.dumps() and database write, not after retrieval (defense-in-depth)
-- Structure-first processing in SecretRedactor: check dict/list types before key sensitivity
-- Dual detection strategy: key-based (field names) + pattern-based (env vars, Bearer tokens)
-- Double-check pattern for TOCTOU defense (pre-check, lock, re-check, atomic update)
-- 60-second approval token expiration for stale approval prevention
-- Optimistic locking via version field incremented on every update
-- asyncio.Lock serializes execution attempts before atomic version-checked update
-
-**Key decisions from v2.3 (Phase 24 Plan 01):**
-- Default 10-second timeout for stop/restart operations (configurable via parameter)
-- Idempotent operations: start on running container succeeds, stop on stopped container succeeds
-- Exit code semantics: 143 = graceful SIGTERM shutdown, 137 = force killed (SIGKILL or OOM)
-- Datetime fields serialized with .isoformat() for JSON compatibility
-- Graceful handling of None values in optional fields (started_at)
-
-**Key decisions from v2.3 (Phase 24 Plan 02):**
-- Default tail 100 lines for get_container_logs (sufficient for most debugging)
-- MAX_TAIL 10000 lines enforced silently (prevents memory exhaustion attacks)
-- Never use follow=True in logs (blocks indefinitely, unsuitable for async)
-- Always include timestamps in logs (essential for debugging)
-- Network validation before connect (better error messages than docker exception)
-- execute_command catches all exceptions (returns in error field, not raised)
-- Non-interactive exec mode (tty=False, interactive=False for programmatic access)
-
-**Key decisions from v2.3 (Phase 24 Plan 03):**
-- Risk levels: LOW for read-only (logs, inspect), MEDIUM for state changes (start, network), HIGH for availability impact or arbitrary execution (stop, restart, exec)
-- Lazy initialization of DockerActionExecutor in _get_docker_executor() to prevent circular import between tools.py and actions.py
-- All Docker actions require approval except read-only operations (logs, inspect)
-- Docker actions registered as ActionType.TOOL for agent discovery through get_general_tools()
-
-**Key decisions from v2.3 (Phase 25 Plan 01):**
-- FORBIDDEN_SERVICES take precedence over whitelist (even if manually added, is_allowed returns False)
-- validate_service_name blocks path separators (/) and traversal (..) before whitelist check
-- All service methods verify state after operation (systemctl is-active) for accurate success status
-- Success requires both returncode=0 AND correct active state (start: active=True, stop: active=False)
-
-**Key decisions from v2.3 (Phase 25 Plan 02):**
-- PID < 300 threshold blocks kernel threads conservatively
-- Signal 0 pre-validation confirms process existence and permission before actual signal
-- Graceful timeout default 5s matches Docker/Kubernetes convention
-- Escalation happens only after timeout loop completes (not partial)
-- kill_process returns escalated=True only if SIGKILL was actually sent
-
-**Key decisions from v2.3 (Phase 25 Plan 03):**
-- Risk levels: MEDIUM for service start/restart (recoverable), HIGH for stop/kill_process (availability impact)
-- Lazy initialization of HostActionExecutor in _get_host_executor() to prevent circular import between tools.py and actions.py
-- All host actions require approval (no read-only host operations)
-- Lambda wrappers map tool names to executor methods (host_service_start -> start_service)
-
-**Key decisions from v2.3 (Phase 26 Plan 01):**
-- Bash syntax validation deferred to execution time (requires async subprocess)
-- Python syntax validation synchronous using ast.parse()
-- Secret patterns detect literal string assignments only (password=get_password() allowed)
-- 10000 character limit for script size (VALD-05)
-- ValidationResult includes layer field for debugging which validation failed
-
-**Key decisions from v2.3 (Phase 26 Plan 02):**
-- Bash syntax validation with bash -n subprocess at execution time (async)
-- Timeout clamped to MAX_TIMEOUT (300s) to prevent infinite resource consumption
-- ExecutionResult includes timeout flag separate from success field
-- Docker exceptions captured in stderr field (not re-raised)
-- Exit code extraction from Docker error messages with fallback to 1
-- Temporary file cleanup with Path.unlink(missing_ok=True) for robustness
-
-**Key decisions from v2.3 (Phase 26 Plan 03):**
-- Lazy initialization of ScriptExecutor in _get_script_executor() following Docker/Host pattern
-- execute_script classified as risk level "high" with requires_approval=True (arbitrary code execution)
-- Comprehensive tool description explains validation layers and sandbox constraints for agent guidance
-- Lambda wrapper translates tool params to executor params (script_content → content)
+**Path to production:**
+- Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
+- The audit layer carries forward unchanged
 
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 26-03-PLAN.md (script tool registration) - Phase 26 complete
+**Stopped at:** Created v3.0 milestone, archived v2.3
 **Resume file:** None
 
 ## Open Issues
@@ -218,4 +137,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 26 complete - all 3 plans)*
+*State updated: 2026-01-28 (v3.0 milestone created, v2.3 archived)*
