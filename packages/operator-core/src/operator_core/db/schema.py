@@ -87,6 +87,9 @@ CREATE TABLE IF NOT EXISTS action_proposals (
     max_retries INTEGER DEFAULT 3,          -- Maximum retry attempts
     next_retry_at TEXT,                     -- When to retry next
     last_error TEXT,                        -- Error from last failed attempt
+    -- TOCTOU defense fields (SAFE-01, SAFE-02)
+    approval_token TEXT,                    -- One-time token for approval verification
+    version INTEGER DEFAULT 1,              -- Optimistic lock version
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (ticket_id) REFERENCES tickets(id)

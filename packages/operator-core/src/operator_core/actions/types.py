@@ -218,6 +218,16 @@ class ActionProposal(BaseModel):
         default=None, description="Error message from last failed attempt"
     )
 
+    # TOCTOU defense fields (SAFE-01, SAFE-02)
+    approval_token: str | None = Field(
+        default=None,
+        description="One-time cryptographic token for approval verification"
+    )
+    version: int = Field(
+        default=1,
+        description="Optimistic lock version, incremented on every update"
+    )
+
     @computed_field
     @property
     def is_approved(self) -> bool:

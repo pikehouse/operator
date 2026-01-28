@@ -13,6 +13,7 @@ Per project patterns:
 """
 
 import json
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -188,6 +189,21 @@ class ActionDB:
         except Exception:
             pass
 
+        # Migration: Add TOCTOU defense columns (SAFE-01, SAFE-02)
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN approval_token TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            await self._conn.execute(
+                "ALTER TABLE action_proposals ADD COLUMN version INTEGER DEFAULT 1"
+            )
+        except Exception:
+            pass  # Column already exists
+
         await self._conn.commit()
 
     def _row_to_proposal(self, row: aiosqlite.Row) -> ActionProposal:
@@ -229,6 +245,10 @@ class ActionDB:
         requester_type = row["requester_type"] if "requester_type" in row.keys() else "agent"
         agent_id = row["agent_id"] if "agent_id" in row.keys() else None
 
+        # Handle TOCTOU fields with defaults for migration compatibility
+        approval_token = row["approval_token"] if "approval_token" in row.keys() else None
+        version = row["version"] if "version" in row.keys() else 1
+
         return ActionProposal(
             id=row["id"],
             ticket_id=row["ticket_id"],
@@ -255,6 +275,8 @@ class ActionDB:
             max_retries=row["max_retries"] or 3,
             next_retry_at=next_retry_at,
             last_error=row["last_error"],
+            approval_token=approval_token,
+            version=version,
         )
 
     def _row_to_record(self, row: aiosqlite.Row) -> ActionRecord:
@@ -326,8 +348,9 @@ class ActionDB:
                 status, proposed_at, proposed_by,
                 requester_id, requester_type, agent_id,
                 workflow_id, execution_order, depends_on_proposal_id,
-                scheduled_at, retry_count, max_retries, next_retry_at, last_error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                scheduled_at, retry_count, max_retries, next_retry_at, last_error,
+                approval_token, version
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 proposal.ticket_id,
@@ -349,6 +372,8 @@ class ActionDB:
                 proposal.max_retries,
                 next_retry_at,
                 proposal.last_error,
+                proposal.approval_token,
+                proposal.version,
             ),
         )
         await self._conn.commit()
@@ -506,13 +531,16 @@ class ActionDB:
         self,
         proposal_id: int,
         approved_by: str = "user",
-    ) -> None:
+    ) -> str:
         """
-        Mark a validated proposal as approved.
+        Mark a validated proposal as approved and generate approval token.
 
         Args:
             proposal_id: The proposal ID to approve
             approved_by: Who approved (default: "user")
+
+        Returns:
+            The generated approval token (cryptographic string)
 
         Raises:
             ValueError: If proposal not found or not in VALIDATED status
@@ -531,16 +559,22 @@ class ActionDB:
 
         now = datetime.now().isoformat()
 
+        # Generate cryptographic approval token (SAFE-02)
+        approval_token = secrets.token_urlsafe(32)
+
         await self._conn.execute(
             """
             UPDATE action_proposals SET
                 approved_at = ?,
-                approved_by = ?
+                approved_by = ?,
+                approval_token = ?
             WHERE id = ?
             """,
-            (now, approved_by, proposal_id),
+            (now, approved_by, approval_token, proposal_id),
         )
         await self._conn.commit()
+
+        return approval_token
 
     async def reject_proposal(
         self,
