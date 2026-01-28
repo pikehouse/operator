@@ -4,9 +4,9 @@
 
 **Milestone:** v3.0 Operator Laboratory
 **Phase:** Phase 32 - Integration & Demo (IN PROGRESS)
-**Plan:** 32-03 complete (3 of 4)
+**Plan:** 32-01, 32-02, 32-03 complete (3 of 4)
 **Status:** Phase 32 in progress
-**Last activity:** 2026-01-28 — Completed 32-03-PLAN.md (TUI agent_lab integration)
+**Last activity:** 2026-01-28 — Completed 32-01-PLAN.md (Agent container configuration)
 
 Progress: [███████░░░] 75% (Phase 2 of 3 complete, Phase 3 in progress)
 
@@ -138,8 +138,20 @@ See: .planning/MILESTONES.md
 - Global state for tool result capture (_last_shell_result) since tool_runner doesn't yield results separately
 - Tool calls logged on ToolUseBlock detection, results logged after execution completes
 
-**Architecture decisions (Phase 32-03):**
-- TUI spawns agent_lab module directly (not CLI wrapper) for cleaner integration
+**Architecture decisions (Phase 32-02):**
+- Direct SQLite access for read-only CLI audit queries (simpler than abstraction layer)
+- Synchronous sqlite3 for CLI commands (no concurrency benefit from async)
+- Haiku summaries displayed by default (per CONTEXT.md)
+
+
+**Architecture decisions (Phase 32-01):**
+- Agent container uses external network (tikv_default) to join TiKV network
+- Docker socket mounted for container control (sibling access pattern)
+- ~/.operator volume mount for shared database between host and container
+- operator-core and operator-protocols installed in development mode
+
+
+
 - Increased agent buffer size to 100 lines for verbose reasoning/tool output
 - Demo chapters emphasize autonomous operation (no playbook, no approval)
 - Agent panel streams real-time Claude reasoning and tool execution
@@ -150,11 +162,11 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-28T20:43:01Z
-**Stopped at:** Completed 32-03-PLAN.md - TUI agent_lab integration
+**Last session:** 2026-01-28T20:41:27Z
+**Stopped at:** Completed 32-02-PLAN.md (CLI audit commands)
 **Resume file:** None
-**Next:** 32-04 - Docker Compose integration
-
+**Next:** 32-04 - End-to-end validation
+*State updated: 2026-01-28 (Phase 32 in progress - 32-01, 32-02, 32-03 complete)*
 ## Open Issues
 
 *None*
