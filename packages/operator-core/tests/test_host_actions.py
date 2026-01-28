@@ -868,8 +868,8 @@ class TestHostActionIntegration:
         from operator_core.actions.tools import get_general_tools
 
         tools = get_general_tools()
-        # 2 base (wait, log_message) + 8 Docker + 4 Host = 14
-        assert len(tools) == 14
+        # 2 base (wait, log_message) + 8 Docker + 4 Host + 1 Script = 15
+        assert len(tools) == 15
 
     def test_host_tools_have_parameters(self):
         """All host tools have properly defined parameters."""
