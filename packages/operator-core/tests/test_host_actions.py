@@ -1,10 +1,12 @@
-"""Tests for HostActionExecutor service operations and ServiceWhitelist validation."""
+"""Tests for HostActionExecutor service/process operations and validation."""
 
 import asyncio
+import os
+import signal
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from operator_core.host.validation import ServiceWhitelist
+from operator_core.host.validation import ServiceWhitelist, validate_pid
 from operator_core.host.actions import HostActionExecutor
 
 
@@ -468,3 +470,318 @@ class TestHostModuleImports:
         assert "nginx" in ServiceWhitelist.DEFAULT_WHITELIST
         assert "systemd" in ServiceWhitelist.FORBIDDEN_SERVICES
         assert "ssh" in ServiceWhitelist.FORBIDDEN_SERVICES
+
+
+# ===== PID Validation Tests =====
+
+
+class TestPidValidation:
+    """Tests for validate_pid function."""
+
+    def test_pid_1_rejected(self):
+        """PID 1 (init process) should be rejected with clear error."""
+        with pytest.raises(ValueError, match="init process"):
+            validate_pid(1)
+
+    def test_pid_0_rejected(self):
+        """PID 0 should be rejected."""
+        with pytest.raises(ValueError, match="PID 0"):
+            validate_pid(0)
+
+    def test_negative_pid_rejected(self):
+        """Negative PIDs should be rejected."""
+        with pytest.raises(ValueError, match="PID -1"):
+            validate_pid(-1)
+
+        with pytest.raises(ValueError, match="PID -100"):
+            validate_pid(-100)
+
+    def test_kernel_thread_pid_rejected(self):
+        """PIDs < 300 (likely kernel threads) should be rejected."""
+        with pytest.raises(ValueError, match="kernel thread"):
+            validate_pid(2)
+
+        with pytest.raises(ValueError, match="kernel thread"):
+            validate_pid(100)
+
+        with pytest.raises(ValueError, match="kernel thread"):
+            validate_pid(299)
+
+    def test_valid_pid_accepted(self):
+        """Valid PIDs >= 300 should be accepted (if process exists)."""
+        with patch("operator_core.host.validation.os.kill") as mock_kill:
+            # Mock os.kill to succeed (process exists and we have permission)
+            mock_kill.return_value = None
+
+            # Should not raise for valid PID
+            validate_pid(300)
+            validate_pid(1000)
+            validate_pid(65535)
+
+            # Verify os.kill was called with signal 0
+            assert mock_kill.call_count == 3
+            mock_kill.assert_any_call(300, 0)
+            mock_kill.assert_any_call(1000, 0)
+            mock_kill.assert_any_call(65535, 0)
+
+    def test_nonexistent_pid_raises(self):
+        """ProcessLookupError should be raised for non-existent PIDs."""
+        with patch("operator_core.host.validation.os.kill") as mock_kill:
+            mock_kill.side_effect = ProcessLookupError("No such process")
+
+            with pytest.raises(ProcessLookupError):
+                validate_pid(99999)
+
+    def test_permission_denied_raises(self):
+        """PermissionError should be raised when no permission to signal."""
+        with patch("operator_core.host.validation.os.kill") as mock_kill:
+            mock_kill.side_effect = PermissionError("Operation not permitted")
+
+            with pytest.raises(PermissionError):
+                validate_pid(500)
+
+    def test_non_integer_pid_rejected(self):
+        """Non-integer PIDs should be rejected."""
+        with pytest.raises(ValueError, match="must be integer"):
+            validate_pid("1000")  # type: ignore
+
+        with pytest.raises(ValueError, match="must be integer"):
+            validate_pid(1000.5)  # type: ignore
+
+        with pytest.raises(ValueError, match="must be integer"):
+            validate_pid(None)  # type: ignore
+
+
+# ===== Host Kill Process Tests =====
+
+
+class TestHostKillProcess:
+    """Tests for HostActionExecutor.kill_process method."""
+
+    @pytest.mark.asyncio
+    async def test_kill_sends_sigterm_by_default(self):
+        """kill_process should send SIGTERM by default."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Mock process exits immediately after SIGTERM
+            mock_kill.side_effect = [
+                None,  # First call sends SIGTERM
+                ProcessLookupError(),  # Second call (check if exists) - process exited
+                ProcessLookupError(),  # Final state check - process gone
+            ]
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234)
+
+            # Verify SIGTERM was sent (first os.kill call)
+            mock_kill.assert_any_call(1234, signal.SIGTERM)
+
+            # Verify result
+            assert result["pid"] == 1234
+            assert result["signal"] == "SIGTERM"
+            assert result["escalated"] is False
+            assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_kill_sends_sigkill_when_specified(self):
+        """kill_process should send SIGKILL when signal_type='SIGKILL'."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill:
+
+            # Mock process gone after SIGKILL
+            mock_kill.side_effect = [
+                None,  # Send SIGKILL
+                ProcessLookupError(),  # Final state check - process gone
+            ]
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234, signal_type="SIGKILL")
+
+            # Verify SIGKILL was sent
+            mock_kill.assert_any_call(1234, signal.SIGKILL)
+
+            assert result["signal"] == "SIGKILL"
+            assert result["escalated"] is False  # No escalation for direct SIGKILL
+            assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_graceful_escalation(self):
+        """If process doesn't die after SIGTERM, SIGKILL should be sent."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Process stays running during graceful timeout, then dies after SIGKILL
+            call_count = [0]
+
+            def kill_side_effect(pid, sig):
+                call_count[0] += 1
+                if sig == signal.SIGTERM:
+                    return None  # SIGTERM sent
+                elif sig == 0:
+                    # Process still running during timeout
+                    return None
+                elif sig == signal.SIGKILL:
+                    return None  # SIGKILL sent
+                return None
+
+            # Process exists during all timeout checks, then gone after SIGKILL
+            mock_kill.side_effect = [
+                None,  # SIGTERM sent
+                *([None] * 50),  # Process still exists for 50 checks (5 seconds at 100ms each)
+                None,  # SIGKILL sent
+                ProcessLookupError(),  # Final check - process gone
+            ]
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234, graceful_timeout=5)
+
+            assert result["escalated"] is True
+            assert result["success"] is True
+            assert result["signal"] == "SIGTERM"  # Original signal
+
+    @pytest.mark.asyncio
+    async def test_graceful_exit_no_escalation(self):
+        """Process dying before timeout should not trigger escalation."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Process exits after first existence check
+            mock_kill.side_effect = [
+                None,  # SIGTERM sent
+                ProcessLookupError(),  # First existence check - process gone
+                ProcessLookupError(),  # Final state check
+            ]
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234)
+
+            assert result["escalated"] is False
+            assert result["success"] is True
+            assert result["still_running"] is False
+
+    @pytest.mark.asyncio
+    async def test_pid_validation_integrated(self):
+        """PID 1 should raise ValueError (integration with validate_pid)."""
+        executor = HostActionExecutor()
+
+        with pytest.raises(ValueError, match="init process"):
+            await executor.kill_process(1)
+
+    @pytest.mark.asyncio
+    async def test_kernel_thread_pid_rejected(self):
+        """Kernel thread PIDs should raise ValueError."""
+        executor = HostActionExecutor()
+
+        with pytest.raises(ValueError, match="kernel thread"):
+            await executor.kill_process(100)
+
+    @pytest.mark.asyncio
+    async def test_return_structure(self):
+        """Result should have all expected fields."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill:
+
+            mock_kill.side_effect = [None, ProcessLookupError()]
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234, signal_type="SIGKILL")
+
+            # Verify all expected fields
+            assert "pid" in result
+            assert "signal" in result
+            assert "escalated" in result
+            assert "still_running" in result
+            assert "success" in result
+
+            # Verify types
+            assert isinstance(result["pid"], int)
+            assert isinstance(result["signal"], str)
+            assert isinstance(result["escalated"], bool)
+            assert isinstance(result["still_running"], bool)
+            assert isinstance(result["success"], bool)
+
+    @pytest.mark.asyncio
+    async def test_custom_graceful_timeout(self):
+        """graceful_timeout parameter should be respected."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Process exits immediately
+            mock_kill.side_effect = [None, ProcessLookupError(), ProcessLookupError()]
+
+            executor = HostActionExecutor()
+
+            # Test with different timeout (should complete quickly since process exits immediately)
+            result = await executor.kill_process(1234, graceful_timeout=10)
+
+            assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_process_not_found_raises(self):
+        """ProcessLookupError should be raised if process doesn't exist."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate:
+            mock_validate.side_effect = ProcessLookupError("No such process")
+
+            executor = HostActionExecutor()
+
+            with pytest.raises(ProcessLookupError):
+                await executor.kill_process(99999)
+
+    @pytest.mark.asyncio
+    async def test_permission_denied_raises(self):
+        """PermissionError should be raised if no permission to signal."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate:
+            mock_validate.side_effect = PermissionError("Operation not permitted")
+
+            executor = HostActionExecutor()
+
+            with pytest.raises(PermissionError):
+                await executor.kill_process(500)
+
+    @pytest.mark.asyncio
+    async def test_still_running_after_sigkill(self):
+        """Handle edge case where process survives SIGKILL (zombie, etc.)."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Process never dies (stuck/zombie)
+            mock_kill.return_value = None  # All signals "succeed" but process stays
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234, graceful_timeout=1)
+
+            # Process still running
+            assert result["still_running"] is True
+            assert result["success"] is False
+            assert result["escalated"] is True
+
+    @pytest.mark.asyncio
+    async def test_zero_graceful_timeout(self):
+        """graceful_timeout=0 should skip waiting and not escalate."""
+        with patch("operator_core.host.actions.validate_pid") as mock_validate, \
+             patch("operator_core.host.actions.os.kill") as mock_kill, \
+             patch("operator_core.host.actions.asyncio.sleep") as mock_sleep:
+
+            # Process still running after SIGTERM
+            mock_kill.return_value = None
+
+            executor = HostActionExecutor()
+            result = await executor.kill_process(1234, graceful_timeout=0)
+
+            # With timeout=0, no waiting occurs, no escalation
+            assert result["escalated"] is False
+            # sleep should not have been called for timeout loop
+            # (though it might be called for SIGKILL wait if that happened)
+
+    def test_executor_has_kill_process_method(self):
+        """HostActionExecutor should have kill_process method."""
+        executor = HostActionExecutor()
+
+        assert hasattr(executor, "kill_process")
+        assert asyncio.iscoroutinefunction(executor.kill_process)
