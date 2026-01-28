@@ -3,10 +3,10 @@
 ## Current Position
 
 **Milestone:** v3.0 Operator Laboratory
-**Phase:** Phase 31 - Agent Loop (IN PROGRESS)
-**Plan:** 31-01 complete (1 of 1)
+**Phase:** Phase 31 - Agent Loop (COMPLETE)
+**Plan:** 31-02 complete (2 of 2)
 **Status:** Phase 31 complete - ready for Phase 32
-**Last activity:** 2026-01-28 — Completed 31-01-PLAN.md (agent loop with tool_runner, Haiku summarization, database audit)
+**Last activity:** 2026-01-28 — Completed 31-02-PLAN.md (tool call and result audit logging)
 
 Progress: [██████░░░░] 67% (Phase 2 of 3 complete)
 
@@ -50,11 +50,12 @@ See: .planning/MILESTONES.md
 - Audit log format (JSON, per-session)
 
 ### Phase 31: Agent Loop ✓
-- Core ~170 line agent loop using tool_runner
+- Core ~198 line agent loop using tool_runner
 - Polls database for tickets every 1 second
 - Synchronous shell() with @beta_tool decorator
 - Haiku summarization for audit logs
 - Database audit logging (agent_sessions, agent_log_entries)
+- Tool call and tool result logging with exit codes
 - SRE system prompt for autonomous operation
 - Ticket status updates (resolved/escalated)
 
@@ -133,6 +134,8 @@ See: .planning/MILESTONES.md
 - 1-second polling interval balances responsiveness and database load
 - Database audit logging instead of JSON files for queryability
 - Separate sync and async shell functions (async in tools.py for compatibility, sync in loop.py for tool_runner)
+- Global state for tool result capture (_last_shell_result) since tool_runner doesn't yield results separately
+- Tool calls logged on ToolUseBlock detection, results logged after execution completes
 
 **Path to production:**
 - Lab → Production: shell(cmd) → propose(cmd) → approve() → shell(cmd)
@@ -140,8 +143,8 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-28T18:54:05Z
-**Stopped at:** Completed 31-01-PLAN.md - agent loop with tool_runner, Haiku summarization, database audit
+**Last session:** 2026-01-28T19:24:59Z
+**Stopped at:** Completed 31-02-PLAN.md - tool call and result audit logging
 **Resume file:** None
 **Next:** Phase 32 - Integration & Demo
 
