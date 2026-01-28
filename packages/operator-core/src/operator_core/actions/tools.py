@@ -17,11 +17,12 @@ from typing import Any
 
 from operator_core.actions.registry import ActionDefinition, ParamDef
 from operator_core.actions.types import ActionType
+from operator_core.docker.actions import DockerActionExecutor
 
 
 def get_general_tools() -> list[ActionDefinition]:
     """
-    Get list of general-purpose tool definitions.
+    Get list of general-purpose tool definitions including Docker actions.
 
     These tools are available regardless of subject and can be used
     in any workflow for common operations.
@@ -29,7 +30,9 @@ def get_general_tools() -> list[ActionDefinition]:
     Returns:
         List of ActionDefinition for general tools
     """
-    return [
+    from operator_core.docker.actions import get_docker_tools
+
+    base_tools = [
         ActionDefinition(
             name="wait",
             description="Wait for a specified duration before continuing. Useful for timing between actions or waiting for systems to stabilize.",
@@ -69,6 +72,10 @@ def get_general_tools() -> list[ActionDefinition]:
             requires_approval=False,
         ),
     ]
+
+    docker_tools = get_docker_tools()
+
+    return base_tools + docker_tools
 
 
 async def execute_wait(seconds: int, reason: str | None = None) -> dict[str, Any]:
@@ -137,10 +144,31 @@ async def execute_log_message(
     }
 
 
+# Lazy initialization of Docker executor to avoid import issues
+_docker_executor: DockerActionExecutor | None = None
+
+
+def _get_docker_executor() -> DockerActionExecutor:
+    """Get or create the shared Docker executor instance."""
+    global _docker_executor
+    if _docker_executor is None:
+        _docker_executor = DockerActionExecutor()
+    return _docker_executor
+
+
 # Map tool names to their execution functions
 TOOL_EXECUTORS = {
     "wait": execute_wait,
     "log_message": execute_log_message,
+    # Docker tools
+    "docker_start_container": lambda **kw: _get_docker_executor().start_container(**kw),
+    "docker_stop_container": lambda **kw: _get_docker_executor().stop_container(**kw),
+    "docker_restart_container": lambda **kw: _get_docker_executor().restart_container(**kw),
+    "docker_logs": lambda **kw: _get_docker_executor().get_container_logs(**kw),
+    "docker_inspect_container": lambda **kw: _get_docker_executor().inspect_container(**kw),
+    "docker_network_connect": lambda **kw: _get_docker_executor().connect_container_to_network(**kw),
+    "docker_network_disconnect": lambda **kw: _get_docker_executor().disconnect_container_from_network(**kw),
+    "docker_exec": lambda **kw: _get_docker_executor().execute_command(**kw),
 }
 
 
