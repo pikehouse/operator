@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v2.3 Infrastructure Actions & Script Execution
-**Phase:** Phase 26 - Script Execution & Validation (IN PROGRESS)
-**Plan:** 02 of 3 complete
-**Status:** In progress
-**Last activity:** 2026-01-28 — Completed 26-02-PLAN.md (script execution)
+**Phase:** Phase 26 - Script Execution & Validation (COMPLETE)
+**Plan:** 3 of 3 complete
+**Status:** Phase complete
+**Last activity:** 2026-01-28 — Completed 26-03-PLAN.md (script tool registration)
 
-Progress: [████████░░] 50% (Phase 4 of 7 in progress)
+Progress: [████████░░] 57% (Phase 4 of 7 complete)
 
 ## Project Reference
 
@@ -38,7 +38,7 @@ See: .planning/MILESTONES.md
 | 23 | Safety Enhancement | SAFE-01 through SAFE-08 (8) | Complete ✓ |
 | 24 | Docker Actions | DOCK-01 through DOCK-10 (10) | Complete ✓ |
 | 25 | Host Actions | HOST-01 through HOST-07 (7) | Complete ✓ |
-| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | In Progress (Plan 02/3) |
+| 26 | Script Execution & Validation | SCRP-01 through SCRP-09, VALD-01 through VALD-06 (15) | Complete ✓ |
 | 27 | Risk Classification | RISK-01 through RISK-06 (6) | Pending |
 | 28 | Agent Integration | AGNT-01 through AGNT-04 (4) | Pending |
 | 29 | Demo Scenarios | DEMO-01, DEMO-02 (2) | Pending |
@@ -195,10 +195,16 @@ See: .planning/MILESTONES.md
 - Exit code extraction from Docker error messages with fallback to 1
 - Temporary file cleanup with Path.unlink(missing_ok=True) for robustness
 
+**Key decisions from v2.3 (Phase 26 Plan 03):**
+- Lazy initialization of ScriptExecutor in _get_script_executor() following Docker/Host pattern
+- execute_script classified as risk level "high" with requires_approval=True (arbitrary code execution)
+- Comprehensive tool description explains validation layers and sandbox constraints for agent guidance
+- Lambda wrapper in TOOL_EXECUTORS maps execute_script to ScriptExecutor.execute()
+
 ## Session Continuity
 
 **Last session:** 2026-01-28
-**Stopped at:** Completed 26-02-PLAN.md (script execution) - Phase 26 in progress
+**Stopped at:** Completed 26-03-PLAN.md (script tool registration) - Phase 26 complete
 **Resume file:** None
 
 ## Open Issues
@@ -212,4 +218,4 @@ See: .planning/MILESTONES.md
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 
 ---
-*State updated: 2026-01-28 (Phase 26 Plan 02 complete)*
+*State updated: 2026-01-28 (Phase 26 complete - all 3 plans)*
