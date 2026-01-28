@@ -18,18 +18,18 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 - [x] **SAFE-07**: Session-level cumulative risk tracking across action chains
 - [x] **SAFE-08**: Kill switch can force-terminate in-flight operations (not just block new ones)
 
-### Docker Actions
+### Docker Actions (Phase 24) ✓
 
-- [ ] **DOCK-01**: docker_start_container action starts a stopped container
-- [ ] **DOCK-02**: docker_stop_container action stops a running container (graceful)
-- [ ] **DOCK-03**: docker_restart_container action restarts a container
-- [ ] **DOCK-04**: docker_logs action retrieves container logs with tail limit (max 10000 lines)
-- [ ] **DOCK-05**: docker_inspect_container action returns container status and config (read-only)
-- [ ] **DOCK-06**: docker_network_connect action connects container to network
-- [ ] **DOCK-07**: docker_network_disconnect action disconnects container from network
-- [ ] **DOCK-08**: docker_exec action executes command in container with output capture
-- [ ] **DOCK-09**: All Docker actions use async executor wrapping (run_in_executor)
-- [ ] **DOCK-10**: Docker actions register as ActionType.TOOL in get_general_tools()
+- [x] **DOCK-01**: docker_start_container action starts a stopped container
+- [x] **DOCK-02**: docker_stop_container action stops a running container (graceful)
+- [x] **DOCK-03**: docker_restart_container action restarts a container
+- [x] **DOCK-04**: docker_logs action retrieves container logs with tail limit (max 10000 lines)
+- [x] **DOCK-05**: docker_inspect_container action returns container status and config (read-only)
+- [x] **DOCK-06**: docker_network_connect action connects container to network
+- [x] **DOCK-07**: docker_network_disconnect action disconnects container from network
+- [x] **DOCK-08**: docker_exec action executes command in container with output capture
+- [x] **DOCK-09**: All Docker actions use async executor wrapping (run_in_executor)
+- [x] **DOCK-10**: Docker actions register as ActionType.TOOL in get_general_tools()
 
 ### Host Actions
 
@@ -122,16 +122,16 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 | SAFE-06 | Phase 23 | Complete |
 | SAFE-07 | Phase 23 | Complete |
 | SAFE-08 | Phase 23 | Complete |
-| DOCK-01 | Phase 24 | Pending |
-| DOCK-02 | Phase 24 | Pending |
-| DOCK-03 | Phase 24 | Pending |
-| DOCK-04 | Phase 24 | Pending |
-| DOCK-05 | Phase 24 | Pending |
-| DOCK-06 | Phase 24 | Pending |
-| DOCK-07 | Phase 24 | Pending |
-| DOCK-08 | Phase 24 | Pending |
-| DOCK-09 | Phase 24 | Pending |
-| DOCK-10 | Phase 24 | Pending |
+| DOCK-01 | Phase 24 | Complete |
+| DOCK-02 | Phase 24 | Complete |
+| DOCK-03 | Phase 24 | Complete |
+| DOCK-04 | Phase 24 | Complete |
+| DOCK-05 | Phase 24 | Complete |
+| DOCK-06 | Phase 24 | Complete |
+| DOCK-07 | Phase 24 | Complete |
+| DOCK-08 | Phase 24 | Complete |
+| DOCK-09 | Phase 24 | Complete |
+| DOCK-10 | Phase 24 | Complete |
 | HOST-01 | Phase 25 | Pending |
 | HOST-02 | Phase 25 | Pending |
 | HOST-03 | Phase 25 | Pending |
@@ -174,4 +174,4 @@ Requirements for Infrastructure Actions & Script Execution milestone.
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-28 — Phase 23 complete (SAFE-01 through SAFE-08)*
+*Last updated: 2026-01-28 — Phase 24 complete (DOCK-01 through DOCK-10)*
