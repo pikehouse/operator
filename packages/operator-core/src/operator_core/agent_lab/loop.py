@@ -15,20 +15,30 @@ from operator_core.monitor.types import Ticket, TicketStatus
 
 from .prompts import HAIKU_SUMMARIZE_PROMPT, SYSTEM_PROMPT
 
+# Global state for capturing shell execution results
+_last_shell_result = None
+
 
 @beta_tool
 def shell(command: str, reasoning: str) -> str:
     """Execute a shell command. Synchronous for tool_runner compatibility."""
+    global _last_shell_result
     try:
         result = subprocess.run(command, shell=True, capture_output=True, timeout=120, text=True)
         output = result.stdout
-        if result.returncode != 0:
-            output += f"\n\nSTDERR: {result.stderr}\nExit code: {result.returncode}"
+        exit_code = result.returncode
+        if exit_code != 0:
+            output += f"\n\nSTDERR: {result.stderr}\nExit code: {exit_code}"
+        _last_shell_result = {"output": output, "exit_code": exit_code, "command": command}
         return output
     except subprocess.TimeoutExpired:
-        return "Command timed out after 120 seconds"
+        output = "Command timed out after 120 seconds"
+        _last_shell_result = {"output": output, "exit_code": 124, "command": command}
+        return output
     except Exception as e:
-        return f"Error: {e}"
+        output = f"Error: {e}"
+        _last_shell_result = {"output": output, "exit_code": 1, "command": command}
+        return output
 
 
 def summarize_with_haiku(client: anthropic.Anthropic, text: str) -> str:
@@ -41,7 +51,7 @@ def summarize_with_haiku(client: anthropic.Anthropic, text: str) -> str:
             max_tokens=150,
             messages=[{"role": "user", "content": f"{HAIKU_SUMMARIZE_PROMPT}\n\n{text}"}],
         )
-        return response.content[0].text
+        return response.content[0].text  # type: ignore
     except Exception:
         return text[:200] + "..." if len(text) > 200 else text
 
@@ -63,21 +73,38 @@ def process_ticket(client: anthropic.Anthropic, ticket: Ticket, audit_db: AuditL
     )
 
     final_message = None
+    global _last_shell_result
     for message in runner:
         if message.content:
             for block in message.content:
-                if hasattr(block, "text") and block.text:
-                    summary = summarize_with_haiku(client, block.text)
-                    audit_db.log_entry(session_id, "reasoning", summary, block.text, None, None, None)
+                if block.type == "text" and hasattr(block, "text"):
+                    summary = summarize_with_haiku(client, block.text)  # type: ignore
+                    audit_db.log_entry(session_id, "reasoning", summary, block.text, None, None, None)  # type: ignore
                     print(f"[Claude] {summary}")
+                elif block.type == "tool_use" and hasattr(block, "input") and hasattr(block, "name"):
+                    tool_params = block.input if isinstance(block.input, dict) else {}  # type: ignore
+                    cmd = str(tool_params.get("command", ""))
+                    cmd_preview = cmd[:60] + "..." if len(cmd) > 60 else cmd
+                    audit_db.log_entry(session_id, "tool_call", f"shell: {cmd_preview}", None, block.name, tool_params, None)  # type: ignore
+                    print(f"[Tool Call] {block.name}: {cmd_preview}")  # type: ignore
+
+        # After each message, check if a tool was executed
+        if _last_shell_result:
+            result = _last_shell_result
+            _last_shell_result = None
+            summary = summarize_with_haiku(client, result["output"])
+            audit_db.log_entry(session_id, "tool_result", summary, result["output"], "shell", None, result["exit_code"])
+            print(f"[Tool Result] Exit {result['exit_code']}: {summary}")
+
         final_message = message
 
     # Determine outcome
     if final_message and final_message.stop_reason == "end_turn":
-        summary_text = final_message.content[0].text if final_message.content else "Completed"
+        summary_text = "Completed"
+        if final_message.content and len(final_message.content) > 0 and hasattr(final_message.content[0], "text"):
+            summary_text = final_message.content[0].text  # type: ignore
         return "resolved", summarize_with_haiku(client, summary_text)
-    else:
-        return "escalated", f"Session ended: {final_message.stop_reason if final_message else 'unknown'}"
+    return "escalated", f"Session ended: {final_message.stop_reason if final_message else 'unknown'}"
 
 
 def poll_for_open_ticket(db_path: Path) -> Ticket | None:
@@ -139,7 +166,7 @@ def run_agent_loop(db_path: Path, audit_dir: Path | None = None) -> None:
         try:
             ticket = poll_for_open_ticket(db_path)
 
-            if ticket:
+            if ticket and ticket.id is not None:
                 print(f"\n{'='*60}\nProcessing ticket #{ticket.id}: {ticket.invariant_name}\n{'='*60}\n")
 
                 with AuditLogDB(db_path) as audit_db:
