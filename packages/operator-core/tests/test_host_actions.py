@@ -785,3 +785,130 @@ class TestHostKillProcess:
 
         assert hasattr(executor, "kill_process")
         assert asyncio.iscoroutinefunction(executor.kill_process)
+
+
+# ===== Host Action Integration Tests =====
+
+
+class TestHostActionIntegration:
+    """Integration tests for host action tool registration."""
+
+    def test_host_tools_in_general_tools(self):
+        """Host tools included in get_general_tools()."""
+        from operator_core.actions.tools import get_general_tools
+
+        tools = get_general_tools()
+        tool_names = [t.name for t in tools]
+
+        assert "host_service_start" in tool_names
+        assert "host_service_stop" in tool_names
+        assert "host_service_restart" in tool_names
+        assert "host_kill_process" in tool_names
+
+    def test_host_tools_have_action_type_tool(self):
+        """All host tools have ActionType.TOOL."""
+        from operator_core.host.actions import get_host_tools
+        from operator_core.actions.types import ActionType
+
+        for tool in get_host_tools():
+            assert tool.action_type == ActionType.TOOL
+
+    def test_host_tools_in_executors(self):
+        """All host tools have executors registered."""
+        from operator_core.actions.tools import TOOL_EXECUTORS
+
+        assert "host_service_start" in TOOL_EXECUTORS
+        assert "host_service_stop" in TOOL_EXECUTORS
+        assert "host_service_restart" in TOOL_EXECUTORS
+        assert "host_kill_process" in TOOL_EXECUTORS
+
+    def test_host_tool_risk_levels(self):
+        """Host tools have correct risk levels."""
+        from operator_core.host.actions import get_host_tools
+
+        tools = {t.name: t for t in get_host_tools()}
+
+        # Service ops: start and restart are medium (recoverable)
+        assert tools["host_service_start"].risk_level == "medium"
+        assert tools["host_service_restart"].risk_level == "medium"
+
+        # High risk: stop service and kill process (availability impact)
+        assert tools["host_service_stop"].risk_level == "high"
+        assert tools["host_kill_process"].risk_level == "high"
+
+    def test_host_tools_require_approval(self):
+        """All host tools require approval."""
+        from operator_core.host.actions import get_host_tools
+
+        for tool in get_host_tools():
+            assert tool.requires_approval is True
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_dispatches_to_host_executor(self):
+        """execute_tool routes host actions to HostActionExecutor."""
+        from operator_core.actions.tools import execute_tool
+
+        # Calling with invalid service should raise ValueError (from whitelist)
+        with pytest.raises(ValueError, match="not in whitelist"):
+            await execute_tool("host_service_start", {"service_name": "nonexistent_service"})
+
+    def test_lazy_host_executor_initialization(self):
+        """Host executor is lazily initialized to avoid circular imports."""
+        from operator_core.actions.tools import _get_host_executor
+
+        executor = _get_host_executor()
+        assert executor is not None
+
+        # Second call returns same instance
+        executor2 = _get_host_executor()
+        assert executor is executor2
+
+    def test_total_tool_count(self):
+        """Verify total tool count after host integration."""
+        from operator_core.actions.tools import get_general_tools
+
+        tools = get_general_tools()
+        # 2 base (wait, log_message) + 8 Docker + 4 Host = 14
+        assert len(tools) == 14
+
+    def test_host_tools_have_parameters(self):
+        """All host tools have properly defined parameters."""
+        from operator_core.host.actions import get_host_tools
+
+        for tool in get_host_tools():
+            assert tool.parameters is not None
+            assert len(tool.parameters) > 0
+
+            # Service tools have service_name parameter
+            if tool.name.startswith("host_service_"):
+                assert "service_name" in tool.parameters
+                assert tool.parameters["service_name"].required is True
+
+            # Kill process has pid parameter
+            if tool.name == "host_kill_process":
+                assert "pid" in tool.parameters
+                assert tool.parameters["pid"].required is True
+                assert "signal" in tool.parameters
+                assert tool.parameters["signal"].required is False
+                assert "graceful_timeout" in tool.parameters
+                assert tool.parameters["graceful_timeout"].required is False
+
+    def test_host_tools_have_descriptions(self):
+        """All host tools have meaningful descriptions."""
+        from operator_core.host.actions import get_host_tools
+
+        for tool in get_host_tools():
+            assert tool.description is not None
+            assert len(tool.description) > 10  # Meaningful description, not empty
+
+    def test_get_host_tools_returns_list(self):
+        """get_host_tools returns a list of ActionDefinitions."""
+        from operator_core.host.actions import get_host_tools
+        from operator_core.actions.registry import ActionDefinition
+
+        tools = get_host_tools()
+
+        assert isinstance(tools, list)
+        assert len(tools) == 4
+        for tool in tools:
+            assert isinstance(tool, ActionDefinition)
