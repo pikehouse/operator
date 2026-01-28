@@ -21,7 +21,7 @@ from operator_core.actions.types import ActionType
 
 def get_general_tools() -> list[ActionDefinition]:
     """
-    Get list of general-purpose tool definitions including Docker actions.
+    Get list of general-purpose tool definitions including Docker and Host actions.
 
     These tools are available regardless of subject and can be used
     in any workflow for common operations.
@@ -30,6 +30,7 @@ def get_general_tools() -> list[ActionDefinition]:
         List of ActionDefinition for general tools
     """
     from operator_core.docker.actions import get_docker_tools
+    from operator_core.host.actions import get_host_tools
 
     base_tools = [
         ActionDefinition(
@@ -73,8 +74,9 @@ def get_general_tools() -> list[ActionDefinition]:
     ]
 
     docker_tools = get_docker_tools()
+    host_tools = get_host_tools()
 
-    return base_tools + docker_tools
+    return base_tools + docker_tools + host_tools
 
 
 async def execute_wait(seconds: int, reason: str | None = None) -> dict[str, Any]:
@@ -157,6 +159,20 @@ def _get_docker_executor():
     return _docker_executor
 
 
+# Lazy initialization of Host executor to avoid circular import issues
+_host_executor = None
+
+
+def _get_host_executor():
+    """Get or create the shared Host executor instance."""
+    from operator_core.host.actions import HostActionExecutor
+
+    global _host_executor
+    if _host_executor is None:
+        _host_executor = HostActionExecutor()
+    return _host_executor
+
+
 # Map tool names to their execution functions
 TOOL_EXECUTORS = {
     "wait": execute_wait,
@@ -170,6 +186,11 @@ TOOL_EXECUTORS = {
     "docker_network_connect": lambda **kw: _get_docker_executor().connect_container_to_network(**kw),
     "docker_network_disconnect": lambda **kw: _get_docker_executor().disconnect_container_from_network(**kw),
     "docker_exec": lambda **kw: _get_docker_executor().execute_command(**kw),
+    # Host tools
+    "host_service_start": lambda **kw: _get_host_executor().start_service(**kw),
+    "host_service_stop": lambda **kw: _get_host_executor().stop_service(**kw),
+    "host_service_restart": lambda **kw: _get_host_executor().restart_service(**kw),
+    "host_kill_process": lambda **kw: _get_host_executor().kill_process(**kw),
 }
 
 
