@@ -147,18 +147,12 @@ class TUIDemoController:
             [
                 "-u",  # Unbuffered output (critical for live display)
                 "-m",
-                "operator_core.cli.main",
-                "agent",
-                "start",
-                "--subject",
-                self.subject_name,
-                "-i",
-                "5",
+                "operator_core.agent_lab",
+                str(Path.home() / ".operator" / "tickets.db"),
             ],
-            buffer_size=50,
+            buffer_size=100,  # Larger buffer for verbose agent output
             env={
                 "OPERATOR_SAFETY_MODE": "execute",
-                "OPERATOR_APPROVAL_MODE": "false",
             },
         )
 
