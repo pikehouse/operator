@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from operator_core.agent_lab import loop
+from operator_core.agent_lab import tools
 from operator_core.db.audit_log import AuditLogDB
 from operator_core.monitor.types import Ticket, TicketStatus
 
@@ -59,7 +60,7 @@ def test_process_ticket_logs_complete_audit_trail():
                 # Simulate tool execution by setting global state after first message
                 def message_generator():
                     yield mock_msg1
-                    loop._last_shell_result = {"output": "hello\n", "exit_code": 0, "command": "echo hello"}
+                    tools._last_shell_result = {"output": "hello\n", "exit_code": 0, "command": "echo hello"}
                     yield mock_msg2
 
                 mock_runner.return_value = message_generator()
