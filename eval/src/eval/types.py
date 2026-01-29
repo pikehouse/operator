@@ -10,7 +10,9 @@ class ChaosType(str, Enum):
     """Chaos types supported by evaluation harness."""
 
     NODE_KILL = "node_kill"
-    # Future: LATENCY, DISK_PRESSURE, NETWORK_PARTITION
+    LATENCY = "latency"
+    DISK_PRESSURE = "disk_pressure"
+    NETWORK_PARTITION = "network_partition"
 
 
 @runtime_checkable
@@ -51,17 +53,32 @@ class EvalSubject(Protocol):
         """
         ...
 
-    async def inject_chaos(self, chaos_type: str) -> dict[str, Any]:
+    async def inject_chaos(self, chaos_type: str, **params: Any) -> dict[str, Any]:
         """Inject specified chaos type.
 
         Args:
             chaos_type: One of get_chaos_types() values
+            **params: Type-specific parameters (e.g., min_ms, max_ms for latency)
 
         Returns:
-            Chaos metadata as JSON-serializable dict
+            Chaos metadata as JSON-serializable dict.
+            IMPORTANT: Must contain all fields needed by cleanup_chaos() to revert the chaos.
 
         Raises:
             ValueError: If chaos_type not supported
+        """
+        ...
+
+    async def cleanup_chaos(self, chaos_metadata: dict[str, Any]) -> None:
+        """Clean up/revert chaos injection.
+
+        Called after trial ends to restore subject to normal state.
+
+        Args:
+            chaos_metadata: The dict returned by inject_chaos()
+
+        Note:
+            Should handle gracefully if container was restarted/killed.
         """
         ...
 
