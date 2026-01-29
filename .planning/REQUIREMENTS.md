@@ -9,18 +9,18 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ### Runner Layer
 
-- [ ] **RUN-01**: Campaign runner executes trials in sequence (reset → inject → wait → record)
-- [ ] **RUN-02**: Trial records raw timing data (started_at, chaos_injected_at, ticket_created_at, resolved_at, ended_at)
-- [ ] **RUN-03**: Subject state captured before and after chaos (initial_state, final_state)
-- [ ] **RUN-04**: Commands extracted from agent session for post-hoc analysis
-- [ ] **RUN-05**: Baseline trials run without agent (self-healing test)
-- [ ] **RUN-06**: eval.db stores campaigns and trials separately from operator.db
+- [x] **RUN-01**: Campaign runner executes trials in sequence (reset → inject → wait → record)
+- [x] **RUN-02**: Trial records raw timing data (started_at, chaos_injected_at, ticket_created_at, resolved_at, ended_at)
+- [x] **RUN-03**: Subject state captured before and after chaos (initial_state, final_state)
+- [x] **RUN-04**: Commands extracted from agent session for post-hoc analysis
+- [x] **RUN-05**: Baseline trials run without agent (self-healing test)
+- [x] **RUN-06**: eval.db stores campaigns and trials separately from operator.db
 
 ### EvalSubject Protocol
 
-- [ ] **SUBJ-01**: EvalSubject protocol defines reset(), wait_healthy(), capture_state(), get_chaos_types()
-- [ ] **SUBJ-02**: TiKVEvalSubject implements protocol with Docker Compose reset
-- [ ] **SUBJ-03**: TiKV chaos: node_kill (SIGKILL container)
+- [x] **SUBJ-01**: EvalSubject protocol defines reset(), wait_healthy(), capture_state(), get_chaos_types()
+- [x] **SUBJ-02**: TiKVEvalSubject implements protocol with Docker Compose reset
+- [x] **SUBJ-03**: TiKV chaos: node_kill (SIGKILL container)
 - [ ] **SUBJ-04**: TiKV chaos: latency injection (tc netem)
 - [ ] **SUBJ-05**: TiKV chaos: disk pressure (fallocate)
 - [ ] **SUBJ-06**: TiKV chaos: network partition (iptables)
@@ -50,8 +50,8 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ### CLI
 
-- [ ] **CLI-01**: eval run --subject tikv --chaos node_kill runs single trial
-- [ ] **CLI-02**: eval run --baseline runs without agent
+- [x] **CLI-01**: eval run --subject tikv --chaos node_kill runs single trial
+- [x] **CLI-02**: eval run --baseline runs without agent
 - [ ] **CLI-03**: eval run campaign config.yaml runs full campaign
 - [ ] **CLI-04**: eval analyze <campaign_id> computes scores
 - [ ] **CLI-05**: eval compare <campaign_a> <campaign_b> compares campaigns
@@ -84,15 +84,15 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RUN-01 | Phase 35 | Pending |
-| RUN-02 | Phase 35 | Pending |
-| RUN-03 | Phase 35 | Pending |
-| RUN-04 | Phase 35 | Pending |
-| RUN-05 | Phase 35 | Pending |
-| RUN-06 | Phase 35 | Pending |
-| SUBJ-01 | Phase 35 | Pending |
-| SUBJ-02 | Phase 35 | Pending |
-| SUBJ-03 | Phase 35 | Pending |
+| RUN-01 | Phase 35 | Complete |
+| RUN-02 | Phase 35 | Complete |
+| RUN-03 | Phase 35 | Complete |
+| RUN-04 | Phase 35 | Complete |
+| RUN-05 | Phase 35 | Complete |
+| RUN-06 | Phase 35 | Complete |
+| SUBJ-01 | Phase 35 | Complete |
+| SUBJ-02 | Phase 35 | Complete |
+| SUBJ-03 | Phase 35 | Complete |
 | ANAL-01 | Phase 36 | Pending |
 | ANAL-02 | Phase 36 | Pending |
 | ANAL-03 | Phase 36 | Pending |
@@ -107,8 +107,8 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | SUBJ-04 | Phase 38 | Pending |
 | SUBJ-05 | Phase 38 | Pending |
 | SUBJ-06 | Phase 38 | Pending |
-| CLI-01 | Phase 35 | Pending |
-| CLI-02 | Phase 35 | Pending |
+| CLI-01 | Phase 35 | Complete |
+| CLI-02 | Phase 35 | Complete |
 | CLI-03 | Phase 38 | Pending |
 | CLI-04 | Phase 36 | Pending |
 | CLI-05 | Phase 36 | Pending |
@@ -118,8 +118,8 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | CONF-03 | Phase 39 | Pending |
 
 **Coverage:**
-- v3.2 requirements: 30 total
-- Mapped to phases: 30
+- v3.2 requirements: 32 total
+- Mapped to phases: 32
 - Unmapped: 0
 
 ---
