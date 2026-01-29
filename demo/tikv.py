@@ -11,6 +11,7 @@ Run via: python -m demo tikv
 import asyncio
 from pathlib import Path
 
+from demo.status import demo_status
 from demo.tikv_chaos import kill_random_tikv, restart_container, start_ycsb_load
 from demo.types import Chapter
 
@@ -65,20 +66,20 @@ def create_fault_chapter(compose_file: Path) -> Chapter:
         """Run countdown then kill random TiKV node."""
         global _killed_container
 
-        # Countdown
+        # Countdown (update status instead of print to avoid TUI interference)
         for i in range(3, 0, -1):
-            print(f"Injecting fault in {i}...")
+            demo_status.set(f"Injecting fault in {i}...")
             await asyncio.sleep(1.0)
 
-        print("FAULT INJECTED!")
+        demo_status.set("FAULT INJECTED!")
 
         # Kill random TiKV
         container = await kill_random_tikv(compose_file)
         if container:
             _killed_container = container
-            print(f"Killed container: {container}")
+            demo_status.set(f"Killed container: {container}")
         else:
-            print("No TiKV containers found to kill!")
+            demo_status.set("No TiKV containers found to kill!")
 
         await asyncio.sleep(1.0)
 
@@ -110,15 +111,15 @@ def create_recovery_chapter(compose_file: Path) -> Chapter:
         global _killed_container
 
         if _killed_container:
-            print(f"Restarting container: {_killed_container}")
+            demo_status.set(f"Restarting container: {_killed_container}")
             success = await restart_container(compose_file, _killed_container)
             if success:
-                print(f"Container {_killed_container} restarted!")
+                demo_status.set(f"Container {_killed_container} restarted!")
                 _killed_container = None
             else:
-                print("Failed to restart container!")
+                demo_status.set("Failed to restart container!")
         else:
-            print("No container to restart!")
+            demo_status.set("No container to restart!")
 
         await asyncio.sleep(2.0)
 
