@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 37 - Viewer Layer (IN PROGRESS)
-**Plan:** 1/2 complete
-**Status:** CLI viewer commands complete (list, show). Web viewer remaining.
-**Last activity:** 2026-01-29 — Completed 37-01-PLAN.md
+**Phase:** 37 - Viewer Layer (COMPLETE)
+**Plan:** 2/2 complete
+**Status:** All viewer layer functionality complete - CLI commands (list, show) and web viewer with reasoning timeline
+**Last activity:** 2026-01-29 — Completed 37-02-PLAN.md
 
-Progress: █████████░░░░░░░░░░░ (v3.2: 45%)
+Progress: ██████████░░░░░░░░░░ (v3.2: 50%)
 
 ## Project Reference
 
@@ -83,19 +83,27 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 in progress (1/2 plans)
+**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete
 
-**Next:** Continue Phase 37 (Web viewer remaining)
+**Next:** Plan Phase 38 (Chaos Expansion)
 
 ## Session Continuity
 
-**Last session:** 2026-01-29T23:03:29Z
-**Stopped at:** Completed 37-01-PLAN.md (Phase 37, plan 1 of 2)
+**Last session:** 2026-01-29T23:04:23Z
+**Stopped at:** Completed 37-02-PLAN.md (Phase 37 complete)
 **Resume file:** None
-**Next:** Execute 37-02-PLAN.md (Web viewer)
+**Next:** Plan Phase 38 (Chaos Expansion)
 
 ---
-*State updated: 2026-01-29 (Phase 37 plan 1 complete)*
+*State updated: 2026-01-29 (Phase 37 complete)*
+
+## Decisions Made
+
+| Phase | Decision | Rationale |
+|-------|----------|-----------|
+| 37-02 | Use FastAPI + Jinja2 for web viewer with server-side rendering | Simple static views, no need for complex frontend framework |
+| 37-02 | Use Tailwind CDN for styling | No build step needed, fast prototyping with modern utility classes |
+| 37-02 | Query operator.db by timerange for reasoning entries | Trial timestamps define the relevant agent session window |
 
 ## Open Issues
 
