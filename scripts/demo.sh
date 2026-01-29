@@ -146,6 +146,18 @@ stop_ratelimiter() {
     log_info "Rate limiter cluster stopped"
 }
 
+rebuild_ratelimiter() {
+    log_info "Rebuilding rate limiter images..."
+    docker compose -f "$RATELIMITER_COMPOSE" build
+    log_info "Rebuild complete"
+}
+
+rebuild_tikv() {
+    log_info "Rebuilding TiKV images..."
+    docker compose -f "$TIKV_COMPOSE" build
+    log_info "Rebuild complete"
+}
+
 show_status() {
     echo ""
     echo "=== TiKV Cluster ==="
@@ -227,6 +239,14 @@ case "${1:-help}" in
             *) log_error "Usage: $0 reset <tikv|ratelimiter>"; exit 1 ;;
         esac
         ;;
+    rebuild)
+        case "$2" in
+            tikv) rebuild_tikv ;;
+            ratelimiter) rebuild_ratelimiter ;;
+            all) rebuild_tikv; rebuild_ratelimiter ;;
+            *) log_error "Usage: $0 rebuild <tikv|ratelimiter|all>"; exit 1 ;;
+        esac
+        ;;
     status)
         show_status
         ;;
@@ -252,6 +272,7 @@ case "${1:-help}" in
         echo "  start <tikv|ratelimiter>          - Start cluster only"
         echo "  stop <tikv|ratelimiter|all>       - Stop cluster"
         echo "  reset <tikv|ratelimiter>          - Stop and restart cluster"
+        echo "  rebuild <tikv|ratelimiter|all>    - Rebuild Docker images"
         echo "  reset-state                       - Kill agent/monitor, reset ticket DB, flush Redis"
         echo "  status                            - Show cluster status"
         echo "  ports [subject]                   - Check port conflicts"
@@ -260,6 +281,7 @@ case "${1:-help}" in
         echo "  $0 run tikv               # Clean start: teardown, start cluster, run demo"
         echo "  $0 run tikv --quick       # Quick start: just run demo (cluster must be running)"
         echo "  $0 run ratelimiter        # Clean start rate limiter demo"
+        echo "  $0 rebuild ratelimiter    # Rebuild ratelimiter images after code changes"
         echo "  $0 stop all               # Stop all clusters"
         echo "  $0 reset-state            # Reset demo state (kill processes, clear DB)"
         ;;
