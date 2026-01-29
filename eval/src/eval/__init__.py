@@ -1,9 +1,9 @@
 """Evaluation harness for chaos engineering trials."""
 
 from eval.types import (
-    EvalSubject,
-    ChaosType,
     Campaign,
+    ChaosType,
+    EvalSubject,
     Trial,
 )
 
