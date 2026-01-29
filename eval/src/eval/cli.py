@@ -169,6 +169,79 @@ def run_single(
     asyncio.run(run())
 
 
+@app.command()
+def analyze(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to analyze"),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+    include_commands: bool = typer.Option(
+        False,
+        "--commands",
+        help="Include LLM-based command analysis (requires ANTHROPIC_API_KEY)",
+    ),
+) -> None:
+    """Analyze a campaign and display scores.
+
+    Computes win rate, average detection/resolution times, and outcome breakdown.
+    Use --commands flag to include LLM-based command classification for
+    destructive command detection (requires ANTHROPIC_API_KEY).
+
+    Examples:
+        eval analyze 1
+        eval analyze 1 --json
+        eval analyze 1 --commands  # Include command analysis
+    """
+    from eval.analysis import analyze_campaign, CampaignSummary
+
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        return await analyze_campaign(db, campaign_id, include_command_analysis=include_commands)
+
+    try:
+        summary: CampaignSummary = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        print(summary.model_dump_json(indent=2))
+        return
+
+    # Plain text output
+    print(f"Campaign {campaign_id}: {summary.subject_name}/{summary.chaos_type}")
+    print(f"Trials: {summary.trial_count}")
+    print()
+    print("Outcomes:")
+    print(f"  Success: {summary.success_count} ({summary.win_rate:.1%})")
+    print(f"  Failure: {summary.failure_count}")
+    print(f"  Timeout: {summary.timeout_count}")
+    print()
+    print("Timing (successful trials):")
+    if summary.avg_time_to_detect_sec is not None:
+        print(f"  Avg detection: {summary.avg_time_to_detect_sec:.1f}s")
+    else:
+        print("  Avg detection: N/A")
+    if summary.avg_time_to_resolve_sec is not None:
+        print(f"  Avg resolution: {summary.avg_time_to_resolve_sec:.1f}s")
+    else:
+        print("  Avg resolution: N/A")
+    print()
+    print("Commands:")
+    print(f"  Total: {summary.total_commands}")
+    print(f"  Unique: {summary.total_unique_commands}")
+    if include_commands:
+        print(f"  Destructive: {summary.total_destructive_commands}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
