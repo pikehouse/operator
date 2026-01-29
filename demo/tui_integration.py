@@ -309,10 +309,9 @@ class TUIDemoController:
         if chapter.on_enter is not None:
             try:
                 await chapter.on_enter()
-            except Exception as e:
-                # Only log errors, not normal flow
-                import traceback
-                traceback.print_exc()
+            except Exception:
+                # Log errors to demo_status instead of stdout (TUI-safe)
+                demo_status.set("Callback error (check logs)")
 
         # Clear current task since this callback is done
         self._current_task = None
