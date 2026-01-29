@@ -96,6 +96,7 @@ async def start_ycsb_load(compose_file: Path) -> bool:
 
     try:
         # Run YCSB load phase first (creates initial data)
+        # tty=False prevents terminal output from interfering with TUI
         docker.compose.run(
             "ycsb",
             command=[
@@ -106,6 +107,7 @@ async def start_ycsb_load(compose_file: Path) -> bool:
             ],
             remove=True,
             detach=False,
+            tty=False,
         )
 
         # Run YCSB workload in background
