@@ -169,28 +169,21 @@ class RateLimiterHealthPoller:
         Returns:
             List of dicts with key, count, limit, over_limit
         """
+        import time
+
         counters = []
         try:
             r = redis.Redis.from_url(self._redis_url, decode_responses=True)
             try:
-                # Scan for rate limit keys
-                keys = []
-                async for key in r.scan_iter(match="ratelimit:*"):
-                    # Skip limit config keys (they're hashes, not sorted sets)
-                    if ":limit:" in key:
-                        continue
-                    keys.append(key)
-
-                # DEBUG: Show what keys we found
-                # print(f"[HEALTH] Found {len(keys)} ratelimit keys: {keys}")
-
-                # Get count for each key (sorted set cardinality within window)
-                import time
-
                 now_ms = int(time.time() * 1000)
                 window_start = now_ms - 60000  # 60 second window
 
-                for key in keys[:10]:  # Limit to 10 keys for display
+                # Scan for rate limit keys, collecting sorted sets until we have 10
+                async for key in r.scan_iter(match="ratelimit:*"):
+                    # Skip limit config keys and loadgen sequence keys
+                    if ":limit:" in key or ":seq" in key:
+                        continue
+
                     # Check key type - only process sorted sets
                     key_type = await r.type(key)
                     if key_type != "zset":
@@ -214,6 +207,11 @@ class RateLimiterHealthPoller:
                             "over_limit": count > limit,
                         }
                     )
+
+                    # Stop after collecting 10 counters
+                    if len(counters) >= 10:
+                        break
+
             finally:
                 await r.aclose()
         except Exception:

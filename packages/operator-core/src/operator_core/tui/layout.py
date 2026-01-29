@@ -57,11 +57,11 @@ def create_layout() -> Layout:
 
     # Right column splits into 4 rows
     # Use ratios for flexibility across different terminal sizes
-    # Narration: 2 parts, Monitor: 3 parts, Agent: 3 parts, Workload: 2 parts
+    # Narration: 2 parts, Monitor: 3 parts, Agent: 4 parts, Workload: 2 parts
     layout["main"].split_column(
         Layout(name="narration", ratio=2),
         Layout(name="monitor", ratio=3),
-        Layout(name="agent", ratio=3),
+        Layout(name="agent", ratio=4),
         Layout(name="workload", ratio=2),
     )
 
