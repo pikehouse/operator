@@ -192,17 +192,13 @@ class RateLimiterHealthPoller:
                     # Get the key name without prefix
                     key_name = key.replace("ratelimit:", "")
 
-                    # Fetch configured limit and window from ratelimit:limit:{key}
+                    # Fetch configured limit from ratelimit:limit:{key}
                     limit_key = f"ratelimit:limit:{key_name}"
                     limit_data = await r.hgetall(limit_key)
                     limit = int(limit_data.get("limit", 10)) if limit_data else 10
-                    window_ms = int(limit_data.get("window_ms", 60000)) if limit_data else 60000
 
-                    # Remove expired entries using the counter's actual window
-                    window_start = now_ms - window_ms
-                    await r.zremrangebyscore(key, "-inf", window_start)
-
-                    # Count remaining entries
+                    # Just count entries - DON'T prune here, let the service handle that
+                    # Pruning here with wrong window was wiping counters
                     count = await r.zcard(key)
                     if count == 0:
                         continue  # Key is effectively empty, skip
