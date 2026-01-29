@@ -5,11 +5,13 @@ This module provides chaos functions specific to rate limiter demos:
 - inject_redis_pause: Injects over-limit counter to simulate sync bug
 - setup_rate_limit: Helper to configure a rate limit before testing
 - create_baseline_traffic: Creates healthy counters for demo visualization
+- start_baseline_heartbeat: Keeps baseline counters alive during demo
 
 These functions demonstrate failure modes that the operator
 should detect and diagnose through invariant checking.
 """
 
+import asyncio
 import time
 
 import httpx
@@ -17,6 +19,9 @@ import redis.asyncio as aioredis
 
 from demo.status import demo_status
 from demo.types import ChaosConfig, ChaosType
+
+# Global heartbeat task reference
+_heartbeat_task: asyncio.Task | None = None
 
 
 async def inject_redis_pause(duration_sec: float = 5.0) -> None:
@@ -167,3 +172,69 @@ COUNTER_DRIFT_CONFIG = ChaosConfig(
     description="Inject over-limit counter to simulate sync bug",
     duration_sec=10.0,
 )
+
+
+async def _heartbeat_loop(
+    keys: list[str],
+    interval_sec: float = 30.0,
+) -> None:
+    """
+    Background loop that keeps baseline counters alive.
+
+    Sends one request per key every interval to refresh the counter
+    within its sliding window.
+
+    Args:
+        keys: List of rate limit keys to keep alive
+        interval_sec: Seconds between heartbeat rounds
+    """
+    target_urls = [
+        "http://localhost:8001",
+        "http://localhost:8002",
+        "http://localhost:8003",
+    ]
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        while True:
+            for i, key in enumerate(keys):
+                try:
+                    url = target_urls[i % len(target_urls)]
+                    await client.post(f"{url}/check", json={"key": key})
+                except Exception:
+                    pass  # Ignore failures, just keep trying
+            await asyncio.sleep(interval_sec)
+
+
+def start_baseline_heartbeat(
+    keys: list[str],
+    interval_sec: float = 30.0,
+) -> None:
+    """
+    Start background heartbeat to keep baseline counters alive.
+
+    Creates a background task that periodically hits each key to
+    prevent counters from expiring during the demo.
+
+    Args:
+        keys: List of rate limit keys to keep alive
+        interval_sec: Seconds between heartbeat rounds (default 30s)
+    """
+    global _heartbeat_task
+
+    # Stop existing heartbeat if running
+    stop_baseline_heartbeat()
+
+    # Start new heartbeat task
+    _heartbeat_task = asyncio.create_task(
+        _heartbeat_loop(keys, interval_sec),
+        name="baseline-heartbeat",
+    )
+
+
+def stop_baseline_heartbeat() -> None:
+    """Stop the baseline heartbeat task if running."""
+    global _heartbeat_task
+
+    if _heartbeat_task is not None:
+        _heartbeat_task.cancel()
+        _heartbeat_task = None

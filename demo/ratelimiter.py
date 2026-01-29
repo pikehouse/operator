@@ -15,6 +15,7 @@ from demo.ratelimiter_chaos import (
     create_baseline_traffic,
     inject_redis_pause,
     setup_rate_limit,
+    start_baseline_heartbeat,
 )
 from demo.status import demo_status
 from demo.types import Chapter
@@ -46,6 +47,8 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
 
     async def setup() -> None:
         """Configure rate limit and create baseline traffic."""
+        baseline_keys = ["api-users", "api-orders", "api-products"]
+
         # Configure the rate limit
         await setup_rate_limit(
             target_url=TARGET_URLS[0],
@@ -55,10 +58,12 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
         )
         # Create baseline traffic so workload panel shows healthy counters
         await create_baseline_traffic(
-            keys=["api-users", "api-orders", "api-products"],
+            keys=baseline_keys,
             count_per_key=5,
             limit=limit,
         )
+        # Start heartbeat to keep baseline counters alive during demo
+        start_baseline_heartbeat(baseline_keys, interval_sec=30.0)
 
     return Chapter(
         title="Stage 2: Setup",
