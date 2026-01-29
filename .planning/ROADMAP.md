@@ -82,11 +82,13 @@ See: .planning/milestones/v3.2-ROADMAP.md
   4. Trial data includes subject state before/after chaos and commands extracted from agent session
   5. TiKVEvalSubject implements EvalSubject protocol
 
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 35-01: TBD
-- [ ] 35-02: TBD
+- [ ] 35-01-PLAN.md — Package foundation with EvalSubject protocol and core types
+- [ ] 35-02-PLAN.md — TiKVEvalSubject with Docker Compose lifecycle and node_kill chaos
+- [ ] 35-03-PLAN.md — Database layer and campaign runner harness
+- [ ] 35-04-PLAN.md — CLI with run command for single-trial execution
 
 ---
 
@@ -210,11 +212,11 @@ Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 | 32. Audit System | v3.0 | 3/3 | Complete | 2026-01-28 |
 | 33. Agent Database Integration | v3.1 | 3/3 | Complete | 2026-01-28 |
 | 34. Demo End-to-End Validation | v3.1 | 2/2 | Complete | 2026-01-29 |
-| 35. Runner Layer | v3.2 | 0/TBD | Not started | - |
+| 35. Runner Layer | v3.2 | 0/4 | Planned | - |
 | 36. Analysis Layer | v3.2 | 0/TBD | Not started | - |
 | 37. Viewer Layer | v3.2 | 0/TBD | Not started | - |
 | 38. Chaos Expansion | v3.2 | 0/TBD | Not started | - |
 | 39. Config Variants | v3.2 | 0/TBD | Not started | - |
 
 ---
-*Updated: 2026-01-29 — v3.2 roadmap added*
+*Updated: 2026-01-29 — Phase 35 planned (4 plans)*
