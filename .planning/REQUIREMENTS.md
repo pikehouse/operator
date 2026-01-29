@@ -36,11 +36,11 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ### Viewer Layer
 
-- [ ] **VIEW-01**: CLI: eval list shows campaigns
-- [ ] **VIEW-02**: CLI: eval show <campaign_id> displays campaign + trials
-- [ ] **VIEW-03**: CLI: eval show <trial_id> displays single trial detail
-- [ ] **VIEW-04**: Web: minimal FastAPI + htmx for browsing trials
-- [ ] **VIEW-05**: Web: trial detail shows reasoning/commands from agent session
+- [x] **VIEW-01**: CLI: eval list shows campaigns
+- [x] **VIEW-02**: CLI: eval show <campaign_id> displays campaign + trials
+- [x] **VIEW-03**: CLI: eval show <trial_id> displays single trial detail
+- [x] **VIEW-04**: Web: minimal FastAPI + Jinja2 for browsing trials
+- [x] **VIEW-05**: Web: trial detail shows reasoning/commands from agent session
 
 ### Config Variants
 
@@ -99,11 +99,11 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | ANAL-04 | Phase 36 | Complete |
 | ANAL-05 | Phase 36 | Complete |
 | ANAL-06 | Phase 36 | Complete |
-| VIEW-01 | Phase 37 | Pending |
-| VIEW-02 | Phase 37 | Pending |
-| VIEW-03 | Phase 37 | Pending |
-| VIEW-04 | Phase 37 | Pending |
-| VIEW-05 | Phase 37 | Pending |
+| VIEW-01 | Phase 37 | Complete |
+| VIEW-02 | Phase 37 | Complete |
+| VIEW-03 | Phase 37 | Complete |
+| VIEW-04 | Phase 37 | Complete |
+| VIEW-05 | Phase 37 | Complete |
 | SUBJ-04 | Phase 38 | Pending |
 | SUBJ-05 | Phase 38 | Pending |
 | SUBJ-06 | Phase 38 | Pending |
@@ -124,4 +124,4 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 after initial definition*
+*Last updated: 2026-01-29 after Phase 37 complete*
