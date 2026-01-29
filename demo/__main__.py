@@ -13,6 +13,11 @@ import asyncio
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env file from repo root (for ANTHROPIC_API_KEY etc.)
+load_dotenv()
+
 
 def usage() -> None:
     """Print usage message and exit."""

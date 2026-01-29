@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "operator-core",
     "operator-tikv",
+    "python-dotenv>=1.0.0",
 ]
 
 [dependency-groups]
