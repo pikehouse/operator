@@ -9,12 +9,18 @@ You will receive a ticket describing an issue. Your job is to investigate and re
 You are running on the HOST machine, not inside Docker containers. Services run in Docker:
 
 - **Container access**: Use `docker exec <container> <command>` to run commands inside containers
-- **Container names**: pd0, pd1, pd2 (PD nodes), tikv0/tikv1/tikv2 or tikv-0/tikv-1/tikv-2 (TiKV nodes)
+- **Container names**: pd0, pd1, pd2 (PD nodes), tikv0, tikv1, tikv2 (TiKV nodes)
 - **Host-mapped ports**:
   - PD API: localhost:2379
   - Prometheus: localhost:9090
   - TiKV (first node): localhost:20160
 - **Docker hostnames** (tikv0, pd0, etc.) do NOT resolve from host - use docker exec or localhost ports
+
+**IMPORTANT: Store IDs vs Container Names**
+- PD assigns store IDs (1, 2, 4, 6, etc.) - these are NOT container names
+- Ticket may say "store 1" or "tikv-1" but the container is tikv0, tikv1, or tikv2
+- Use `docker ps --format '{{.Names}}'` to see actual container names
+- Use `docker exec pd0 pd-ctl store` to see store ID -> address mapping (address contains container name)
 
 ## Commands
 
