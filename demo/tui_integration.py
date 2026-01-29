@@ -550,16 +550,21 @@ class TUIDemoController:
         if not counters:
             return "[dim]No active counters[/dim]"
 
-        lines = ["[bold]Rate Limit Counters[/bold]", ""]
+        # Sort counters: over-limit first, then by key name
+        sorted_counters = sorted(
+            counters,
+            key=lambda c: (not c.get("over_limit", False), c.get("key", "")),
+        )
 
-        # Count anomalies
-        over_limit = [c for c in counters if c.get("over_limit")]
-        if over_limit:
-            lines.append(f"[bold red]⚠ {len(over_limit)} OVER LIMIT[/bold red]")
-            lines.append("")
+        # Count anomalies for header
+        over_limit_count = sum(1 for c in counters if c.get("over_limit"))
+        header = "[bold]Rate Limit Counters[/bold]"
+        if over_limit_count:
+            header += f" [bold red]⚠ {over_limit_count} OVER LIMIT[/bold red]"
+        lines = [header]
 
-        # Show each counter
-        for counter in counters:
+        # Show each counter (compact, no blank lines)
+        for counter in sorted_counters:
             key = counter.get("key", "?")
             count = counter.get("count", 0)
             limit = counter.get("limit", 10)
