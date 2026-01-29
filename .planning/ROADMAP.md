@@ -130,11 +130,11 @@ Plans:
   4. Developer can open web UI and browse campaigns/trials
   5. Web UI displays trial reasoning and commands
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 37-01: TBD
-- [ ] 37-02: TBD
+- [ ] 37-01-PLAN.md — CLI list and show commands (VIEW-01, VIEW-02, VIEW-03)
+- [ ] 37-02-PLAN.md — Web viewer with FastAPI, templates, reasoning display (VIEW-04, VIEW-05)
 
 ---
 
@@ -216,9 +216,9 @@ Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 | 34. Demo End-to-End Validation | v3.1 | 2/2 | Complete | 2026-01-29 |
 | 35. Runner Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
 | 36. Analysis Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
-| 37. Viewer Layer | v3.2 | 0/TBD | Not started | - |
+| 37. Viewer Layer | v3.2 | 0/2 | Not started | - |
 | 38. Chaos Expansion | v3.2 | 0/TBD | Not started | - |
 | 39. Config Variants | v3.2 | 0/TBD | Not started | - |
 
 ---
-*Updated: 2026-01-29 — Phase 36 complete*
+*Updated: 2026-01-29 — Phase 37 planned*
