@@ -110,16 +110,20 @@ class TiKVHealthPoller(HealthPollerProtocol):
             store = item.get("store", {})
             state = store.get("state_name", "Unknown")
             store_id = store.get("id", 0)
+            address = store.get("address", "")
+
+            # Extract container name from address (e.g., "tikv0:20160" -> "tikv0")
+            container_name = address.split(":")[0] if address else f"tikv-{store_id}"
 
             # Parse state to health status
             health = self._parse_tikv_state(state)
 
             nodes.append({
                 "id": str(store_id),
-                "name": f"tikv-{store_id}",
+                "name": container_name,
                 "type": "tikv",
                 "health": health,
-                "address": store.get("address", ""),
+                "address": address,
             })
 
         # 2. Get PD member health
