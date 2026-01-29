@@ -1,6 +1,7 @@
 """Evaluation harness CLI."""
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -366,6 +367,59 @@ def compare_baseline_cmd(
     print()
     print(f"Winner: {result.winner.title()}")
     print(f"Reason: {result.winner_reason}")
+
+
+@app.command("list")
+def list_campaigns(
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of campaigns to show"),
+    offset: int = typer.Option(0, "--offset", help="Skip first N campaigns"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List all campaigns in the database."""
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        campaigns = await db.get_all_campaigns(limit=limit, offset=offset)
+        total = await db.count_campaigns()
+        return campaigns, total
+
+    campaigns, total = asyncio.run(run())
+
+    if json_output:
+        # Output JSON array with keys: id, subject_name, chaos_type, trial_count, baseline, created_at
+        data = [
+            {
+                "id": c.id,
+                "subject_name": c.subject_name,
+                "chaos_type": c.chaos_type,
+                "trial_count": c.trial_count,
+                "baseline": c.baseline,
+                "created_at": c.created_at,
+            }
+            for c in campaigns
+        ]
+        print(json.dumps(data, indent=2))
+        return
+
+    # Plain text table with fixed column widths (no Rich tables)
+    # Handle empty database case
+    if not campaigns:
+        print("No campaigns found.")
+        print(f"Database: {db_path}")
+        return
+
+    # Header row with fixed widths: ID(6), Date(12), Subject(10), Chaos(12), Trials(8), Baseline(8)
+    print(f"{'ID':<6} {'Date':<12} {'Subject':<10} {'Chaos':<12} {'Trials':<8} {'Baseline':<8}")
+    print("-" * 58)
+    for c in campaigns:
+        date_str = c.created_at[:10] if c.created_at else "N/A"
+        baseline_str = "Yes" if c.baseline else "No"
+        print(f"{c.id:<6} {date_str:<12} {c.subject_name:<10} {c.chaos_type:<12} {c.trial_count:<8} {baseline_str:<8}")
+
+    # Show pagination info
+    showing_end = min(offset + limit, total)
+    print(f"\nShowing {offset + 1}-{showing_end} of {total} campaigns")
 
 
 def main() -> None:
