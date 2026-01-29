@@ -1,4 +1,14 @@
-"""Sliding window rate limiter using Redis sorted sets and Lua scripts."""
+"""
+Sliding window rate limiter using Redis sorted sets and Lua scripts.
+
+Uses a sorted set per key with timestamp scores. On each request:
+1. ZREMRANGEBYSCORE to prune entries older than window
+2. ZCARD to count requests in window
+3. ZADD to record new request (if under limit)
+
+Lua script ensures atomicity (no race between count and increment).
+The :seq counter ensures unique members when multiple requests share a timestamp.
+"""
 
 import time
 from dataclasses import dataclass
