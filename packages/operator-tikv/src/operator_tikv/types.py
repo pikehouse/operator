@@ -99,10 +99,11 @@ class PDRegionLeader(BaseModel):
     Region leader info.
 
     The leader handles all reads and writes for a region.
+    May have missing fields when no leader is elected (API returns {}).
     """
 
-    id: int
-    store_id: int
+    id: int | None = None
+    store_id: int | None = None
 
 
 class PDRegionResponse(BaseModel):

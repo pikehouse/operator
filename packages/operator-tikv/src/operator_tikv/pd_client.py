@@ -143,8 +143,13 @@ class PDClient:
         Returns:
             Region object with string store IDs.
         """
-        # Leader store ID - empty string if no leader
-        leader_id = str(pd_region.leader.store_id) if pd_region.leader else ""
+        # Leader store ID - empty string if no leader or leader has no store_id
+        # PD API returns {} for regions with no elected leader
+        leader = pd_region.leader
+        if leader and leader.store_id is not None:
+            leader_id = str(leader.store_id)
+        else:
+            leader_id = ""
 
         # Peer store IDs - all stores holding replicas (including leader)
         peer_ids = [str(p.store_id) for p in pd_region.peers]

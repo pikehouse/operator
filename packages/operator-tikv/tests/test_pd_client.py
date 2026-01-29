@@ -130,6 +130,46 @@ def regions_response():
 
 
 @pytest.fixture
+def regions_with_empty_leader_response():
+    """
+    Sample PD API response with regions that have no elected leader.
+
+    This happens during leader election or when a region is being transferred.
+    The API returns an empty leader object {} instead of null.
+    """
+    return {
+        "count": 3,
+        "regions": [
+            {
+                "id": 100,
+                "leader": {"id": 1001, "store_id": 1},
+                "peers": [
+                    {"id": 1001, "store_id": 1},
+                    {"id": 1002, "store_id": 2},
+                ],
+            },
+            {
+                # Region with empty leader object (no leader elected)
+                "id": 200,
+                "leader": {},
+                "peers": [
+                    {"id": 2001, "store_id": 2},
+                    {"id": 2002, "store_id": 3},
+                ],
+            },
+            {
+                # Region with null leader
+                "id": 300,
+                "leader": None,
+                "peers": [
+                    {"id": 3001, "store_id": 1},
+                ],
+            },
+        ],
+    }
+
+
+@pytest.fixture
 def single_region_response():
     """Sample PD API response for /pd/api/v1/region/id/{id}."""
     return {
@@ -253,6 +293,39 @@ class TestGetRegions:
             assert isinstance(region.leader_store_id, str)
             for peer_id in region.peer_store_ids:
                 assert isinstance(peer_id, str)
+
+    @pytest.mark.asyncio
+    async def test_get_regions_handles_empty_leader(
+        self, regions_with_empty_leader_response
+    ):
+        """
+        get_regions should handle regions with no elected leader.
+
+        PD API returns empty leader object {} during leader election.
+        These regions should have empty string leader_store_id.
+        """
+        transport = MockTransport({
+            "/pd/api/v1/regions": {"json": regions_with_empty_leader_response}
+        })
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://pd:2379"
+        ) as http:
+            client = PDClient(http=http)
+            regions = await client.get_regions()
+
+        assert len(regions) == 3
+
+        # First region has normal leader
+        assert regions[0].id == 100
+        assert regions[0].leader_store_id == "1"
+
+        # Second region has empty leader object {}
+        assert regions[1].id == 200
+        assert regions[1].leader_store_id == ""  # Empty string when no leader
+
+        # Third region has null leader
+        assert regions[2].id == 300
+        assert regions[2].leader_store_id == ""  # Empty string when null leader
 
 
 class TestGetRegion:
