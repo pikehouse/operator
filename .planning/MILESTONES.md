@@ -1,5 +1,29 @@
 # Project Milestones: Operator
 
+## v3.1 Demo Update (Shipped: 2026-01-29)
+
+**Delivered:** Fixed TUI demo to work with v3.0 agent_lab architecture. Both TiKV and ratelimiter demos run end-to-end with autonomous agent diagnosis and remediation.
+
+**Phases completed:** 33-34 (5 plans total)
+
+**Key accomplishments:**
+- TicketOpsDB context manager with automatic schema initialization (no more "no such table" errors)
+- Agent subprocess graceful SIGTERM shutdown (marks session escalated, cleans up)
+- Ratelimiter demo counter persistence (heartbeat keeps counters alive, read-only get_counter)
+- Compact workload panel with over-limit counters sorted first
+- Demo management scripts (rebuild, reset-state commands)
+
+**Stats:**
+- 2 phases, 5 plans
+- 11 requirements shipped
+- 2 days from start to ship
+
+**Git range:** Phase 33 commits → `5824cd0` (docs(34): mark phase complete)
+
+**What's next:** Additional subjects, production approval layer, or v3.2 enhancements
+
+---
+
 ## v3.0 Operator Laboratory (Shipped: 2026-01-28)
 
 **Delivered:** Autonomous AI operator with full shell access, safety via container isolation, and complete audit trail. Claude autonomously diagnoses and fixes TiKV failures without predefined playbooks.

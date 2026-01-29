@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** v3.1 Demo Update
-**Phase:** 34 - Demo End-to-End Validation (COMPLETE)
-**Plan:** Ad-hoc validation complete
-**Status:** Milestone complete
-**Last activity:** 2026-01-29 — Phase 34 validated, ratelimiter demo fixed and working
+**Milestone:** v3.1 SHIPPED
+**Phase:** —
+**Plan:** —
+**Status:** Ready for next milestone
+**Last activity:** 2026-01-29 — v3.1 milestone shipped, archived to milestones/
 
-Progress: ████████ (Phase 34: COMPLETE)
+Progress: ████████████████████ (v3.1: SHIPPED)
 
 ## Project Reference
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-01-28 after v3.0)
 | v2.2 | SHIPPED | 2026-01-27 |
 | v2.3 | ARCHIVED | 2026-01-28 |
 | v3.0 | SHIPPED | 2026-01-28 |
-| v3.1 | IN PROGRESS | 2026-01-28 |
+| v3.1 | SHIPPED | 2026-01-29 |
 
 See: .planning/MILESTONES.md
 
@@ -67,28 +67,22 @@ See: .planning/MILESTONES.md
 | milestones/v3.0-REQUIREMENTS.md | v3.0 requirements (14 total) |
 | milestones/v3.0-MILESTONE-AUDIT.md | v3.0 audit report |
 
-## Current Milestone: v3.1 Demo Update
+## Current Milestone: None (v3.1 SHIPPED)
 
-**Goal:** Fix TUI demo to work with v3.0 agent_lab architecture
+**v3.1 Delivered:**
+- TUI demo works with v3.0 agent_lab architecture
+- Agent subprocess graceful shutdown
+- Both TiKV and ratelimiter demos functional end-to-end
+- Demo counter persistence fixed
 
-**Target features:**
-- TUI demo works with v3.0 agent_lab (not old tickets table)
-- Agent panel shows autonomous agent output
-- Both TiKV and ratelimiter demos functional
-- Demo chapters flow correctly with new architecture
-
-**Roadmap:**
-- Phase 33: Agent Database Integration (6 requirements) - COMPLETE
-- Phase 34: Demo End-to-End Validation (5 requirements)
-
-**Next:** `/gsd:plan-phase 34`
+**Next:** `/gsd:new-milestone` to start next milestone
 
 ## Session Continuity
 
-**Last session:** 2026-01-28T23:30:00Z
-**Stopped at:** Phase 33 complete and verified
+**Last session:** 2026-01-29
+**Stopped at:** v3.1 milestone complete and archived
 **Resume file:** None
-**Next:** Plan Phase 34 (Demo End-to-End Validation)
+**Next:** `/gsd:new-milestone` to define next milestone
 
 ---
 *State updated: 2026-01-28 (Phase 33 complete and verified)*

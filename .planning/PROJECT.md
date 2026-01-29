@@ -10,7 +10,7 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ## Current State
 
-**Shipped:** v3.0 (2026-01-28)
+**Shipped:** v3.1 (2026-01-29)
 **Code:** ~21,500 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
 **Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Redis, FastAPI, Rich TUI, Pydantic
 
@@ -105,14 +105,16 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - CLI audit commands (operator audit list/show) — v3.0
 - Autonomous diagnosis and remediation (no playbook) — v3.0
 
+**v3.1:**
+- TUI demo works with v3.0 agent_lab architecture — v3.1
+- TicketOpsDB context manager with automatic schema initialization — v3.1
+- Agent subprocess graceful SIGTERM shutdown — v3.1
+- Both TiKV and ratelimiter demos functional end-to-end — v3.1
+- Demo chapters flow correctly with new architecture — v3.1
+
 ### Active
 
-**v3.1 Demo Update:**
-- [ ] TUI demo works with v3.0 agent_lab architecture
-- [ ] Agent panel shows v3.0 autonomous agent output (not old tickets table)
-- [ ] Monitor panel works with v3.0's invariant checking
-- [ ] Both TiKV and ratelimiter demos functional
-- [ ] Demo chapters flow correctly with new architecture
+(No active requirements — run `/gsd:new-milestone` to start next milestone)
 
 ### Future
 
@@ -173,4 +175,4 @@ The audit layer carries forward unchanged. Production adds an approval gate befo
 | Database audit over JSON files | Better queryability, CLI integration | Good — operator audit commands work |
 
 ---
-*Last updated: 2026-01-28 after v3.1 milestone start*
+*Last updated: 2026-01-29 after v3.1 milestone shipped*

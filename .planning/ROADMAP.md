@@ -8,7 +8,7 @@
 - v2.1 Protocols - Phases 16-20 (shipped 2026-01-27)
 - v2.2 Agentic Loop - Phases 21-22 (shipped 2026-01-27)
 - v3.0 Operator Laboratory - Phases 30-32 (shipped 2026-01-28)
-- v3.1 Demo Update - Phases 33-34 (in progress)
+- v3.1 Demo Update - Phases 33-34 (shipped 2026-01-29)
 
 ## Phases
 
@@ -54,44 +54,12 @@ See: .planning/milestones/v3.0-ROADMAP.md
 
 </details>
 
-### v3.1 Demo Update (In Progress)
+<details>
+<summary>v3.1 Demo Update (Phases 33-34) - SHIPPED 2026-01-29</summary>
 
-**Milestone Goal:** Fix TUI demo to work with v3.0 agent_lab architecture
+See: .planning/milestones/v3.1-ROADMAP.md
 
-#### Phase 33: Agent Database Integration
-**Goal**: Agent subprocess handles database lifecycle correctly
-**Depends on**: Phase 32
-**Requirements**: DEMO-01, DEMO-02, DEMO-03, DEMO-07, ARCH-01, TEST-03
-**Success Criteria** (what must be TRUE):
-  1. Agent subprocess initializes schema on first connection (no "no such table" errors)
-  2. Agent poll loop runs without errors when database is empty (no tickets yet)
-  3. Demo script starts with clean database state (repeatable demo runs)
-  4. Agent subprocess handles SIGTERM gracefully (marks session as escalated, cleans up)
-  5. Agent code (operator_core) contains no demo-specific logic (clean separation of concerns)
-  6. Unit test verifies agent schema initialization works correctly
-**Plans**: 3 plans
-
-Plans:
-- [x] 33-01-PLAN.md - Create TicketOpsDB context manager with schema initialization
-- [x] 33-02-PLAN.md - Add signal handling to agent loop with graceful shutdown
-- [x] 33-03-PLAN.md - Unit tests for schema initialization (TEST-03)
-
-#### Phase 34: Demo End-to-End Validation
-**Goal**: Both demos run successfully with v3.0 agent
-**Depends on**: Phase 33
-**Requirements**: DEMO-04, DEMO-05, DEMO-06, TEST-01, TEST-02
-**Success Criteria** (what must be TRUE):
-  1. TiKV demo completes full flow: startup -> fault injection -> agent diagnosis -> autonomous resolution
-  2. Rate limiter demo completes full flow: startup -> fault injection -> agent diagnosis -> autonomous resolution
-  3. Agent panel displays subprocess output in real-time (verify existing TUI behavior)
-  4. Demo chapters advance correctly with proper timing and state transitions
-  5. Integration tests verify TiKV demo runs without errors
-  6. Integration tests verify ratelimiter demo runs without errors
-**Plans**: 2 plans
-
-Plans:
-- [x] 34-01-PLAN.md - Manual validation of TiKV and rate limiter demos (DEMO-04, DEMO-05, DEMO-06)
-- [x] 34-02-PLAN.md - Create pytest integration tests (TEST-01, TEST-02)
+</details>
 
 ## Progress
 
@@ -127,3 +95,6 @@ Phases execute in numeric order: 33 -> 34
 | 32. Audit System | v3.0 | 3/3 | Complete | 2026-01-28 |
 | 33. Agent Database Integration | v3.1 | 3/3 | Complete | 2026-01-28 |
 | 34. Demo End-to-End Validation | v3.1 | 2/2 | Complete | 2026-01-29 |
+
+---
+*All v3.1 phases complete. Run `/gsd:new-milestone` to start next milestone.*
