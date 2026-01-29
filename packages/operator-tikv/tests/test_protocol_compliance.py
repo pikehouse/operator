@@ -38,15 +38,6 @@ class TestTiKVSubjectProtocolCompliance:
         assert hasattr(subject, "observe")
         assert callable(subject.observe)
 
-    def test_tikv_subject_has_get_action_definitions_method(self):
-        """TiKVSubject should have get_action_definitions() method."""
-        mock_pd = MagicMock()
-        mock_prom = MagicMock()
-        subject = TiKVSubject(pd=mock_pd, prom=mock_prom)
-
-        assert hasattr(subject, "get_action_definitions")
-        assert callable(subject.get_action_definitions)
-
     @pytest.mark.asyncio
     async def test_observe_returns_dict(self):
         """observe() should return dict[str, Any]."""
@@ -75,17 +66,6 @@ class TestTiKVSubjectProtocolCompliance:
         assert "stores" in result
         assert "cluster_metrics" in result
         assert "store_metrics" in result
-
-    def test_get_action_definitions_returns_list(self):
-        """get_action_definitions() should return list."""
-        mock_pd = MagicMock()
-        mock_prom = MagicMock()
-        subject = TiKVSubject(pd=mock_pd, prom=mock_prom)
-
-        result = subject.get_action_definitions()
-
-        assert isinstance(result, list)
-        assert len(result) > 0  # TiKV has several actions
 
 
 class TestTiKVInvariantCheckerProtocolCompliance:

@@ -22,8 +22,6 @@ def mock_ratelimiter_client():
     client.get_counters = AsyncMock(return_value=[
         CounterInfo(key="user:1", count=5, limit=10, remaining=5),
     ])
-    client.reset_counter = AsyncMock(return_value=None)
-    client.update_limit = AsyncMock(return_value=None)
     return client
 
 
@@ -140,37 +138,3 @@ class TestObserve:
         assert "node_metrics" in result
         # Nodes with failed metrics are skipped
         assert result["node_metrics"] == {}
-
-
-class TestActions:
-    """Tests for action methods."""
-
-    @pytest.mark.asyncio
-    async def test_reset_counter_calls_client(self, subject, mock_ratelimiter_client):
-        """reset_counter() should call client method."""
-        await subject.reset_counter("test_key")
-        mock_ratelimiter_client.reset_counter.assert_called_once_with("test_key")
-
-    @pytest.mark.asyncio
-    async def test_update_limit_calls_client(self, subject, mock_ratelimiter_client):
-        """update_limit() should call client method."""
-        await subject.update_limit("test_key", 100)
-        mock_ratelimiter_client.update_limit.assert_called_once_with("test_key", 100)
-
-    def test_get_action_definitions(self, subject):
-        """get_action_definitions() should return action list."""
-        definitions = subject.get_action_definitions()
-        assert len(definitions) >= 2
-
-        # Check reset_counter action
-        reset_action = next((d for d in definitions if d.name == "reset_counter"), None)
-        assert reset_action is not None
-        assert "key" in reset_action.parameters
-        assert reset_action.risk_level == "medium"
-
-        # Check update_limit action
-        update_action = next((d for d in definitions if d.name == "update_limit"), None)
-        assert update_action is not None
-        assert "key" in update_action.parameters
-        assert "new_limit" in update_action.parameters
-        assert update_action.risk_level == "high"

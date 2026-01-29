@@ -32,7 +32,7 @@ from operator_tikv.log_parser import (
 )
 from operator_tikv.pd_client import PDClient
 from operator_tikv.prom_client import PrometheusClient
-from operator_tikv.subject import TIKV_CONFIG, TiKVSubject
+from operator_tikv.subject import TiKVSubject
 from operator_tikv.types import (
     # PD API types
     PDRegionLeader,
@@ -56,7 +56,6 @@ InvariantChecker = TiKVInvariantChecker
 __all__ = [
     # Subject
     "TiKVSubject",
-    "TIKV_CONFIG",
     # Factory
     "create_tikv_subject_and_checker",
     # Clients

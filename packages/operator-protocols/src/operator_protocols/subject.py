@@ -6,10 +6,7 @@ can be monitored by the operator. Implementations include TiKV clusters,
 rate limiters, and other distributed systems.
 """
 
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-if TYPE_CHECKING:
-    from operator_protocols.types import ActionDefinition
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -17,10 +14,9 @@ class SubjectProtocol(Protocol):
     """
     Protocol for observable systems.
 
-    A Subject represents any system that can be observed and potentially
-    acted upon by the operator. It provides:
+    A Subject represents any system that can be observed by the operator.
+    It provides:
     - observe(): Returns current system state as a flexible dict
-    - get_action_definitions(): Returns available actions
 
     Example observation schema:
         {
@@ -43,15 +39,5 @@ class SubjectProtocol(Protocol):
             - Component states (e.g., stores, nodes)
             - Metrics (e.g., latency, throughput)
             - Metadata (e.g., timestamp)
-        """
-        ...
-
-    def get_action_definitions(self) -> list[Any]:
-        """
-        Get the action definitions available for this subject.
-
-        Returns:
-            List of ActionDefinition objects describing available actions.
-            Each action includes name, description, parameters, and handler.
         """
         ...

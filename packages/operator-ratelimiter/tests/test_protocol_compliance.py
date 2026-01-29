@@ -54,11 +54,6 @@ class TestSubjectProtocolCompliance:
         # Check it's a coroutine function
         assert inspect.iscoroutinefunction(RateLimiterSubject.observe)
 
-    def test_subject_has_get_action_definitions_method(self):
-        """RateLimiterSubject should have get_action_definitions() method."""
-        assert hasattr(RateLimiterSubject, "get_action_definitions")
-        assert callable(RateLimiterSubject.get_action_definitions)
-
     @pytest.mark.asyncio
     async def test_observe_returns_dict(self):
         """observe() should return dict[str, Any]."""
@@ -79,23 +74,6 @@ class TestSubjectProtocolCompliance:
         result = await subject.observe()
 
         assert isinstance(result, dict)
-
-    def test_get_action_definitions_returns_list(self):
-        """get_action_definitions() should return list."""
-        mock_rl = MagicMock(spec=RateLimiterClient)
-        mock_redis = MagicMock(spec=RedisClient)
-        mock_prom = MagicMock(spec=PrometheusClient)
-
-        subject = RateLimiterSubject(
-            ratelimiter=mock_rl,
-            redis=mock_redis,
-            prom=mock_prom,
-        )
-
-        result = subject.get_action_definitions()
-
-        assert isinstance(result, list)
-        assert len(result) > 0  # RateLimiter has reset_counter and update_limit
 
 
 # =============================================================================

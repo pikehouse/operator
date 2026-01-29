@@ -6,8 +6,6 @@ SubjectProtocol defined in operator-protocols for rate limiter services.
 
 RateLimiterSubject:
 - Implements SubjectProtocol with observe() method returning dict[str, Any]
-- Implements action methods: reset_counter, update_limit
-- Provides get_action_definitions() for ActionRegistry integration
 - Uses injected HTTP clients for RateLimiter, Redis, and Prometheus APIs
 
 Pattern mirrors TiKVSubject for consistency across subjects.
@@ -15,8 +13,6 @@ Pattern mirrors TiKVSubject for consistency across subjects.
 
 from dataclasses import dataclass
 from typing import Any
-
-from operator_core.actions.registry import ActionDefinition, ParamDef
 
 from operator_ratelimiter.prom_client import PrometheusClient
 from operator_ratelimiter.ratelimiter_client import RateLimiterClient
@@ -29,11 +25,10 @@ class RateLimiterSubject:
     Rate Limiter implementation of the Subject Protocol.
 
     Provides observations about rate limiter cluster state through the
-    management API, Redis, and Prometheus metrics. Implements action
-    methods for counter reset and limit updates.
+    management API, Redis, and Prometheus metrics.
 
     Attributes:
-        ratelimiter: RateLimiterClient for management API queries and actions
+        ratelimiter: RateLimiterClient for management API queries
         redis: RedisClient for direct Redis state inspection
         prom: PrometheusClient for performance metrics
 
@@ -53,51 +48,6 @@ class RateLimiterSubject:
     ratelimiter: RateLimiterClient
     redis: RedisClient
     prom: PrometheusClient
-
-    def get_action_definitions(self) -> list[ActionDefinition]:
-        """
-        Return definitions of all actions this subject supports.
-
-        Used by ActionRegistry to discover available actions at runtime.
-        Provides parameter schemas, risk levels, and descriptions for
-        each action.
-
-        Returns:
-            List of ActionDefinition objects for all implemented actions.
-        """
-        return [
-            ActionDefinition(
-                name="reset_counter",
-                description="Reset a rate limit counter to zero",
-                parameters={
-                    "key": ParamDef(
-                        type="str",
-                        description="The counter key to reset",
-                        required=True,
-                    ),
-                },
-                risk_level="medium",
-                requires_approval=False,
-            ),
-            ActionDefinition(
-                name="update_limit",
-                description="Update the rate limit for a key",
-                parameters={
-                    "key": ParamDef(
-                        type="str",
-                        description="The counter key to update",
-                        required=True,
-                    ),
-                    "new_limit": ParamDef(
-                        type="int",
-                        description="New rate limit value",
-                        required=True,
-                    ),
-                },
-                risk_level="high",
-                requires_approval=False,
-            ),
-        ]
 
     # -------------------------------------------------------------------------
     # SubjectProtocol.observe() - Generic observation interface
@@ -167,41 +117,3 @@ class RateLimiterSubject:
             "node_metrics": node_metrics,
             "redis_connected": redis_connected,
         }
-
-    # -------------------------------------------------------------------------
-    # Actions - Operations that modify system state
-    # -------------------------------------------------------------------------
-
-    async def reset_counter(self, key: str) -> None:
-        """
-        Reset a rate limit counter to zero.
-
-        Fire-and-forget: returns when management API accepts the request.
-        Does not wait for actual counter reset confirmation.
-
-        Args:
-            key: The counter key to reset.
-
-        Raises:
-            httpx.HTTPStatusError: On API errors (4xx, 5xx).
-        """
-        await self.ratelimiter.reset_counter(key)
-
-    async def update_limit(self, key: str, new_limit: int) -> None:
-        """
-        Update the rate limit for a key.
-
-        Fire-and-forget: returns when management API accepts the request.
-        Does not wait for actual limit update confirmation.
-
-        Args:
-            key: The counter key to update.
-            new_limit: New rate limit value.
-
-        Raises:
-            httpx.HTTPStatusError: On API errors (4xx, 5xx).
-
-        Note:
-            Window size is not specified, so service default is used.
-        """
-        await self.ratelimiter.update_limit(key, new_limit)
