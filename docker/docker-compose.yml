@@ -28,7 +28,7 @@ services:
 
   ratelimiter-1:
     build:
-      context: ../packages/ratelimiter-service
+      context: ../subjects/ratelimiter/service
     environment:
       - RATELIMITER_REDIS_URL=redis://redis:6379
       - RATELIMITER_NODE_ID=node-1
@@ -52,7 +52,7 @@ services:
 
   ratelimiter-2:
     build:
-      context: ../packages/ratelimiter-service
+      context: ../subjects/ratelimiter/service
     environment:
       - RATELIMITER_REDIS_URL=redis://redis:6379
       - RATELIMITER_NODE_ID=node-2
@@ -76,7 +76,7 @@ services:
 
   ratelimiter-3:
     build:
-      context: ../packages/ratelimiter-service
+      context: ../subjects/ratelimiter/service
     environment:
       - RATELIMITER_REDIS_URL=redis://redis:6379
       - RATELIMITER_NODE_ID=node-3
