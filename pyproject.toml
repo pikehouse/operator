@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "operator-core",
     "operator-tikv",
+    "operator-ratelimiter",
     "python-dotenv>=1.0.0",
     "redis>=5.0.0",
 ]
@@ -24,6 +25,7 @@ members = ["packages/*"]
 operator-core = { workspace = true }
 operator-protocols = { workspace = true }
 operator-tikv = { workspace = true }
+operator-ratelimiter = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["packages"]
