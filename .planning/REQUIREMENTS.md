@@ -27,12 +27,12 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ### Analysis Layer
 
-- [ ] **ANAL-01**: Scoring computes time-to-detect, time-to-resolve from raw trial data
-- [ ] **ANAL-02**: Command analysis: count, unique commands, thrashing detection
-- [ ] **ANAL-03**: Destructive command detection via pattern matching
-- [ ] **ANAL-04**: Baseline comparison (agent vs self-healing)
-- [ ] **ANAL-05**: Campaign comparison (variant A vs variant B)
-- [ ] **ANAL-06**: Analysis is idempotent — can re-run on old campaigns
+- [x] **ANAL-01**: Scoring computes time-to-detect, time-to-resolve from raw trial data
+- [x] **ANAL-02**: Command analysis: count, unique commands, thrashing detection
+- [x] **ANAL-03**: Destructive command detection via LLM classification
+- [x] **ANAL-04**: Baseline comparison (agent vs self-healing)
+- [x] **ANAL-05**: Campaign comparison (variant A vs variant B)
+- [x] **ANAL-06**: Analysis is idempotent — can re-run on old campaigns
 
 ### Viewer Layer
 
@@ -53,9 +53,9 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 - [x] **CLI-01**: eval run --subject tikv --chaos node_kill runs single trial
 - [x] **CLI-02**: eval run --baseline runs without agent
 - [ ] **CLI-03**: eval run campaign config.yaml runs full campaign
-- [ ] **CLI-04**: eval analyze <campaign_id> computes scores
-- [ ] **CLI-05**: eval compare <campaign_a> <campaign_b> compares campaigns
-- [ ] **CLI-06**: eval compare-baseline <campaign_id> compares to baseline
+- [x] **CLI-04**: eval analyze <campaign_id> computes scores
+- [x] **CLI-05**: eval compare <campaign_a> <campaign_b> compares campaigns
+- [x] **CLI-06**: eval compare-baseline <campaign_id> compares to baseline
 
 ## Future Requirements
 
@@ -93,12 +93,12 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | SUBJ-01 | Phase 35 | Complete |
 | SUBJ-02 | Phase 35 | Complete |
 | SUBJ-03 | Phase 35 | Complete |
-| ANAL-01 | Phase 36 | Pending |
-| ANAL-02 | Phase 36 | Pending |
-| ANAL-03 | Phase 36 | Pending |
-| ANAL-04 | Phase 36 | Pending |
-| ANAL-05 | Phase 36 | Pending |
-| ANAL-06 | Phase 36 | Pending |
+| ANAL-01 | Phase 36 | Complete |
+| ANAL-02 | Phase 36 | Complete |
+| ANAL-03 | Phase 36 | Complete |
+| ANAL-04 | Phase 36 | Complete |
+| ANAL-05 | Phase 36 | Complete |
+| ANAL-06 | Phase 36 | Complete |
 | VIEW-01 | Phase 37 | Pending |
 | VIEW-02 | Phase 37 | Pending |
 | VIEW-03 | Phase 37 | Pending |
@@ -110,9 +110,9 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | CLI-01 | Phase 35 | Complete |
 | CLI-02 | Phase 35 | Complete |
 | CLI-03 | Phase 38 | Pending |
-| CLI-04 | Phase 36 | Pending |
-| CLI-05 | Phase 36 | Pending |
-| CLI-06 | Phase 36 | Pending |
+| CLI-04 | Phase 36 | Complete |
+| CLI-05 | Phase 36 | Complete |
+| CLI-06 | Phase 36 | Complete |
 | CONF-01 | Phase 39 | Pending |
 | CONF-02 | Phase 39 | Pending |
 | CONF-03 | Phase 39 | Pending |

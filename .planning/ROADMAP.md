@@ -109,10 +109,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 36-01-PLAN.md — Analysis types and scoring module (ANAL-01, ANAL-06)
-- [ ] 36-02-PLAN.md — Command analysis with LLM classification (ANAL-02, ANAL-03)
-- [ ] 36-03-PLAN.md — Baseline and campaign comparison (ANAL-04, ANAL-05)
-- [ ] 36-04-PLAN.md — CLI commands analyze, compare, compare-baseline (CLI-04, CLI-05, CLI-06)
+- [x] 36-01-PLAN.md — Analysis types and scoring module (ANAL-01, ANAL-06)
+- [x] 36-02-PLAN.md — Command analysis with LLM classification (ANAL-02, ANAL-03)
+- [x] 36-03-PLAN.md — Baseline and campaign comparison (ANAL-04, ANAL-05)
+- [x] 36-04-PLAN.md — CLI commands analyze, compare, compare-baseline (CLI-04, CLI-05, CLI-06)
 
 ---
 
@@ -215,10 +215,10 @@ Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 | 33. Agent Database Integration | v3.1 | 3/3 | Complete | 2026-01-28 |
 | 34. Demo End-to-End Validation | v3.1 | 2/2 | Complete | 2026-01-29 |
 | 35. Runner Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
-| 36. Analysis Layer | v3.2 | 0/4 | Planned | - |
+| 36. Analysis Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
 | 37. Viewer Layer | v3.2 | 0/TBD | Not started | - |
 | 38. Chaos Expansion | v3.2 | 0/TBD | Not started | - |
 | 39. Config Variants | v3.2 | 0/TBD | Not started | - |
 
 ---
-*Updated: 2026-01-29 — Phase 36 planned (4 plans in 3 waves)*
+*Updated: 2026-01-29 — Phase 36 complete*
