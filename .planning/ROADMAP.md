@@ -9,6 +9,7 @@
 - v2.2 Agentic Loop - Phases 21-22 (shipped 2026-01-27)
 - v3.0 Operator Laboratory - Phases 30-32 (shipped 2026-01-28)
 - v3.1 Demo Update - Phases 33-34 (shipped 2026-01-29)
+- v3.2 Evaluation Harness - Phases 35-39 (in progress)
 
 ## Phases
 
@@ -61,10 +62,124 @@ See: .planning/milestones/v3.1-ROADMAP.md
 
 </details>
 
+### v3.2 Evaluation Harness (In Progress)
+
+**Milestone Goal:** Build eval/ — a standalone harness that injects chaos, monitors agent problem-solving, grades performance, and provides historical analysis.
+
+See: .planning/milestones/v3.2-ROADMAP.md
+
+#### Phase 35: Runner Layer
+**Goal**: Developer can run single-trial evaluations and see raw results stored in database
+
+**Depends on**: Nothing (first phase of v3.2)
+
+**Requirements**: RUN-01, RUN-02, RUN-03, RUN-04, RUN-05, RUN-06, SUBJ-01, SUBJ-02, SUBJ-03, CLI-01, CLI-02
+
+**Success Criteria**:
+  1. Developer can run `eval run --subject tikv --chaos node_kill` and trial executes
+  2. Developer can run `eval run --baseline` and trial executes without agent
+  3. Trial data persists in eval.db with timing data
+  4. Trial data includes subject state before/after chaos and commands extracted from agent session
+  5. TiKVEvalSubject implements EvalSubject protocol
+
+**Plans**: TBD
+
+Plans:
+- [ ] 35-01: TBD
+- [ ] 35-02: TBD
+
+---
+
+#### Phase 36: Analysis Layer
+**Goal**: Developer can compute scores and compare performance across trials/campaigns
+
+**Depends on**: Phase 35
+
+**Requirements**: ANAL-01, ANAL-02, ANAL-03, ANAL-04, ANAL-05, ANAL-06, CLI-04, CLI-05, CLI-06
+
+**Success Criteria**:
+  1. Developer can run `eval analyze <campaign_id>` and see scores
+  2. Developer can run `eval compare-baseline <campaign_id>` and see agent vs self-healing
+  3. Developer can run `eval compare <campaign_a> <campaign_b>` and see differences
+  4. Analysis computes command metrics (count, unique, thrashing, destructive)
+  5. Analysis is idempotent
+
+**Plans**: TBD
+
+Plans:
+- [ ] 36-01: TBD
+- [ ] 36-02: TBD
+
+---
+
+#### Phase 37: Viewer Layer
+**Goal**: Developer can browse campaigns and drill into trial details via CLI and web UI
+
+**Depends on**: Phase 36
+
+**Requirements**: VIEW-01, VIEW-02, VIEW-03, VIEW-04, VIEW-05
+
+**Success Criteria**:
+  1. Developer can run `eval list` and see all campaigns
+  2. Developer can run `eval show <campaign_id>` and see campaign summary
+  3. Developer can run `eval show <trial_id>` and see trial detail
+  4. Developer can open web UI and browse campaigns/trials
+  5. Web UI displays trial reasoning and commands
+
+**Plans**: TBD
+
+Plans:
+- [ ] 37-01: TBD
+- [ ] 37-02: TBD
+
+---
+
+#### Phase 38: Chaos Expansion
+**Goal**: Developer can run batch campaigns with multiple chaos types
+
+**Depends on**: Phase 37
+
+**Requirements**: SUBJ-04, SUBJ-05, SUBJ-06, CLI-03
+
+**Success Criteria**:
+  1. TiKV supports latency chaos (tc netem)
+  2. TiKV supports disk pressure chaos (fallocate)
+  3. TiKV supports network partition chaos (iptables)
+  4. Developer can define campaign config YAML
+  5. Developer can run `eval run campaign config.yaml`
+
+**Plans**: TBD
+
+Plans:
+- [ ] 38-01: TBD
+- [ ] 38-02: TBD
+
+---
+
+#### Phase 39: Config Variants
+**Goal**: Developer can test different agent configurations and compare performance
+
+**Depends on**: Phase 38
+
+**Requirements**: CONF-01, CONF-02, CONF-03
+
+**Success Criteria**:
+  1. Config variants define model, system_prompt, tools_config
+  2. Campaign config can specify variant
+  3. Analysis compares performance across variants
+  4. Developer can see which configuration performs best
+
+**Plans**: TBD
+
+Plans:
+- [ ] 39-01: TBD
+
+---
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 33 -> 34
+Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -95,6 +210,11 @@ Phases execute in numeric order: 33 -> 34
 | 32. Audit System | v3.0 | 3/3 | Complete | 2026-01-28 |
 | 33. Agent Database Integration | v3.1 | 3/3 | Complete | 2026-01-28 |
 | 34. Demo End-to-End Validation | v3.1 | 2/2 | Complete | 2026-01-29 |
+| 35. Runner Layer | v3.2 | 0/TBD | Not started | - |
+| 36. Analysis Layer | v3.2 | 0/TBD | Not started | - |
+| 37. Viewer Layer | v3.2 | 0/TBD | Not started | - |
+| 38. Chaos Expansion | v3.2 | 0/TBD | Not started | - |
+| 39. Config Variants | v3.2 | 0/TBD | Not started | - |
 
 ---
-*All v3.1 phases complete. Run `/gsd:new-milestone` to start next milestone.*
+*Updated: 2026-01-29 — v3.2 roadmap added*

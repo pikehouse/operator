@@ -3,10 +3,10 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** Not started (defining requirements)
-**Plan:** —
-**Status:** Defining requirements
-**Last activity:** 2026-01-29 — Milestone v3.2 started
+**Phase:** 35 - Runner Layer
+**Plan:** Not yet planned
+**Status:** Not started (roadmap complete, ready for planning)
+**Last activity:** 2026-01-29 — v3.2 roadmap created
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ (v3.2: 0%)
 
@@ -30,6 +30,7 @@ See: .planning/PROJECT.md (updated 2026-01-28 after v3.0)
 | v2.3 | ARCHIVED | 2026-01-28 |
 | v3.0 | SHIPPED | 2026-01-28 |
 | v3.1 | SHIPPED | 2026-01-29 |
+| v3.2 | IN PROGRESS | 2026-01-29 |
 
 See: .planning/MILESTONES.md
 
@@ -66,26 +67,35 @@ See: .planning/MILESTONES.md
 | milestones/v3.0-ROADMAP.md | v3.0 roadmap (3 phases) |
 | milestones/v3.0-REQUIREMENTS.md | v3.0 requirements (14 total) |
 | milestones/v3.0-MILESTONE-AUDIT.md | v3.0 audit report |
+| milestones/v3.1-ROADMAP.md | v3.1 roadmap (2 phases) |
 
-## Current Milestone: None (v3.1 SHIPPED)
+## Current Milestone: v3.2 Evaluation Harness
 
-**v3.1 Delivered:**
-- TUI demo works with v3.0 agent_lab architecture
-- Agent subprocess graceful shutdown
-- Both TiKV and ratelimiter demos functional end-to-end
-- Demo counter persistence fixed
+**Milestone Goal:** Build eval/ — a standalone harness that injects chaos, monitors agent problem-solving, grades performance, and provides historical analysis.
 
-**Next:** `/gsd:new-milestone` to start next milestone
+**Roadmap:** .planning/milestones/v3.2-ROADMAP.md
+**Requirements:** .planning/REQUIREMENTS.md (30 requirements)
+
+**Phases:**
+- Phase 35: Runner Layer (11 requirements)
+- Phase 36: Analysis Layer (9 requirements)
+- Phase 37: Viewer Layer (5 requirements)
+- Phase 38: Chaos Expansion (4 requirements)
+- Phase 39: Config Variants (3 requirements)
+
+**Status:** Roadmap complete, ready for Phase 35 planning
+
+**Next:** `/gsd:plan-phase 35` to create Phase 35 execution plan
 
 ## Session Continuity
 
 **Last session:** 2026-01-29
-**Stopped at:** v3.1 milestone complete and archived
+**Stopped at:** v3.2 roadmap created
 **Resume file:** None
-**Next:** `/gsd:new-milestone` to define next milestone
+**Next:** `/gsd:plan-phase 35` to begin Phase 35
 
 ---
-*State updated: 2026-01-28 (Phase 33 complete and verified)*
+*State updated: 2026-01-29 (v3.2 roadmap created)*
 
 ## Open Issues
 
