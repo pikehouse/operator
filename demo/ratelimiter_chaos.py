@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 import redis.asyncio as redis
 
+from demo.status import demo_status
 from demo.types import ChaosConfig, ChaosType
 
 
@@ -37,8 +38,7 @@ async def inject_redis_pause(duration_sec: float = 5.0) -> None:
     """
     import time
 
-    from datetime import datetime
-    print(f"[CHAOS {datetime.now().strftime('%H:%M:%S')}] inject_redis_pause starting...")
+    demo_status.set("[dim]Injecting counter drift...[/dim]")
 
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
 
@@ -66,12 +66,10 @@ async def inject_redis_pause(duration_sec: float = 5.0) -> None:
 
         # Verify creation
         count = await r.zcard(redis_key)
-        print(f"[CHAOS] Created {redis_key} with {count} entries")
+        demo_status.set(f"Created drift counter ({count} entries)")
 
     finally:
         await r.aclose()
-
-    print("[CHAOS] inject_redis_pause complete")
 
 
 async def inject_burst_traffic(
@@ -98,7 +96,7 @@ async def inject_burst_traffic(
     """
     import time
 
-    print(f"[CHAOS] inject_burst_traffic starting for key={key}...")
+    demo_status.set(f"[dim]Injecting burst traffic for {key}...[/dim]")
 
     # Connect to Redis and inject over-limit counter
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
@@ -125,12 +123,10 @@ async def inject_burst_traffic(
 
         # Verify creation
         count = await r.zcard(redis_key)
-        print(f"[CHAOS] Created {redis_key} with {count} entries")
+        demo_status.set(f"Created burst counter ({count} entries)")
 
     finally:
         await r.aclose()
-
-    print(f"[CHAOS] inject_burst_traffic complete")
 
     # Return simulated results (the anomaly is the over-limit counter, not traffic)
     return {"allowed": over_limit_count, "denied": 0}
@@ -154,7 +150,7 @@ async def create_baseline_traffic(
     """
     import time
 
-    print(f"[BASELINE] Creating {len(keys)} counters with {count_per_key} entries each...")
+    demo_status.set(f"[dim]Creating {len(keys)} baseline counters...[/dim]")
 
     r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
     try:
@@ -173,7 +169,7 @@ async def create_baseline_traffic(
 
             await r.expire(redis_key, 120)
 
-        print(f"[BASELINE] Created {len(keys)} healthy counters ({count_per_key}/{limit} each)")
+        demo_status.set(f"Created {len(keys)} baseline counters ({count_per_key}/{limit} each)")
 
     finally:
         await r.aclose()
