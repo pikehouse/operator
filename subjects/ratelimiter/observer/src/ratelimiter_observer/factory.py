@@ -9,11 +9,11 @@ direct imports from operator-ratelimiter.
 import httpx
 import redis.asyncio as redis
 
-from operator_ratelimiter.invariants import RateLimiterInvariantChecker
-from operator_ratelimiter.prom_client import PrometheusClient
-from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-from operator_ratelimiter.redis_client import RedisClient
-from operator_ratelimiter.subject import RateLimiterSubject
+from ratelimiter_observer.invariants import RateLimiterInvariantChecker
+from ratelimiter_observer.prom_client import PrometheusClient
+from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+from ratelimiter_observer.redis_client import RedisClient
+from ratelimiter_observer.subject import RateLimiterSubject
 
 
 def create_ratelimiter_subject_and_checker(

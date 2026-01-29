@@ -13,8 +13,8 @@ from operator_protocols import (
     InvariantCheckerProtocol,
     InvariantViolation,
 )
-from operator_tikv.subject import TiKVSubject
-from operator_tikv.invariants import TiKVInvariantChecker
+from tikv_observer.subject import TiKVSubject
+from tikv_observer.invariants import TiKVInvariantChecker
 
 
 class TestTiKVSubjectProtocolCompliance:

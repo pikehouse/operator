@@ -16,7 +16,7 @@ Must convert to float explicitly (per RESEARCH.md Pitfall 2).
 import pytest
 import httpx
 
-from operator_tikv.prom_client import PrometheusClient
+from tikv_observer.prom_client import PrometheusClient
 from operator_core.types import StoreMetrics
 
 

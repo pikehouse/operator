@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from operator_protocols import InvariantViolation
-from operator_ratelimiter.types import CounterInfo, NodeInfo
+from ratelimiter_observer.types import CounterInfo, NodeInfo
 
 
 @dataclass

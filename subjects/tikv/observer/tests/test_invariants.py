@@ -15,7 +15,7 @@ import pytest
 
 from operator_protocols.types import Store, StoreMetrics
 from operator_protocols import InvariantViolation
-from operator_tikv.invariants import (
+from tikv_observer.invariants import (
     HIGH_LATENCY_CONFIG,
     InvariantConfig,
     LOW_DISK_SPACE_CONFIG,

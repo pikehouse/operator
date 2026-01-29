@@ -20,8 +20,8 @@ from typing import Any
 from operator_core.types import Region
 from operator_protocols.types import ClusterMetrics, Store, StoreMetrics
 
-from operator_tikv.pd_client import PDClient
-from operator_tikv.prom_client import PrometheusClient
+from tikv_observer.pd_client import PDClient
+from tikv_observer.prom_client import PrometheusClient
 
 
 @dataclass

@@ -15,8 +15,8 @@ defined in operator-protocols. It includes:
 # Re-export InvariantViolation from operator_protocols for convenience
 from operator_protocols import InvariantViolation
 
-from operator_ratelimiter.factory import create_ratelimiter_subject_and_checker
-from operator_ratelimiter.invariants import (
+from ratelimiter_observer.factory import create_ratelimiter_subject_and_checker
+from ratelimiter_observer.invariants import (
     COUNTER_DRIFT_CONFIG,
     GHOST_ALLOWING_CONFIG,
     HIGH_LATENCY_CONFIG,
@@ -25,11 +25,11 @@ from operator_ratelimiter.invariants import (
     REDIS_DISCONNECTED_CONFIG,
     RateLimiterInvariantChecker,
 )
-from operator_ratelimiter.prom_client import PrometheusClient
-from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-from operator_ratelimiter.redis_client import RedisClient
-from operator_ratelimiter.subject import RateLimiterSubject
-from operator_ratelimiter.types import (
+from ratelimiter_observer.prom_client import PrometheusClient
+from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+from ratelimiter_observer.redis_client import RedisClient
+from ratelimiter_observer.subject import RateLimiterSubject
+from ratelimiter_observer.types import (
     BlockedKeyInfo,
     BlocksResponse,
     CounterInfo,

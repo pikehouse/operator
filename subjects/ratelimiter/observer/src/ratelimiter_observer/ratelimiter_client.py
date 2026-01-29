@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from operator_ratelimiter.types import (
+from ratelimiter_observer.types import (
     BlockedKeyInfo,
     BlocksResponse,
     CounterInfo,

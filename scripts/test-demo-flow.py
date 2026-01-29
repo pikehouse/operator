@@ -170,7 +170,7 @@ class DemoFlowTest:
 
     async def test_invariant_checker(self):
         """Test invariant checker detects over-limit violation."""
-        from operator_ratelimiter.invariants import RateLimiterInvariantChecker
+        from ratelimiter_observer.invariants import RateLimiterInvariantChecker
 
         checker = RateLimiterInvariantChecker()
 
@@ -223,10 +223,10 @@ class DemoFlowTest:
         from operator_core.agent.prompt import build_diagnosis_prompt
         from operator_core.db.tickets import TicketDB
         from operator_core.monitor.types import Ticket, TicketStatus
-        from operator_ratelimiter.subject import RateLimiterSubject
-        from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-        from operator_ratelimiter.redis_client import RedisClient
-        from operator_ratelimiter.prom_client import PrometheusClient
+        from ratelimiter_observer.subject import RateLimiterSubject
+        from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+        from ratelimiter_observer.redis_client import RedisClient
+        from ratelimiter_observer.prom_client import PrometheusClient
         from datetime import datetime
         from pathlib import Path
         import tempfile
@@ -279,11 +279,11 @@ class DemoFlowTest:
 
     async def test_monitor_flow(self):
         """Test full monitor observation -> check -> violation flow."""
-        from operator_ratelimiter.subject import RateLimiterSubject
-        from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-        from operator_ratelimiter.redis_client import RedisClient
-        from operator_ratelimiter.prom_client import PrometheusClient
-        from operator_ratelimiter.invariants import RateLimiterInvariantChecker
+        from ratelimiter_observer.subject import RateLimiterSubject
+        from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+        from ratelimiter_observer.redis_client import RedisClient
+        from ratelimiter_observer.prom_client import PrometheusClient
+        from ratelimiter_observer.invariants import RateLimiterInvariantChecker
 
         async with httpx.AsyncClient(base_url=self.ratelimiter_url, timeout=5.0) as rl_http:
             async with httpx.AsyncClient(base_url="http://localhost:9090", timeout=5.0) as prom_http:
@@ -355,11 +355,11 @@ class DemoFlowTest:
 
     async def test_monitor_persistence(self):
         """Test that violations persist across multiple check cycles (simulates demo flow)."""
-        from operator_ratelimiter.subject import RateLimiterSubject
-        from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-        from operator_ratelimiter.redis_client import RedisClient
-        from operator_ratelimiter.prom_client import PrometheusClient
-        from operator_ratelimiter.invariants import RateLimiterInvariantChecker
+        from ratelimiter_observer.subject import RateLimiterSubject
+        from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+        from ratelimiter_observer.redis_client import RedisClient
+        from ratelimiter_observer.prom_client import PrometheusClient
+        from ratelimiter_observer.invariants import RateLimiterInvariantChecker
         from demo.ratelimiter_chaos import inject_redis_pause
 
         # Clear and inject fresh counter

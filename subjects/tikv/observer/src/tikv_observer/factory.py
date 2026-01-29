@@ -8,10 +8,10 @@ direct imports from operator-tikv.
 
 import httpx
 
-from operator_tikv.invariants import TiKVInvariantChecker
-from operator_tikv.pd_client import PDClient
-from operator_tikv.prom_client import PrometheusClient
-from operator_tikv.subject import TiKVSubject
+from tikv_observer.invariants import TiKVInvariantChecker
+from tikv_observer.pd_client import PDClient
+from tikv_observer.prom_client import PrometheusClient
+from tikv_observer.subject import TiKVSubject
 
 
 def create_tikv_subject_and_checker(

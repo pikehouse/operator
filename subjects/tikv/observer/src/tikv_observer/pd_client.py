@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import httpx
 
 from operator_core.types import Region, RegionId, Store
-from operator_tikv.types import (
+from tikv_observer.types import (
     PDRegionResponse,
     PDRegionsResponse,
     PDStoresResponse,

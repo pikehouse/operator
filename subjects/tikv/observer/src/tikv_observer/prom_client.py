@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from operator_core.types import StoreId, StoreMetrics
-from operator_tikv.types import PrometheusQueryResponse
+from tikv_observer.types import PrometheusQueryResponse
 
 
 @dataclass

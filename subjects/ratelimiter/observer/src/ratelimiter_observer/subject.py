@@ -14,9 +14,9 @@ Pattern mirrors TiKVSubject for consistency across subjects.
 from dataclasses import dataclass
 from typing import Any
 
-from operator_ratelimiter.prom_client import PrometheusClient
-from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-from operator_ratelimiter.redis_client import RedisClient
+from ratelimiter_observer.prom_client import PrometheusClient
+from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+from ratelimiter_observer.redis_client import RedisClient
 
 
 @dataclass

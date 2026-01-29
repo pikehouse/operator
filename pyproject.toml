@@ -5,8 +5,8 @@ description = "AI-powered operator for distributed systems"
 requires-python = ">=3.11"
 dependencies = [
     "operator-core",
-    "operator-tikv",
-    "operator-ratelimiter",
+    "tikv-observer",
+    "ratelimiter-observer",
     "python-dotenv>=1.0.0",
     "redis>=5.0.0",
 ]
@@ -19,14 +19,15 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["packages/*", "subjects/*/observer", "subjects/*/service"]
 
 [tool.uv.sources]
 operator-core = { workspace = true }
 operator-protocols = { workspace = true }
-operator-tikv = { workspace = true }
-operator-ratelimiter = { workspace = true }
+tikv-observer = { workspace = true }
+ratelimiter-observer = { workspace = true }
+ratelimiter-service = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["packages"]
+testpaths = ["packages", "subjects"]
 asyncio_mode = "auto"

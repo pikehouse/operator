@@ -4,11 +4,11 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 
-from operator_ratelimiter.subject import RateLimiterSubject
-from operator_ratelimiter.ratelimiter_client import RateLimiterClient
-from operator_ratelimiter.redis_client import RedisClient
-from operator_ratelimiter.prom_client import PrometheusClient
-from operator_ratelimiter.types import NodeInfo, CounterInfo
+from ratelimiter_observer.subject import RateLimiterSubject
+from ratelimiter_observer.ratelimiter_client import RateLimiterClient
+from ratelimiter_observer.redis_client import RedisClient
+from ratelimiter_observer.prom_client import PrometheusClient
+from ratelimiter_observer.types import NodeInfo, CounterInfo
 
 
 @pytest.fixture

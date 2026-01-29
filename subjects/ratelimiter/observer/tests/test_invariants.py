@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from operator_ratelimiter.invariants import (
+from ratelimiter_observer.invariants import (
     RateLimiterInvariantChecker,
     InvariantConfig,
     NODE_DOWN_CONFIG,
@@ -24,7 +24,7 @@ from operator_ratelimiter.invariants import (
     COUNTER_DRIFT_CONFIG,
     GHOST_ALLOWING_CONFIG,
 )
-from operator_ratelimiter.types import NodeInfo, CounterInfo
+from ratelimiter_observer.types import NodeInfo, CounterInfo
 
 
 # =============================================================================

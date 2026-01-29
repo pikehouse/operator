@@ -16,24 +16,24 @@ defined in operator-protocols. It includes:
 # Re-export InvariantViolation from operator_protocols for convenience
 from operator_protocols import InvariantViolation
 
-from operator_tikv.factory import create_tikv_subject_and_checker
-from operator_tikv.invariants import (
+from tikv_observer.factory import create_tikv_subject_and_checker
+from tikv_observer.invariants import (
     HIGH_LATENCY_CONFIG,
     InvariantConfig,
     LOW_DISK_SPACE_CONFIG,
     STORE_DOWN_CONFIG,
     TiKVInvariantChecker,
 )
-from operator_tikv.log_parser import (
+from tikv_observer.log_parser import (
     LeadershipChange,
     LogEntry,
     extract_leadership_changes,
     parse_log_line,
 )
-from operator_tikv.pd_client import PDClient
-from operator_tikv.prom_client import PrometheusClient
-from operator_tikv.subject import TiKVSubject
-from operator_tikv.types import (
+from tikv_observer.pd_client import PDClient
+from tikv_observer.prom_client import PrometheusClient
+from tikv_observer.subject import TiKVSubject
+from tikv_observer.types import (
     # PD API types
     PDRegionLeader,
     PDRegionPeer,

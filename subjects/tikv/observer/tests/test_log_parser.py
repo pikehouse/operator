@@ -14,7 +14,7 @@ class TestParseLogLine:
 
     def test_parse_valid_info_line(self):
         """Parse valid INFO log line returns LogEntry with all fields."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         line = "[2024/01/15 14:20:11.015 +08:00] [INFO] [raftstore] [leader changed] [region_id=123]"
 
@@ -28,7 +28,7 @@ class TestParseLogLine:
 
     def test_parse_line_with_multiple_fields(self):
         """Parse log line extracts multiple field=value pairs into dict."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         line = "[2024/01/15 14:20:11.015 +08:00] [WARN] [scheduler] [transfer leader] [region_id=456] [store_id=1] [peer_id=789]"
 
@@ -43,7 +43,7 @@ class TestParseLogLine:
 
     def test_parse_line_with_no_fields(self):
         """Parse log line with no fields returns empty fields dict."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         line = "[2024/01/15 14:20:11.015 +08:00] [DEBUG] [server] [starting up]"
 
@@ -55,13 +55,13 @@ class TestParseLogLine:
 
     def test_parse_empty_line_returns_none(self):
         """Parse empty line returns None."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         assert parse_log_line("") is None
 
     def test_parse_malformed_line_returns_none(self):
         """Parse malformed line returns None (doesn't crash)."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         # Missing brackets
         assert parse_log_line("2024/01/15 INFO something") is None
@@ -72,7 +72,7 @@ class TestParseLogLine:
 
     def test_parse_different_log_levels(self):
         """Parse handles different log levels (DEBUG, INFO, WARN, ERROR)."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         levels = ["DEBUG", "INFO", "WARN", "ERROR"]
         for level in levels:
@@ -83,7 +83,7 @@ class TestParseLogLine:
 
     def test_parse_timestamp_correctly(self):
         """Parse extracts timestamp as datetime object."""
-        from operator_tikv.log_parser import parse_log_line
+        from tikv_observer.log_parser import parse_log_line
 
         line = "[2024/01/15 14:20:11.015 +08:00] [INFO] [test] [message]"
 
@@ -103,7 +103,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_filters_leadership_keywords(self):
         """Extract filters for leadership-related log events."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             "[2024/01/15 14:20:11.015 +08:00] [INFO] [raftstore] [leader changed] [region_id=123]",
@@ -119,7 +119,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_includes_region_id(self):
         """Leadership changes include region_id when present."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             "[2024/01/15 14:20:11.015 +08:00] [INFO] [raftstore] [leader changed] [region_id=123]",
@@ -132,7 +132,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_skips_lines_without_region_id(self):
         """Leadership changes skips lines without region_id field."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             # Has leadership keyword but no region_id
@@ -149,7 +149,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_handles_all_leadership_keywords(self):
         """Extract recognizes all leadership-related keywords."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         # Per CONTEXT.md: "transfer leader", "leader changed", "became leader", "step down", "leader election"
         lines = [
@@ -168,7 +168,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_preserves_message(self):
         """Leadership change includes the original message."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             "[2024/01/15 14:20:11.015 +08:00] [INFO] [raftstore] [leader changed] [region_id=123]",
@@ -180,7 +180,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_preserves_timestamp(self):
         """Leadership change includes parsed timestamp."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             "[2024/01/15 14:20:11.015 +08:00] [INFO] [raftstore] [became leader] [region_id=100]",
@@ -194,7 +194,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_handles_empty_list(self):
         """Extract handles empty input list."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         changes = extract_leadership_changes([])
 
@@ -202,7 +202,7 @@ class TestExtractLeadershipChanges:
 
     def test_extract_handles_malformed_lines_gracefully(self):
         """Extract skips malformed lines without crashing."""
-        from operator_tikv.log_parser import extract_leadership_changes
+        from tikv_observer.log_parser import extract_leadership_changes
 
         lines = [
             "not a valid log line",
@@ -223,7 +223,7 @@ class TestLogEntryType:
 
     def test_log_entry_has_required_fields(self):
         """LogEntry has timestamp, level, source, message, fields."""
-        from operator_tikv.log_parser import LogEntry
+        from tikv_observer.log_parser import LogEntry
 
         entry = LogEntry(
             timestamp=datetime(2024, 1, 15, 14, 20, 11),
@@ -245,7 +245,7 @@ class TestLeadershipChangeType:
 
     def test_leadership_change_has_required_fields(self):
         """LeadershipChange has timestamp, region_id, message."""
-        from operator_tikv.log_parser import LeadershipChange
+        from tikv_observer.log_parser import LeadershipChange
 
         change = LeadershipChange(
             timestamp=datetime(2024, 1, 15, 14, 20, 11),

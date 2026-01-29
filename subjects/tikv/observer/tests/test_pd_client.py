@@ -13,7 +13,7 @@ import httpx
 from httpx import Response, Request
 
 from operator_core.types import Store, Region
-from operator_tikv.pd_client import PDClient
+from tikv_observer.pd_client import PDClient
 
 
 class MockTransport(httpx.AsyncBaseTransport):

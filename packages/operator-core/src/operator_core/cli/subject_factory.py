@@ -49,12 +49,12 @@ async def create_subject(
     """
     if subject_name == "tikv":
         # Lazy import to avoid loading tikv package unless needed
-        from operator_tikv.factory import create_tikv_subject_and_checker
+        from tikv_observer.factory import create_tikv_subject_and_checker
 
         return create_tikv_subject_and_checker(**kwargs)
     elif subject_name == "ratelimiter":
         # Lazy import to avoid loading ratelimiter package unless needed
-        from operator_ratelimiter.factory import create_ratelimiter_subject_and_checker
+        from ratelimiter_observer.factory import create_ratelimiter_subject_and_checker
 
         return create_ratelimiter_subject_and_checker(**kwargs)
     else:
