@@ -54,6 +54,7 @@ class Ticket:
         resolved_at: When ticket was resolved
         diagnosis: AI-generated diagnosis (Phase 5)
         metric_snapshot: Metrics captured at violation time
+        subject_context: Subject-specific agent prompt context
         created_at: Database record creation time
         updated_at: Database record last update time
     """
@@ -73,6 +74,7 @@ class Ticket:
     resolved_at: datetime | None = None
     diagnosis: str | None = None
     metric_snapshot: dict[str, Any] | None = None
+    subject_context: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

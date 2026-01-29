@@ -117,11 +117,20 @@ def run_monitor(
                 **factory_kwargs,
             )
 
+            # Load subject-specific agent prompt if available
+            subject_context = None
+            try:
+                module = __import__(f"{subject}_observer", fromlist=["AGENT_PROMPT"])
+                subject_context = getattr(module, "AGENT_PROMPT", None)
+            except ImportError:
+                pass
+
             loop = MonitorLoop(
                 subject=subject_instance,
                 checker=checker,
                 db_path=db_path,
                 interval_seconds=interval,
+                subject_context=subject_context,
             )
 
             await loop.run()

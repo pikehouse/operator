@@ -61,6 +61,7 @@ class MonitorLoop:
         checker: InvariantCheckerProtocol,
         db_path: Path,
         interval_seconds: float = 30.0,
+        subject_context: str | None = None,
     ) -> None:
         """
         Initialize monitor loop.
@@ -70,11 +71,13 @@ class MonitorLoop:
             checker: Any InvariantCheckerProtocol for invariant checks
             db_path: Path to SQLite database file
             interval_seconds: Seconds between check cycles (default 30)
+            subject_context: Optional subject-specific agent prompt context
         """
         self.subject = subject
         self.checker = checker
         self.db_path = db_path
         self.interval = interval_seconds
+        self._subject_context = subject_context
         self._shutdown = asyncio.Event()
 
         # Stats for heartbeat
@@ -156,7 +159,11 @@ class MonitorLoop:
         if violations:
             batch_key = f"batch-{datetime.now().isoformat()}"
             for v in violations:
-                ticket = await db.create_or_update_ticket(v, batch_key=batch_key)
+                ticket = await db.create_or_update_ticket(
+                    v,
+                    batch_key=batch_key,
+                    subject_context=self._subject_context,
+                )
                 if ticket.occurrence_count == 1:
                     print(f"Created ticket {ticket.id}: {ticket.invariant_name}")
 

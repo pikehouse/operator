@@ -115,6 +115,7 @@ class TicketDB:
             resolved_at=resolved_at,
             diagnosis=row["diagnosis"],
             metric_snapshot=metric_snapshot,
+            subject_context=row["subject_context"],
             created_at=created_at,
             updated_at=updated_at,
         )
@@ -124,6 +125,7 @@ class TicketDB:
         violation: InvariantViolation,
         metric_snapshot: dict[str, Any] | None = None,
         batch_key: str | None = None,
+        subject_context: str | None = None,
     ) -> Ticket:
         """
         Create a new ticket or update an existing open ticket.
@@ -135,6 +137,7 @@ class TicketDB:
             violation: The invariant violation
             metric_snapshot: Optional metrics captured at violation time
             batch_key: Optional key to group related violations
+            subject_context: Optional subject-specific agent prompt context
 
         Returns:
             The created or updated Ticket
@@ -192,8 +195,8 @@ class TicketDB:
             """
             INSERT INTO tickets (
                 violation_key, invariant_name, store_id, message, severity,
-                first_seen_at, last_seen_at, batch_key, metric_snapshot
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                first_seen_at, last_seen_at, batch_key, metric_snapshot, subject_context
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 violation_key,
@@ -205,6 +208,7 @@ class TicketDB:
                 now.isoformat(),
                 batch_key,
                 snapshot_json,
+                subject_context,
             ),
         )
         await self._conn.commit()

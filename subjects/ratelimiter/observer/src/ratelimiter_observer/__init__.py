@@ -12,6 +12,15 @@ defined in operator-protocols. It includes:
 - Factory function for CLI integration
 """
 
+# Subject-specific context for agent system prompt
+AGENT_PROMPT = """
+Rate limiter context:
+- Sliding window rate limiter using Redis sorted sets
+- Containers: ratelimiter-1, ratelimiter-2, ratelimiter-3, redis
+- API: /check (rate limit), /api/counters (view), /api/counters/{key}/reset
+- Common issues: counter drift (count > limit), Redis connectivity
+"""
+
 # Re-export InvariantViolation from operator_protocols for convenience
 from operator_protocols import InvariantViolation
 
@@ -42,6 +51,8 @@ from ratelimiter_observer.types import (
 )
 
 __all__ = [
+    # Agent prompt
+    "AGENT_PROMPT",
     # Subject
     "RateLimiterSubject",
     # Factory

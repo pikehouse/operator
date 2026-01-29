@@ -81,6 +81,7 @@ class TicketOpsDB:
             resolved_at=datetime.fromisoformat(row["resolved_at"]) if row["resolved_at"] else None,
             diagnosis=row["diagnosis"],
             metric_snapshot=json.loads(row["metric_snapshot"]) if row["metric_snapshot"] else None,
+            subject_context=row["subject_context"],
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )

@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     severity TEXT NOT NULL DEFAULT 'warning',
     diagnosis TEXT,                        -- Attached by AI in Phase 5
     metric_snapshot TEXT,                  -- JSON blob of metrics at violation time
+    subject_context TEXT,                  -- Subject-specific agent prompt context
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

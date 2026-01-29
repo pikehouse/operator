@@ -301,6 +301,75 @@ class TestMonitorLoopAutoResolve:
             assert tickets[0].status == TicketStatus.RESOLVED
 
 
+class TestMonitorLoopSubjectContext:
+    """Tests that subject_context is passed through to tickets."""
+
+    @pytest.mark.asyncio
+    async def test_subject_context_stored_in_ticket(self, tmp_path):
+        """MonitorLoop should store subject_context in created tickets."""
+        subject = MockSubject()
+        now = datetime.now()
+        violation = InvariantViolation(
+            invariant_name="test_invariant",
+            message="Test violation",
+            first_seen=now,
+            last_seen=now,
+            store_id="node-1",
+            severity="warning",
+        )
+        checker = MockChecker(violations=[violation])
+        db_path = tmp_path / "test.db"
+
+        test_context = "Test subject context for agent prompts"
+        loop = MonitorLoop(
+            subject=subject,
+            checker=checker,
+            db_path=db_path,
+            interval_seconds=1.0,
+            subject_context=test_context,
+        )
+
+        from operator_core.db.tickets import TicketDB
+
+        async with TicketDB(db_path) as db:
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].subject_context == test_context
+
+    @pytest.mark.asyncio
+    async def test_subject_context_none_by_default(self, tmp_path):
+        """MonitorLoop should allow None subject_context."""
+        subject = MockSubject()
+        now = datetime.now()
+        violation = InvariantViolation(
+            invariant_name="test_invariant",
+            message="Test violation",
+            first_seen=now,
+            last_seen=now,
+            store_id="node-1",
+            severity="warning",
+        )
+        checker = MockChecker(violations=[violation])
+        db_path = tmp_path / "test.db"
+
+        loop = MonitorLoop(
+            subject=subject,
+            checker=checker,
+            db_path=db_path,
+            interval_seconds=1.0,
+            # subject_context not provided - should default to None
+        )
+
+        from operator_core.db.tickets import TicketDB
+
+        async with TicketDB(db_path) as db:
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].subject_context is None
+
+
 class TestMonitorLoopSubjectAgnostic:
     """Tests proving MonitorLoop is truly subject-agnostic."""
 

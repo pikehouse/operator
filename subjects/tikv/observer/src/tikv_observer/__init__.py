@@ -13,6 +13,16 @@ defined in operator-protocols. It includes:
 - Log parser for event extraction
 """
 
+# Subject-specific context for agent system prompt
+AGENT_PROMPT = """
+TiKV-specific context:
+- TiKV is a distributed key-value store using Raft consensus
+- PD (Placement Driver) manages cluster scheduling
+- Containers: pd0, tikv0, tikv1, tikv2
+- Key commands: pd-ctl, tikv-ctl
+- Common issues: region leader imbalance, hot spots, store offline
+"""
+
 # Re-export InvariantViolation from operator_protocols for convenience
 from operator_protocols import InvariantViolation
 
@@ -54,6 +64,8 @@ from tikv_observer.types import (
 InvariantChecker = TiKVInvariantChecker
 
 __all__ = [
+    # Agent prompt
+    "AGENT_PROMPT",
     # Subject
     "TiKVSubject",
     # Factory

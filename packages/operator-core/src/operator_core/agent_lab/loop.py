@@ -39,12 +39,17 @@ def process_ticket(
     if ticket.metric_snapshot:
         ticket_text += f"\n\nMetrics:\n{json.dumps(ticket.metric_snapshot, indent=2)}"
 
+    # Build system prompt with subject context if available
+    system_prompt = SYSTEM_PROMPT
+    if ticket.subject_context:
+        system_prompt += "\n\n" + ticket.subject_context
+
     # Run Claude with tool_runner
     runner = client.beta.messages.tool_runner(
         model="claude-opus-4-20250514",
         max_tokens=8192,
         tools=[shell],
-        system=SYSTEM_PROMPT,
+        system=system_prompt,
         messages=[{"role": "user", "content": ticket_text}],
     )
 
