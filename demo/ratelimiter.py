@@ -48,6 +48,7 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
     async def setup() -> None:
         """Configure rate limit and create baseline traffic."""
         baseline_keys = ["api-users", "api-orders", "api-products"]
+        chaos_key = "chaos-drift-demo"
 
         # Configure the rate limit
         await setup_rate_limit(
@@ -57,13 +58,14 @@ def create_setup_chapter(key: str, limit: int, window_sec: int) -> Chapter:
             window_sec=window_sec,
         )
         # Create baseline traffic so workload panel shows healthy counters
+        # Include chaos key with low count so it's visible before injection
         await create_baseline_traffic(
-            keys=baseline_keys,
+            keys=baseline_keys + [chaos_key],
             count_per_key=5,
             limit=limit,
         )
-        # Start heartbeat to keep baseline counters alive during demo
-        start_baseline_heartbeat(baseline_keys, interval_sec=30.0)
+        # Start heartbeat to keep counters alive during demo (including chaos key)
+        start_baseline_heartbeat(baseline_keys + [chaos_key], interval_sec=30.0)
 
     return Chapter(
         title="Stage 2: Setup",
