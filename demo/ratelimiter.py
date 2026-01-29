@@ -2,9 +2,8 @@
 Rate limiter demo chapters and chaos injection callbacks.
 
 This module provides rate limiter-specific demo chapters and callbacks
-for the TUI demo controller. It demonstrates TWO distinct anomaly types:
-1. Counter Drift: Redis PAUSE causes distributed counter to drift
-2. Ghost Allowing: Burst traffic triggers allowing with limit=0
+for the TUI demo controller. It demonstrates the over-limit anomaly:
+- Counter Drift: Injected entries cause counter to exceed its limit
 
 Run via: python -m demo ratelimiter
 """
@@ -13,9 +12,7 @@ import asyncio
 
 from demo.ratelimiter_chaos import (
     COUNTER_DRIFT_CONFIG,
-    GHOST_ALLOWING_CONFIG,
     create_baseline_traffic,
-    inject_burst_traffic,
     inject_redis_pause,
     setup_rate_limit,
 )
@@ -77,75 +74,30 @@ def create_counter_drift_chapter() -> Chapter:
     """
     Create counter drift chaos chapter.
 
-    This chapter pauses Redis writes for 10 seconds, causing the
-    distributed counter to drift as nodes can't sync with Redis.
+    This chapter injects extra entries into Redis to simulate a sync bug
+    that allowed more requests than the limit permits.
 
     Returns:
         Chapter that blocks advance during countdown and chaos injection
     """
 
     async def inject_chaos() -> None:
-        """Countdown and inject Redis PAUSE chaos."""
+        """Countdown and inject counter drift chaos."""
         # Countdown before chaos
         for i in range(3, 0, -1):
             demo_status.set(f"[yellow]Injecting chaos in {i}...[/yellow]")
             await asyncio.sleep(1.0)
 
-        demo_status.set("[bold red]INJECTING REDIS PAUSE![/bold red]")
+        demo_status.set("[bold red]INJECTING COUNTER DRIFT![/bold red]")
         await inject_redis_pause(duration_sec=COUNTER_DRIFT_CONFIG.duration_sec)
-        demo_status.set("[green]Redis pause complete[/green]")
+        demo_status.set("[green]Counter drift injected - check Workload panel[/green]")
 
     return Chapter(
         title="Stage 3: Injecting Chaos",
-        narration=f"""[bold yellow]Counter Drift[/bold yellow] - Creating over-limit counter
-Simulates Redis sync failure causing counter inconsistency
+        narration="""[bold yellow]Over-Limit Injection[/bold yellow]
+Simulates a sync bug that allowed requests past the limit
 
-[dim]Injecting...[/dim]""",
-        on_enter=inject_chaos,
-        blocks_advance=True,
-        key_hint="[dim]Chaos in progress...[/dim]",
-    )
-
-
-def create_ghost_allowing_chapter(key: str, limit: int) -> Chapter:
-    """
-    Create ghost allowing chaos chapter.
-
-    This chapter sends burst traffic (2x limit) to trigger ghost allowing,
-    where the limit becomes 0 but requests are still allowed.
-
-    Args:
-        key: Rate limit key to burst
-        limit: Known limit for the key
-
-    Returns:
-        Chapter that blocks advance during burst traffic
-    """
-
-    async def inject_chaos() -> None:
-        """Countdown and inject burst traffic chaos."""
-        # Countdown before chaos
-        for i in range(3, 0, -1):
-            demo_status.set(f"[yellow]Injecting chaos in {i}...[/yellow]")
-            await asyncio.sleep(1.0)
-
-        demo_status.set("[bold red]INJECTING BURST TRAFFIC![/bold red]")
-        result = await inject_burst_traffic(
-            target_urls=TARGET_URLS,
-            key=key,
-            limit=limit,
-            multiplier=GHOST_ALLOWING_CONFIG.burst_multiplier,
-        )
-        demo_status.set(
-            f"[green]Burst complete: {result['allowed']} allowed, {result['denied']} denied (expected {limit} allowed)[/green]"
-        )
-
-    return Chapter(
-        title="Stage 7: Injecting Chaos",
-        narration=f"""[bold yellow]Ghost Allowing[/bold yellow] - Burst traffic (2x limit)
-Simulates race condition allowing requests past limit
-
-[dim]Injecting...[/dim]""",
+[dim]Watch Workload panel for OVER LIMIT counter...[/dim]""",
         on_enter=inject_chaos,
         blocks_advance=True,
         key_hint="[dim]Chaos in progress...[/dim]",
@@ -158,7 +110,7 @@ RATELIMITER_CHAPTERS = [
         title="Welcome",
         narration="""[bold cyan]Rate Limiter Chaos Demo[/bold cyan]
 
-Demonstrating AI diagnosis of: [bold]Counter Drift[/bold] and [bold]Ghost Allowing[/bold]
+Demonstrating AI diagnosis of [bold]Over-Limit[/bold] anomaly
 
 [dim]Press SPACE to begin...[/dim]""",
     ),
@@ -169,7 +121,7 @@ Watch the Cluster panel → all nodes should be [green]Up[/green]
 
 [dim]Press SPACE to continue...[/dim]""",
     ),
-    # Stage 2: Setup (auto-advances)
+    # Stage 2: Setup (creates baseline counters)
     create_setup_chapter(DEMO_KEY, DEMO_LIMIT, DEMO_WINDOW),
     # Stage 3: Counter Drift Chaos (blocks advance, on_enter)
     create_counter_drift_chapter(),
@@ -183,9 +135,9 @@ Next: Agent will diagnose and act automatically.""",
     Chapter(
         title="Stage 5: AI Remediation",
         narration="""Watch Agent panel for the complete agentic loop:
-1. Diagnosis: AI identifies counter drift root cause
-2. Action: reset_counter to realign distributed counters
-3. Verify: Agent checks counters are aligned after action
+1. Diagnosis: AI identifies over-limit root cause
+2. Action: reset_counter to fix the counter
+3. Verify: Agent checks counter is back to normal
 
 [dim]Autonomous remediation - no human approval.[/dim]""",
     ),
@@ -194,36 +146,15 @@ Next: Agent will diagnose and act automatically.""",
         narration="""Agent executed reset_counter, verifying fix...
 Watch Agent panel for verification result.
 
-[dim]Auto-advancing...[/dim]""",
-        auto_advance=True,
-    ),
-    # Stage 7: Ghost Allowing Chaos (blocks advance, on_enter)
-    create_ghost_allowing_chapter(DEMO_KEY, DEMO_LIMIT),
-    Chapter(
-        title="Stage 8: Detection",
-        narration="""Watch Monitor panel → new violation detected
-Counter exceeds limit due to burst traffic race condition
-
-Next: Agent will diagnose and act automatically.""",
-    ),
-    Chapter(
-        title="Stage 9: AI Remediation",
-        narration="""Watch Agent panel for the agentic loop:
-1. Diagnosis: AI identifies ghost allowing root cause
-2. Action: reset_counter to fix counter state
-3. Verify: Agent checks counters are back to normal
-
-[dim]Same autonomous loop, different anomaly.[/dim]""",
+[dim]Press SPACE when agent completes...[/dim]""",
     ),
     Chapter(
         title="Complete",
         narration="""[bold green]Demo Complete![/bold green]
 
-AI diagnosed both anomalies using generic invariant checking.
+AI diagnosed the over-limit anomaly using generic invariant checking.
 No rate-limiter-specific prompts needed.
 
 [dim]Press Q to quit[/dim]""",
     ),
 ]
-
-

@@ -2,19 +2,18 @@
 Rate limiter chaos injection functions.
 
 This module provides chaos functions specific to rate limiter demos:
-- inject_redis_pause: Pauses Redis writes to cause counter drift
-- inject_burst_traffic: Sends burst traffic to trigger ghost allowing
+- inject_redis_pause: Injects over-limit counter to simulate sync bug
 - setup_rate_limit: Helper to configure a rate limit before testing
+- create_baseline_traffic: Creates healthy counters for demo visualization
 
-These functions demonstrate different failure modes that the operator
+These functions demonstrate failure modes that the operator
 should detect and diagnose through invariant checking.
 """
 
-import asyncio
-from typing import Any
+import time
 
 import httpx
-import redis.asyncio as redis
+import redis.asyncio as aioredis
 
 from demo.status import demo_status
 from demo.types import ChaosConfig, ChaosType
@@ -22,13 +21,12 @@ from demo.types import ChaosConfig, ChaosType
 
 async def inject_redis_pause(duration_sec: float = 5.0) -> None:
     """
-    Inject a counter drift anomaly by creating an over-limit counter.
+    Inject a counter drift anomaly by manipulating Redis behind the rate limiter's back.
 
-    Creates a counter with count > limit to simulate what would happen
-    if Redis writes were paused and counters drifted out of sync.
+    Creates a counter via the API, then injects extra entries directly into Redis
+    to simulate a sync bug or race condition that allowed more requests than the limit.
 
-    IMPORTANT: Timestamps are spread across the next 50 seconds so entries
-    stay valid within the 60-second sliding window for demo purposes.
+    This creates a TRUE over-limit violation (count > limit) that the monitor can detect.
 
     Args:
         duration_sec: Not used (kept for API compatibility)
@@ -36,143 +34,92 @@ async def inject_redis_pause(duration_sec: float = 5.0) -> None:
     Example:
         await inject_redis_pause(duration_sec=10.0)
     """
-    import time
-
     demo_status.set("[dim]Injecting counter drift...[/dim]")
 
-    r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
+    key = "chaos-drift-demo"
+    limit = 10
+    target_url = "http://localhost:8001"
 
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        # 1. Set a limit for the key (10 min window so it persists during demo)
+        await client.put(
+            f"{target_url}/api/limits/{key}",
+            json={"limit": limit, "window_ms": 600000},
+        )
+
+        # 2. Create some baseline traffic via API (5 requests)
+        for _ in range(5):
+            try:
+                await client.post(f"{target_url}/check", json={"key": key})
+            except Exception:
+                pass
+
+    # 3. Inject extra entries directly into Redis to push counter over limit
+    # This simulates a sync bug where Redis has more entries than it should
+    r = aioredis.Redis.from_url("redis://localhost:6379", decode_responses=True)
     try:
-        # Create an over-limit counter to simulate drift
-        # Use timestamps spread from now to +50 seconds so entries stay valid
-        # within the 60-second sliding window for ~50 seconds
-        now_ms = int(time.time() * 1000)
-        redis_key = "ratelimit:counter-drift-demo"
-
-        # Clear any existing entries first
-        await r.delete(redis_key)
-
-        # Add 15 entries when limit is 10 (simulates drift)
-        # Spread entries across 50 seconds into the future
-        for i in range(15):
-            # Spread entries: 0, 3.3s, 6.6s, ... up to 50s
-            offset_ms = int((i / 14) * 50000) if i > 0 else 0
-            timestamp = now_ms + offset_ms
-            member = f"{timestamp}:drift-{i}"
-            await r.zadd(redis_key, {member: timestamp})
-
-        # Set TTL so key itself persists
-        await r.expire(redis_key, 120)
-
-        # Verify creation
-        count = await r.zcard(redis_key)
-        demo_status.set(f"Created drift counter ({count} entries)")
-
-    finally:
-        await r.aclose()
-
-
-async def inject_burst_traffic(
-    target_urls: list[str],
-    key: str,
-    limit: int,
-    multiplier: int = 2,
-) -> dict[str, int]:
-    """
-    Inject an over-limit anomaly that persists for demo detection.
-
-    Creates a counter that exceeds its limit, simulating a race condition
-    or consistency bug. Uses timestamps spread across the next 50 seconds
-    so entries stay valid within the 60-second sliding window.
-
-    Args:
-        target_urls: List of rate limiter endpoints (used for context)
-        key: Rate limit key to create anomaly for
-        limit: Configured limit for the key
-        multiplier: How many times over limit (default 2x)
-
-    Returns:
-        Dict with simulated "allowed" and "denied" counts
-    """
-    import time
-
-    demo_status.set(f"[dim]Injecting burst traffic for {key}...[/dim]")
-
-    # Connect to Redis and inject over-limit counter
-    r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
-    try:
-        # Use timestamps spread from now to +50 seconds so entries stay valid
-        # within the 60-second sliding window for ~50 seconds
-        now_ms = int(time.time() * 1000)
         redis_key = f"ratelimit:{key}"
+        now_ms = int(time.time() * 1000)
 
-        # Clear any existing entries
-        await r.delete(redis_key)
+        # Add 10 extra entries (5 from API + 10 injected = 15 total, limit is 10)
+        for i in range(10):
+            member = f"{now_ms}:drift-injected-{i}"
+            await r.zadd(redis_key, {member: now_ms})
 
-        # Add entries that exceed the limit (e.g., 20 entries when limit is 10)
-        over_limit_count = limit * multiplier
-        for i in range(over_limit_count):
-            # Spread entries: 0, ~2.5s, ~5s, ... up to 50s
-            offset_ms = int((i / max(over_limit_count - 1, 1)) * 50000) if i > 0 else 0
-            timestamp = now_ms + offset_ms
-            member = f"{timestamp}:anomaly-{i}"
-            await r.zadd(redis_key, {member: timestamp})
-
-        # Set TTL so key itself persists
-        await r.expire(redis_key, 120)
-
-        # Verify creation
+        # Verify the injection worked
         count = await r.zcard(redis_key)
-        demo_status.set(f"Created burst counter ({count} entries)")
+        demo_status.set(f"Counter drift injected: {count} entries (limit: {limit})")
 
     finally:
         await r.aclose()
-
-    # Return simulated results (the anomaly is the over-limit counter, not traffic)
-    return {"allowed": over_limit_count, "denied": 0}
 
 
 async def create_baseline_traffic(
     keys: list[str],
     count_per_key: int = 5,
     limit: int = 10,
+    window_ms: int = 600000,  # 10 minutes - long enough for demo to complete
 ) -> None:
     """
-    Create baseline counter entries to show normal workload.
+    Create baseline traffic through the rate limiter.
 
-    Creates counters at healthy levels (below limit) so the demo
-    shows normal operation before chaos is injected.
+    Sends requests through the rate limiter's /check endpoint to create
+    real counters at healthy levels (below limit).
 
     Args:
-        keys: List of rate limit keys to create
-        count_per_key: Number of entries per key (should be < limit)
-        limit: The limit for display purposes
+        keys: List of rate limit keys to create traffic for
+        count_per_key: Number of requests per key (should be < limit)
+        limit: The limit to configure for each key
+        window_ms: Sliding window size in ms (default 5 min for demo persistence)
     """
-    import time
-
     demo_status.set(f"[dim]Creating {len(keys)} baseline counters...[/dim]")
 
-    r = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
-    try:
-        now_ms = int(time.time() * 1000)
+    target_urls = [
+        "http://localhost:8001",
+        "http://localhost:8002",
+        "http://localhost:8003",
+    ]
 
+    async with httpx.AsyncClient(timeout=5.0) as client:
         for key in keys:
-            redis_key = f"ratelimit:{key}"
-            await r.delete(redis_key)
+            # Set limit for the key (use longer window so counters persist during demo)
+            await client.put(
+                f"{target_urls[0]}/api/limits/{key}",
+                json={"limit": limit, "window_ms": window_ms},
+            )
 
-            # Add entries spread across 50 seconds into the future
+            # Send requests to create counter (below limit)
             for i in range(count_per_key):
-                offset_ms = int((i / max(count_per_key - 1, 1)) * 50000) if i > 0 else 0
-                timestamp = now_ms + offset_ms
-                member = f"{timestamp}:baseline-{i}"
-                await r.zadd(redis_key, {member: timestamp})
-
-            await r.expire(redis_key, 120)
+                try:
+                    url = target_urls[i % len(target_urls)]
+                    await client.post(
+                        f"{url}/check",
+                        json={"key": key},
+                    )
+                except Exception:
+                    pass  # Ignore individual failures
 
         demo_status.set(f"Created {len(keys)} baseline counters ({count_per_key}/{limit} each)")
-
-    finally:
-        await r.aclose()
 
 
 async def setup_rate_limit(
@@ -185,7 +132,7 @@ async def setup_rate_limit(
     Set up a rate limit for a key before testing.
 
     Configures a known rate limit via the management API so that
-    burst traffic tests can reliably trigger anomalies.
+    chaos injection can reliably trigger anomalies.
 
     Args:
         target_url: Rate limiter management API URL
@@ -217,14 +164,6 @@ async def setup_rate_limit(
 COUNTER_DRIFT_CONFIG = ChaosConfig(
     name="Counter Drift",
     chaos_type=ChaosType.REDIS_PAUSE,
-    description="Pause Redis writes to create counter drift between nodes and Redis state",
+    description="Inject over-limit counter to simulate sync bug",
     duration_sec=10.0,
-)
-
-# Ghost allowing chaos configuration
-GHOST_ALLOWING_CONFIG = ChaosConfig(
-    name="Ghost Allowing",
-    chaos_type=ChaosType.BURST_TRAFFIC,
-    description="Send burst traffic to trigger ghost allowing (limit becomes 0 but requests allowed)",
-    burst_multiplier=2,
 )

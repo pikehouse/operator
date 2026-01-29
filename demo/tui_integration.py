@@ -362,26 +362,26 @@ class TUIDemoController:
         self._update_narration()
 
         # Calculate available lines based on terminal height
-        # Layout uses ratios: narration(2) + monitor(3) + agent(3) + workload(2) = 10 parts
-        # Monitor and agent each get 3/10 of terminal height
+        # Layout uses ratios: narration(2) + monitor(3) + agent(4) + workload(2) = 11 parts
         # Panel border uses 2 lines
         term_height = self.console.size.height
-        panel_rows = (term_height * 3) // 10  # 3/10 of height for monitor/agent
-        panel_content_lines = panel_rows - 2  # minus border
-        panel_content_lines = max(panel_content_lines, 5)  # minimum 5 lines
+        monitor_rows = (term_height * 3) // 11  # monitor gets 3/11
+        agent_rows = (term_height * 4) // 11    # agent gets 4/11
+        monitor_lines = max(monitor_rows - 2, 5)  # minus border, min 5
+        agent_lines = max(agent_rows - 2, 5)
 
         # Update monitor panel
         monitor_buf = self._subprocess_mgr.get_buffer("monitor")
         if monitor_buf:
             self._layout["main"]["monitor"].update(
-                make_panel(monitor_buf.get_text(n=panel_content_lines), "Monitor", "blue")
+                make_panel(monitor_buf.get_text(n=monitor_lines), "Monitor", "blue")
             )
 
         # Update agent panel
         agent_buf = self._subprocess_mgr.get_buffer("agent")
         if agent_buf:
             self._layout["main"]["agent"].update(
-                make_panel(agent_buf.get_text(n=panel_content_lines), "Agent", "green")
+                make_panel(agent_buf.get_text(n=agent_lines), "Agent", "green")
             )
 
         # Update cluster panel with health status
