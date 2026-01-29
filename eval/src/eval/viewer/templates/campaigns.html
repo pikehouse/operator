@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Campaigns - Eval Viewer{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Campaigns</h1>
+
+{% if campaigns %}
+<div class="bg-white shadow rounded overflow-hidden">
+    <table class="min-w-full">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Subject</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Chaos</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Trials</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Baseline</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Created</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for campaign in campaigns %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-2">
+                    <a href="/campaign/{{ campaign.id }}" class="text-blue-600 hover:underline">{{ campaign.id }}</a>
+                </td>
+                <td class="px-4 py-2">{{ campaign.subject_name }}</td>
+                <td class="px-4 py-2">{{ campaign.chaos_type }}</td>
+                <td class="px-4 py-2">{{ campaign.trial_count }}</td>
+                <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
+                <td class="px-4 py-2 text-gray-500 text-sm">{{ campaign.created_at[:19] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-white shadow rounded p-4 text-gray-500">
+    No campaigns found. Run some evaluations first.
+</div>
+{% endif %}
+{% endblock %}

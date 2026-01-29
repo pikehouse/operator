@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Campaign {{ campaign.id }} - Eval Viewer{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="/" class="text-blue-600 hover:underline text-sm">&larr; Back to campaigns</a>
+</div>
+
+<h1 class="text-2xl font-bold mb-4">Campaign {{ campaign.id }}: {{ campaign.subject_name }}/{{ campaign.chaos_type }}</h1>
+
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-2">Details</h2>
+    <dl class="grid grid-cols-2 gap-2 text-sm">
+        <dt class="text-gray-500">Subject:</dt>
+        <dd>{{ campaign.subject_name }}</dd>
+        <dt class="text-gray-500">Chaos Type:</dt>
+        <dd>{{ campaign.chaos_type }}</dd>
+        <dt class="text-gray-500">Trial Count:</dt>
+        <dd>{{ campaign.trial_count }}</dd>
+        <dt class="text-gray-500">Baseline:</dt>
+        <dd>{% if campaign.baseline %}Yes{% else %}No{% endif %}</dd>
+        <dt class="text-gray-500">Created:</dt>
+        <dd>{{ campaign.created_at }}</dd>
+    </dl>
+</div>
+
+<h2 class="text-xl font-bold mb-4">Trials</h2>
+
+{% if trials %}
+<div class="bg-white shadow rounded overflow-hidden">
+    <table class="min-w-full">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Started</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Chaos Injected</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Resolved</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Ended</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for trial in trials %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-2">
+                    <a href="/trial/{{ trial.id }}" class="text-blue-600 hover:underline">{{ trial.id }}</a>
+                </td>
+                <td class="px-4 py-2 text-sm">{{ trial.started_at[:19] if trial.started_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">{{ trial.chaos_injected_at[:19] if trial.chaos_injected_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">
+                    {% if trial.resolved_at %}
+                    <span class="text-green-600">{{ trial.resolved_at[:19] }}</span>
+                    {% else %}
+                    <span class="text-red-600">Not resolved</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-sm">{{ trial.ended_at[:19] if trial.ended_at else "N/A" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bg-white shadow rounded p-4 text-gray-500">
+    No trials recorded for this campaign.
+</div>
+{% endif %}
+{% endblock %}
