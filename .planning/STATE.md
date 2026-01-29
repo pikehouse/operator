@@ -4,9 +4,9 @@
 
 **Milestone:** v3.2 Evaluation Harness
 **Phase:** 35 - Runner Layer
-**Plan:** Not yet planned
-**Status:** Not started (roadmap complete, ready for planning)
-**Last activity:** 2026-01-29 — v3.2 roadmap created
+**Plan:** 4 plans created (35-01 to 35-04)
+**Status:** Planned, ready for execution
+**Last activity:** 2026-01-29 — Phase 35 planned (4 plans in 3 waves)
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ (v3.2: 0%)
 
@@ -83,16 +83,16 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Roadmap complete, ready for Phase 35 planning
+**Status:** Phase 35 planned, ready for execution
 
-**Next:** `/gsd:plan-phase 35` to create Phase 35 execution plan
+**Next:** `/gsd:execute-phase 35` to begin implementation
 
 ## Session Continuity
 
 **Last session:** 2026-01-29
-**Stopped at:** v3.2 roadmap created
+**Stopped at:** Phase 35 planned (4 plans in 3 waves)
 **Resume file:** None
-**Next:** `/gsd:plan-phase 35` to begin Phase 35
+**Next:** `/gsd:execute-phase 35` to begin execution
 
 ---
 *State updated: 2026-01-29 (v3.2 roadmap created)*
