@@ -57,9 +57,9 @@ class AuditLogDB:
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they don't exist."""
-        from operator_core.db.schema import SCHEMA_SQL, ACTIONS_SCHEMA_SQL
+        from operator_core.db.schema import SCHEMA_SQL, AGENT_SCHEMA_SQL
         self._conn.executescript(SCHEMA_SQL)
-        self._conn.executescript(ACTIONS_SCHEMA_SQL)
+        self._conn.executescript(AGENT_SCHEMA_SQL)
         self._conn.commit()
 
     def create_session(self, ticket_id: int | None = None) -> str:
@@ -184,6 +184,29 @@ class AuditLogDB:
             ORDER BY timestamp ASC
             """,
             (session_id,),
+        )
+
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    def get_entries_by_timerange(self, start_time: datetime, end_time: datetime) -> list[dict]:
+        """
+        Retrieve all log entries within a time range.
+
+        Args:
+            start_time: Start of time range (inclusive)
+            end_time: End of time range (inclusive)
+
+        Returns:
+            List of log entries as dictionaries
+        """
+        cursor = self._conn.execute(
+            """
+            SELECT * FROM agent_log_entries
+            WHERE timestamp >= ? AND timestamp <= ?
+            ORDER BY timestamp ASC
+            """,
+            (start_time.isoformat(), end_time.isoformat()),
         )
 
         rows = cursor.fetchall()

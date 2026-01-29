@@ -582,6 +582,32 @@ def list_campaigns(
     print(f"\nShowing {offset + 1}-{showing_end} of {total} campaigns")
 
 
+@app.command()
+def viewer(
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    operator_db: Optional[Path] = typer.Option(None, "--operator-db", help="Path to operator.db for reasoning"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind"),
+    port: int = typer.Option(8000, "--port", "-p", help="Port to bind"),
+) -> None:
+    """Start the web viewer for browsing campaigns and trials."""
+    import uvicorn
+    from eval.viewer import create_app
+
+    # Auto-detect operator.db if not specified
+    if operator_db is None:
+        default = Path("data/operator.db")
+        if default.exists():
+            operator_db = default
+            console.print(f"[dim]Using operator.db: {operator_db}[/dim]")
+
+    if not db_path.exists():
+        console.print(f"[yellow]Warning: Database {db_path} does not exist. Will be created on first access.[/yellow]")
+
+    app_instance = create_app(db_path, operator_db)
+    console.print(f"Starting viewer at http://{host}:{port}")
+    uvicorn.run(app_instance, host=host, port=port)
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
