@@ -165,6 +165,7 @@ class RateLimiterHealthPoller:
         Poll Redis for counter statistics.
 
         Scans for ratelimit:* keys (sorted sets only) and returns count vs limit.
+        Fetches actual configured limits from ratelimit:limit:{key} hashes.
 
         Returns:
             List of dicts with key, count, limit, over_limit
@@ -176,7 +177,6 @@ class RateLimiterHealthPoller:
             r = redis.Redis.from_url(self._redis_url, decode_responses=True)
             try:
                 now_ms = int(time.time() * 1000)
-                window_start = now_ms - 60000  # 60 second window
 
                 # Scan for rate limit keys, collecting sorted sets until we have 10
                 async for key in r.scan_iter(match="ratelimit:*"):
@@ -189,19 +189,27 @@ class RateLimiterHealthPoller:
                     if key_type != "zset":
                         continue
 
-                    # Remove expired entries (matches rate limiter behavior)
+                    # Get the key name without prefix
+                    key_name = key.replace("ratelimit:", "")
+
+                    # Fetch configured limit and window from ratelimit:limit:{key}
+                    limit_key = f"ratelimit:limit:{key_name}"
+                    limit_data = await r.hgetall(limit_key)
+                    limit = int(limit_data.get("limit", 10)) if limit_data else 10
+                    window_ms = int(limit_data.get("window_ms", 60000)) if limit_data else 60000
+
+                    # Remove expired entries using the counter's actual window
+                    window_start = now_ms - window_ms
                     await r.zremrangebyscore(key, "-inf", window_start)
 
-                    # Count ALL remaining entries (matches rate limiter API)
+                    # Count remaining entries
                     count = await r.zcard(key)
                     if count == 0:
                         continue  # Key is effectively empty, skip
 
-                    # Default limit is 10 (from docker-compose)
-                    limit = 10
                     counters.append(
                         {
-                            "key": key.replace("ratelimit:", ""),
+                            "key": key_name,
                             "count": count,
                             "limit": limit,
                             "over_limit": count > limit,

@@ -116,7 +116,14 @@ class RateLimiter:
         """Get current count for a key without incrementing."""
         from .config import settings
 
-        window_ms = window_ms if window_ms is not None else settings.default_window_ms
+        # Look up the key's configured window if not provided
+        if window_ms is None:
+            limit_data = await self.get_limit(key)
+            if limit_data:
+                window_ms = limit_data[1]  # (limit, window_ms)
+            else:
+                window_ms = settings.default_window_ms
+
         now_ms = int(time.time() * 1000)
         window_start = now_ms - window_ms
         prefixed_key = f"ratelimit:{key}"

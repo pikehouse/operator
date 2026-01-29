@@ -111,24 +111,30 @@ async def get_counters(
     counters = []
     max_counters = 100  # Limit to avoid timeout on large key sets
 
-    # Scan for all ratelimit keys (excluding :seq keys)
+    # Scan for all ratelimit keys (excluding :seq and :limit: keys)
     async for key in redis_client.scan_iter("ratelimit:*"):
         # Handle both bytes and string keys
         key_str = key.decode() if isinstance(key, bytes) else key
-        if key_str.endswith(":seq"):
+        if key_str.endswith(":seq") or ":limit:" in key_str:
             continue
 
         # Strip prefix for display
         display_key = key_str.replace("ratelimit:", "", 1)
 
         try:
+            # Get count (uses key's configured window)
             count = await limiter.get_counter(display_key)
+
+            # Get key's configured limit, or use default
+            limit_data = await limiter.get_limit(display_key)
+            limit = limit_data[0] if limit_data else settings.default_limit
+
             counters.append(
                 CounterInfo(
                     key=display_key,
                     count=count,
-                    limit=settings.default_limit,
-                    remaining=max(0, settings.default_limit - count),
+                    limit=limit,
+                    remaining=max(0, limit - count),
                 )
             )
         except redis.ResponseError:
