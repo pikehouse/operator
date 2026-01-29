@@ -152,11 +152,11 @@ Plans:
   4. Developer can define campaign config YAML
   5. Developer can run `eval run campaign config.yaml`
 
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 38-01: TBD
-- [ ] 38-02: TBD
+- [ ] 38-01-PLAN.md — Chaos injection functions (latency, disk pressure, network partition)
+- [ ] 38-02-PLAN.md — Campaign YAML config and batch runner with parallel support
 
 ---
 
@@ -217,8 +217,8 @@ Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 | 35. Runner Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
 | 36. Analysis Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
 | 37. Viewer Layer | v3.2 | 2/2 | Complete | 2026-01-29 |
-| 38. Chaos Expansion | v3.2 | 0/TBD | Not started | - |
+| 38. Chaos Expansion | v3.2 | 0/2 | Not started | - |
 | 39. Config Variants | v3.2 | 0/TBD | Not started | - |
 
 ---
-*Updated: 2026-01-29 — Phase 37 complete*
+*Updated: 2026-01-29 — Phase 38 planned*
