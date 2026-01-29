@@ -111,6 +111,30 @@ class TicketOpsDB:
         )
         self._conn.commit()
 
+    def hold_ticket(self, ticket_id: int) -> None:
+        """Hold ticket to prevent auto-resolution while agent is working.
+
+        Args:
+            ticket_id: ID of ticket to hold
+        """
+        self._conn.execute(
+            "UPDATE tickets SET held = 1, status = 'acknowledged' WHERE id = ?",
+            (ticket_id,),
+        )
+        self._conn.commit()
+
+    def unhold_ticket(self, ticket_id: int) -> None:
+        """Release hold on ticket (typically after resolution/escalation).
+
+        Args:
+            ticket_id: ID of ticket to unhold
+        """
+        self._conn.execute(
+            "UPDATE tickets SET held = 0 WHERE id = ?",
+            (ticket_id,),
+        )
+        self._conn.commit()
+
 
 # Deprecated module-level functions for backward compatibility
 def poll_for_open_ticket(db_path: Path) -> Ticket | None:

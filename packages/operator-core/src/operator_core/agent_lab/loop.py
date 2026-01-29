@@ -135,6 +135,10 @@ def run_agent_loop(db_path: Path, audit_dir: Path | None = None) -> None:
                 print(f"Processing ticket #{ticket.id}: {ticket.invariant_name}")
                 print(f"{'='*60}\n")
 
+                # Hold ticket to prevent auto-resolution while working
+                with TicketOpsDB(db_path) as ticket_db:
+                    ticket_db.hold_ticket(ticket.id)
+
                 with AuditLogDB(db_path) as audit_db:
                     session_id = audit_db.create_session(ticket.id)
                     current_session = (audit_db, session_id, ticket.id)
