@@ -114,7 +114,12 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ### Active
 
-(No active requirements — run `/gsd:new-milestone` to start next milestone)
+**v3.2 Evaluation Harness:**
+- Standalone eval/ harness for chaos experimentation
+- Three-layer architecture: Runner → Analysis → Viewer
+- Subject-agnostic (TiKV, rate limiter, future subjects)
+- Post-hoc scoring and baseline comparison
+- Config variants for testing different agent configurations
 
 ### Future
 

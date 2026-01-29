@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** v3.1 SHIPPED
-**Phase:** —
+**Milestone:** v3.2 Evaluation Harness
+**Phase:** Not started (defining requirements)
 **Plan:** —
-**Status:** Ready for next milestone
-**Last activity:** 2026-01-29 — v3.1 milestone shipped, archived to milestones/
+**Status:** Defining requirements
+**Last activity:** 2026-01-29 — Milestone v3.2 started
 
-Progress: ████████████████████ (v3.1: SHIPPED)
+Progress: ░░░░░░░░░░░░░░░░░░░░ (v3.2: 0%)
 
 ## Project Reference
 
