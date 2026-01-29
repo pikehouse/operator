@@ -149,3 +149,74 @@ class EvalDB:
                 )
                 for row in rows
             ]
+
+    async def get_all_campaigns(self, limit: int = 100, offset: int = 0) -> list[Campaign]:
+        """Get all campaigns with pagination.
+
+        Args:
+            limit: Maximum number of campaigns to return
+            offset: Number of campaigns to skip
+
+        Returns:
+            List of Campaign objects ordered by created_at DESC
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM campaigns ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+            rows = await cursor.fetchall()
+            return [
+                Campaign(
+                    id=row["id"],
+                    subject_name=row["subject_name"],
+                    chaos_type=row["chaos_type"],
+                    trial_count=row["trial_count"],
+                    baseline=bool(row["baseline"]),
+                    created_at=row["created_at"],
+                )
+                for row in rows
+            ]
+
+    async def get_trial(self, trial_id: int) -> Trial | None:
+        """Get trial by ID.
+
+        Args:
+            trial_id: Trial ID to fetch
+
+        Returns:
+            Trial object if found, None otherwise
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT * FROM trials WHERE id = ?", (trial_id,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                return Trial(
+                    id=row["id"],
+                    campaign_id=row["campaign_id"],
+                    started_at=row["started_at"],
+                    chaos_injected_at=row["chaos_injected_at"],
+                    ticket_created_at=row["ticket_created_at"],
+                    resolved_at=row["resolved_at"],
+                    ended_at=row["ended_at"],
+                    initial_state=row["initial_state"],
+                    final_state=row["final_state"],
+                    chaos_metadata=row["chaos_metadata"],
+                    commands_json=row["commands_json"],
+                )
+            return None
+
+    async def count_campaigns(self) -> int:
+        """Count total number of campaigns.
+
+        Returns:
+            Total campaign count
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM campaigns")
+            row = await cursor.fetchone()
+            return row[0] if row else 0
