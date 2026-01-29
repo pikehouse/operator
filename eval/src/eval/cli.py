@@ -242,6 +242,132 @@ def analyze(
         print(f"  Destructive: {summary.total_destructive_commands}")
 
 
+@app.command()
+def compare(
+    campaign_a: int = typer.Argument(..., help="First campaign ID"),
+    campaign_b: int = typer.Argument(..., help="Second campaign ID"),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+) -> None:
+    """Compare two campaigns by win rate.
+
+    Primary metric is win rate. Resolution time is tiebreaker for equal win rates.
+
+    Examples:
+        eval compare 1 2
+        eval compare 1 2 --json
+    """
+    from eval.analysis import compare_campaigns, CampaignComparison
+
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        return await compare_campaigns(db, campaign_a, campaign_b)
+
+    try:
+        result: CampaignComparison = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        print(result.model_dump_json(indent=2))
+        return
+
+    # Plain text output
+    print(f"Campaign Comparison: {result.subject_name}/{result.chaos_type}")
+    print()
+    print(f"{'Metric':<20} {'Campaign A':<15} {'Campaign B':<15} {'Delta':<15}")
+    print("-" * 65)
+    print(f"{'Trials':<20} {result.a_trial_count:<15} {result.b_trial_count:<15} {'':<15}")
+    print(f"{'Win Rate':<20} {result.a_win_rate:.1%:<15} {result.b_win_rate:.1%:<15} {result.win_rate_delta:+.1%}")
+
+    a_resolve = f"{result.a_avg_resolve_sec:.1f}s" if result.a_avg_resolve_sec else "N/A"
+    b_resolve = f"{result.b_avg_resolve_sec:.1f}s" if result.b_avg_resolve_sec else "N/A"
+    delta_resolve = f"{result.resolve_time_delta:+.1f}s" if result.resolve_time_delta else ""
+    print(f"{'Avg Resolution':<20} {a_resolve:<15} {b_resolve:<15} {delta_resolve}")
+    print()
+    print(f"Winner: Campaign {result.winner}")
+    print(f"Reason: {result.winner_reason}")
+
+
+@app.command("compare-baseline")
+def compare_baseline_cmd(
+    campaign_id: int = typer.Argument(..., help="Agent campaign ID"),
+    baseline_id: Optional[int] = typer.Option(
+        None,
+        "--baseline",
+        "-b",
+        help="Baseline campaign ID (auto-detects if not specified)",
+    ),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+) -> None:
+    """Compare agent campaign to baseline (self-healing).
+
+    Shows full metric breakdown: win rate, detection time, resolution time.
+    Auto-detects matching baseline campaign if not specified.
+
+    Examples:
+        eval compare-baseline 1
+        eval compare-baseline 1 --baseline 2
+        eval compare-baseline 1 --json
+    """
+    from eval.analysis import compare_baseline, BaselineComparison
+
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        return await compare_baseline(db, campaign_id, baseline_id)
+
+    try:
+        result: BaselineComparison = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        print(result.model_dump_json(indent=2))
+        return
+
+    # Plain text output
+    print(f"Baseline Comparison: {result.subject_name}/{result.chaos_type}")
+    print(f"Agent Campaign: {result.agent_campaign_id}")
+    print(f"Baseline Campaign: {result.baseline_campaign_id}")
+    print()
+    print(f"{'Metric':<20} {'Agent':<15} {'Baseline':<15} {'Delta':<15}")
+    print("-" * 65)
+    print(f"{'Trials':<20} {result.agent_trial_count:<15} {result.baseline_trial_count:<15} {'':<15}")
+    print(f"{'Win Rate':<20} {result.agent_win_rate:.1%:<15} {result.baseline_win_rate:.1%:<15} {result.win_rate_delta:+.1%}")
+
+    agent_detect = f"{result.agent_avg_detect_sec:.1f}s" if result.agent_avg_detect_sec else "N/A"
+    print(f"{'Avg Detection':<20} {agent_detect:<15} {'N/A':<15} {'':<15}")
+
+    agent_resolve = f"{result.agent_avg_resolve_sec:.1f}s" if result.agent_avg_resolve_sec else "N/A"
+    baseline_resolve = f"{result.baseline_avg_resolve_sec:.1f}s" if result.baseline_avg_resolve_sec else "N/A"
+    delta_resolve = f"{result.resolve_time_delta:+.1f}s" if result.resolve_time_delta else ""
+    print(f"{'Avg Resolution':<20} {agent_resolve:<15} {baseline_resolve:<15} {delta_resolve}")
+    print()
+    print(f"Winner: {result.winner.title()}")
+    print(f"Reason: {result.winner_reason}")
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
