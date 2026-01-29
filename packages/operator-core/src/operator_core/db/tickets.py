@@ -154,16 +154,35 @@ class TicketDB:
 
         if row:
             # Update existing ticket
-            await self._conn.execute(
-                """
-                UPDATE tickets SET
-                    last_seen_at = ?,
-                    occurrence_count = occurrence_count + 1,
-                    message = ?
-                WHERE id = ?
-                """,
-                (now.isoformat(), violation.message, row["id"]),
-            )
+            # If ticket was diagnosed/escalated, re-open it for agent retry
+            current_status = row["status"]
+            if current_status == "diagnosed":
+                # Re-open for agent to retry
+                await self._conn.execute(
+                    """
+                    UPDATE tickets SET
+                        last_seen_at = ?,
+                        occurrence_count = occurrence_count + 1,
+                        message = ?,
+                        status = 'open',
+                        held = 0,
+                        diagnosis = NULL
+                    WHERE id = ?
+                    """,
+                    (now.isoformat(), violation.message, row["id"]),
+                )
+            else:
+                # Just update occurrence count
+                await self._conn.execute(
+                    """
+                    UPDATE tickets SET
+                        last_seen_at = ?,
+                        occurrence_count = occurrence_count + 1,
+                        message = ?
+                    WHERE id = ?
+                    """,
+                    (now.isoformat(), violation.message, row["id"]),
+                )
             await self._conn.commit()
             return await self.get_ticket(row["id"])
 
