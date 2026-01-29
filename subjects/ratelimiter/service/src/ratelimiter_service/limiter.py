@@ -113,7 +113,7 @@ class RateLimiter:
         return RateLimitResult.from_lua_result(result)
 
     async def get_counter(self, key: str, window_ms: int | None = None) -> int:
-        """Get current count for a key without incrementing."""
+        """Get current count for a key without incrementing (read-only)."""
         from .config import settings
 
         # Look up the key's configured window if not provided
@@ -128,9 +128,9 @@ class RateLimiter:
         window_start = now_ms - window_ms
         prefixed_key = f"ratelimit:{key}"
 
-        # Remove expired and count
-        await self._redis.zremrangebyscore(prefixed_key, "-inf", window_start)
-        count = await self._redis.zcard(prefixed_key)
+        # Count entries in window WITHOUT pruning (read-only)
+        # The check() method handles pruning atomically via Lua script
+        count = await self._redis.zcount(prefixed_key, window_start, "+inf")
         return count
 
     async def reset_counter(self, key: str) -> bool:
