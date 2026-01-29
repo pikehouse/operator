@@ -18,9 +18,10 @@ You are running on the HOST machine, not inside Docker containers. Services run 
 
 **IMPORTANT: Store IDs vs Container Names**
 - PD assigns store IDs (1, 2, 4, 6, etc.) - these are NOT container names
-- Ticket may say "store 1" or "tikv-1" but the container is tikv0, tikv1, or tikv2
-- Use `docker ps --format '{{.Names}}'` to see actual container names
-- Use `docker exec pd0 pd-ctl store` to see store ID -> address mapping (address contains container name)
+- The ticket message format is: "Store {id} at {container}:20160 is {state}"
+- Extract the container name from the "at X:20160" part (e.g., "at tikv2:20160" → container is `tikv2`)
+- Container names are: tikv0, tikv1, tikv2 (NOT tikv-0 or tikv-1)
+- Use `docker start tikv0` not `docker start 1` or `docker start tikv-1`
 
 ## Commands
 
