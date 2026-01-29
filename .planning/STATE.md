@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 36 - Analysis Layer (IN PROGRESS)
-**Plan:** 3/4 complete
-**Status:** Command analysis, comparison modules complete
-**Last activity:** 2026-01-29 — Completed 36-02-PLAN.md
+**Phase:** 36 - Analysis Layer (COMPLETE)
+**Plan:** 4/4 complete
+**Status:** All analysis layer functionality complete - scoring, commands, comparison, CLI
+**Last activity:** 2026-01-29 — Completed 36-04-PLAN.md
 
-Progress: ███████░░░░░░░░░░░░░ (v3.2: 35%)
+Progress: ████████░░░░░░░░░░░░ (v3.2: 40%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, ready for Phase 36
+**Status:** Phase 35 complete, Phase 36 complete, ready for Phase 37
 
-**Next:** `/gsd:plan-phase 36` to plan Analysis Layer
+**Next:** `/gsd:plan-phase 37` to plan Viewer Layer
 
 ## Session Continuity
 
-**Last session:** 2026-01-29T21:39:18Z
-**Stopped at:** Completed 36-02-PLAN.md
+**Last session:** 2026-01-29T21:44:58Z
+**Stopped at:** Completed 36-04-PLAN.md (Phase 36 complete)
 **Resume file:** None
-**Next:** Execute remaining Analysis Layer plan (36-04)
+**Next:** Plan Phase 37 (Viewer Layer)
 
 ---
-*State updated: 2026-01-29 (Phase 36 plan 02 complete)*
+*State updated: 2026-01-29 (Phase 36 complete)*
 
 ## Open Issues
 
