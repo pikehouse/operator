@@ -369,6 +369,166 @@ def compare_baseline_cmd(
     print(f"Reason: {result.winner_reason}")
 
 
+@app.command("show")
+def show_detail(
+    id: int = typer.Argument(..., help="Campaign or trial ID"),
+    trial: bool = typer.Option(False, "--trial", "-t", help="Treat ID as trial ID"),
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Show details for a campaign or trial.
+
+    By default, treats ID as a campaign ID. Use --trial flag for trial ID.
+
+    Examples:
+        eval show 1              # Show campaign 1
+        eval show --trial 5      # Show trial 5
+    """
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+
+        if trial:
+            # Fetch trial by ID
+            t = await db.get_trial(id)
+            if t is None:
+                console.print(f"[red]Error: Trial {id} not found[/red]")
+                raise typer.Exit(1)
+            return ("trial", t, None, None)
+        else:
+            # Fetch campaign and its trials
+            campaign = await db.get_campaign(id)
+            if campaign is None:
+                console.print(f"[red]Error: Campaign {id} not found[/red]")
+                raise typer.Exit(1)
+            trials = await db.get_trials(id)
+
+            # Get campaign analysis for aggregate scores
+            from eval.analysis import analyze_campaign
+            try:
+                summary = await analyze_campaign(db, id)
+            except ValueError:
+                summary = None
+            return ("campaign", campaign, trials, summary)
+
+    result_type, obj, trials, summary = asyncio.run(run())
+
+    if result_type == "trial":
+        # Trial detail output
+        t = obj
+        if json_output:
+            # Parse commands_json for output
+            commands = json.loads(t.commands_json) if t.commands_json else []
+            data = {
+                "id": t.id,
+                "campaign_id": t.campaign_id,
+                "started_at": t.started_at,
+                "chaos_injected_at": t.chaos_injected_at,
+                "ticket_created_at": t.ticket_created_at,
+                "resolved_at": t.resolved_at,
+                "ended_at": t.ended_at,
+                "initial_state": json.loads(t.initial_state) if t.initial_state else None,
+                "final_state": json.loads(t.final_state) if t.final_state else None,
+                "chaos_metadata": json.loads(t.chaos_metadata) if t.chaos_metadata else None,
+                "commands": commands,
+            }
+            print(json.dumps(data, indent=2))
+            return
+
+        # Plain text trial detail
+        print(f"Trial {t.id} (Campaign {t.campaign_id})")
+        print("-" * 40)
+        print(f"Started:        {t.started_at}")
+        print(f"Chaos injected: {t.chaos_injected_at}")
+        if t.ticket_created_at:
+            print(f"Ticket created: {t.ticket_created_at}")
+        if t.resolved_at:
+            print(f"Resolved:       {t.resolved_at}")
+        print(f"Ended:          {t.ended_at}")
+        print()
+
+        # Commands list
+        commands = json.loads(t.commands_json) if t.commands_json else []
+        if commands:
+            print("Commands:")
+            for i, cmd in enumerate(commands, 1):
+                # Each command is a string or dict with 'command' key
+                cmd_str = cmd if isinstance(cmd, str) else cmd.get("command", str(cmd))
+                # Indent and truncate long commands
+                cmd_display = cmd_str[:80] + "..." if len(cmd_str) > 80 else cmd_str
+                print(f"  {i}. {cmd_display}")
+        else:
+            print("Commands: (none recorded)")
+        print()
+
+        # Show initial/final state summary
+        print("States (use --json for full detail):")
+        print(f"  Initial: {len(t.initial_state)} bytes")
+        print(f"  Final:   {len(t.final_state)} bytes")
+
+    else:
+        # Campaign detail output
+        campaign = obj
+        if json_output:
+            data = {
+                "id": campaign.id,
+                "subject_name": campaign.subject_name,
+                "chaos_type": campaign.chaos_type,
+                "trial_count": campaign.trial_count,
+                "baseline": campaign.baseline,
+                "created_at": campaign.created_at,
+                "trials": [
+                    {
+                        "id": t.id,
+                        "started_at": t.started_at,
+                        "resolved_at": t.resolved_at,
+                        "ended_at": t.ended_at,
+                    }
+                    for t in trials
+                ],
+            }
+            if summary:
+                data["win_rate"] = summary.win_rate
+                data["success_count"] = summary.success_count
+                data["failure_count"] = summary.failure_count
+                data["timeout_count"] = summary.timeout_count
+            print(json.dumps(data, indent=2))
+            return
+
+        # Plain text campaign detail
+        print(f"Campaign {campaign.id}: {campaign.subject_name}/{campaign.chaos_type}")
+        print("-" * 50)
+        print(f"Created:  {campaign.created_at}")
+        print(f"Trials:   {campaign.trial_count}")
+        print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
+        print()
+
+        # Aggregate scores if available
+        if summary:
+            print("Scores:")
+            print(f"  Win rate:   {summary.win_rate:.1%}")
+            print(f"  Success:    {summary.success_count}")
+            print(f"  Failure:    {summary.failure_count}")
+            print(f"  Timeout:    {summary.timeout_count}")
+            if summary.avg_time_to_detect_sec:
+                print(f"  Avg detect: {summary.avg_time_to_detect_sec:.1f}s")
+            if summary.avg_time_to_resolve_sec:
+                print(f"  Avg resolve: {summary.avg_time_to_resolve_sec:.1f}s")
+            print()
+
+        # Trial list table
+        if trials:
+            print("Trials:")
+            # Header: ID(6), Started(20), Resolved(20), Status
+            print(f"  {'ID':<6} {'Started':<20} {'Resolved':<20}")
+            for t in trials:
+                resolved_str = t.resolved_at[:19] if t.resolved_at else "N/A"
+                started_str = t.started_at[:19] if t.started_at else "N/A"
+                print(f"  {t.id:<6} {started_str:<20} {resolved_str:<20}")
+        else:
+            print("No trials recorded.")
+
+
 @app.command("list")
 def list_campaigns(
     db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
