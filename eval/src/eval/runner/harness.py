@@ -126,32 +126,37 @@ async def wait_for_ticket_resolution(
         def query_ticket():
             conn = sqlite3.connect(operator_db_path)
             conn.row_factory = sqlite3.Row
-            # Get most recent ticket (optionally filtered by time)
-            if chaos_injected_after:
-                cursor = conn.execute(
-                    """
-                    SELECT first_seen_at, resolved_at, status
-                    FROM tickets
-                    WHERE first_seen_at > ?
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (chaos_injected_after,),
-                )
-            else:
-                cursor = conn.execute(
-                    """
-                    SELECT first_seen_at, resolved_at, status
-                    FROM tickets
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """
-                )
-            row = cursor.fetchone()
-            conn.close()
-            if row:
-                return row["first_seen_at"], row["resolved_at"], row["status"]
-            return None, None, None
+            try:
+                # Get most recent ticket (optionally filtered by time)
+                if chaos_injected_after:
+                    cursor = conn.execute(
+                        """
+                        SELECT first_seen_at, resolved_at, status
+                        FROM tickets
+                        WHERE first_seen_at > ?
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        (chaos_injected_after,),
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT first_seen_at, resolved_at, status
+                        FROM tickets
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """
+                    )
+                row = cursor.fetchone()
+                if row:
+                    return row["first_seen_at"], row["resolved_at"], row["status"]
+                return None, None, None
+            except sqlite3.OperationalError:
+                # Table doesn't exist yet (monitor still initializing)
+                return None, None, None
+            finally:
+                conn.close()
 
         created, resolved, status = await asyncio.to_thread(query_ticket)
 
