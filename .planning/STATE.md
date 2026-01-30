@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 38 - Chaos Expansion (IN PROGRESS)
-**Plan:** 1/1 complete
-**Status:** Extended TiKV chaos types - latency, disk pressure, network partition with cleanup protocol
-**Last activity:** 2026-01-29 — Completed 38-01-PLAN.md
+**Phase:** 38 - Chaos Expansion (COMPLETE)
+**Plan:** 2/2 complete
+**Status:** YAML campaign configuration with parallel execution and matrix expansion
+**Last activity:** 2026-01-30 — Completed 38-02-PLAN.md
 
-Progress: ███████████░░░░░░░░░ (v3.2: 55%)
+Progress: ████████████░░░░░░░░ (v3.2: 60%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete
+**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete (2/2 plans)
 
 **Next:** Plan Phase 39 (Config Variants)
 
 ## Session Continuity
 
-**Last session:** 2026-01-29T23:58:41Z
-**Stopped at:** Completed 38-01-PLAN.md (Phase 38 complete)
+**Last session:** 2026-01-30T00:06:47Z
+**Stopped at:** Completed 38-02-PLAN.md (Phase 38 complete - 2/2 plans)
 **Resume file:** None
 **Next:** Plan Phase 39 (Config Variants)
 
 ---
-*State updated: 2026-01-29 (Phase 38 complete)*
+*State updated: 2026-01-30 (Phase 38 complete - 2/2 plans)*
 
 ## Decisions Made
 
@@ -108,6 +108,9 @@ See: .planning/MILESTONES.md
 | 38-01 | Use fallocate for disk pressure | fallocate is instant (allocates space without writing), simpler than dd or filesystem quotas |
 | 38-01 | Use iptables for network partition | iptables allows selective blocking of specific peer IPs, better than coarse docker network disconnect |
 | 38-01 | Chaos metadata contains cleanup fields | Makes cleanup stateless - inject_chaos returns all fields needed by cleanup_chaos for reversibility |
+| 38-02 | Campaign matrix expansion uses Cartesian product | itertools.product generates subjects x chaos_types x trials_per_combination efficiently |
+| 38-02 | Cleanup chaos after final_state capture | Ensures final_state snapshot reflects during-chaos conditions before reverting |
+| 38-02 | run_campaign_from_config is NEW function | Preserves backward compatibility - existing run_campaign() unchanged for CLI |
 
 ## Open Issues
 
