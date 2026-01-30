@@ -87,13 +87,14 @@ class OperatorProcesses:
         console.print(f"[dim]Starting operator in: {self.project_root}[/dim]")
         console.print(f"[dim]Using database: {self.operator_db_path}[/dim]")
 
-        # Start monitor subprocess
-        console.print("[bold blue]Starting operator monitor...[/bold blue]")
+        # Start monitor subprocess with fast check interval for eval
+        console.print("[bold blue]Starting operator monitor (5s interval)...[/bold blue]")
         self.monitor_proc = subprocess.Popen(
             [
                 "uv", "run", "operator", "monitor", "run",
                 "--subject", self.subject_name,
                 "--db", str(self.operator_db_path),
+                "--interval", "5",  # Fast interval for eval
             ],
             cwd=self.project_root,
             env=env,

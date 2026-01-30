@@ -97,34 +97,56 @@ async def update_ticket_variant(
 async def wait_for_ticket_resolution(
     operator_db_path: Path,
     timeout_sec: float = 300.0,
+    chaos_injected_after: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Wait for ticket to be created and resolved in operator.db.
 
     Args:
         operator_db_path: Path to operator.db
         timeout_sec: Maximum time to wait
+        chaos_injected_after: Only consider tickets created after this timestamp
 
     Returns:
         Tuple of (ticket_created_at, resolved_at) or (None, None) if timeout
     """
-    if not operator_db_path.exists():
-        return None, None
-
     start = asyncio.get_running_loop().time()
+    ticket_found = False
+
+    console.print(f"[dim]Waiting up to {timeout_sec}s for ticket resolution...[/dim]")
 
     while (asyncio.get_running_loop().time() - start) < timeout_sec:
+        # Wait for database to exist (monitor creates it)
+        if not operator_db_path.exists():
+            elapsed = asyncio.get_running_loop().time() - start
+            if elapsed > 60:
+                console.print("[yellow]Warning: operator.db not created after 60s[/yellow]")
+            await asyncio.sleep(2.0)
+            continue
+
         def query_ticket():
             conn = sqlite3.connect(operator_db_path)
             conn.row_factory = sqlite3.Row
-            # Get most recent open or resolved ticket
-            cursor = conn.execute(
-                """
-                SELECT first_seen_at, resolved_at, status
-                FROM tickets
-                ORDER BY id DESC
-                LIMIT 1
-                """
-            )
+            # Get most recent ticket (optionally filtered by time)
+            if chaos_injected_after:
+                cursor = conn.execute(
+                    """
+                    SELECT first_seen_at, resolved_at, status
+                    FROM tickets
+                    WHERE first_seen_at > ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (chaos_injected_after,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT first_seen_at, resolved_at, status
+                    FROM tickets
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """
+                )
             row = cursor.fetchone()
             conn.close()
             if row:
@@ -135,13 +157,21 @@ async def wait_for_ticket_resolution(
 
         if created:
             # Ticket exists
+            if not ticket_found:
+                ticket_found = True
+                console.print(f"[cyan]Ticket detected (status: {status})[/cyan]")
+
             if status == "resolved" and resolved:
+                elapsed = asyncio.get_running_loop().time() - start
+                console.print(f"[green]Ticket resolved after {elapsed:.1f}s[/green]")
                 return created, resolved
             # Ticket not yet resolved, keep waiting
 
         await asyncio.sleep(2.0)
 
     # Timeout - return what we have
+    elapsed = asyncio.get_running_loop().time() - start
+    console.print(f"[yellow]Timeout after {elapsed:.1f}s (ticket_found={ticket_found})[/yellow]")
     return None, None
 
 
