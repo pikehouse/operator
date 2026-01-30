@@ -75,6 +75,9 @@ class Ticket:
     diagnosis: str | None = None
     metric_snapshot: dict[str, Any] | None = None
     subject_context: str | None = None
+    variant_model: str | None = None
+    variant_system_prompt: str | None = None
+    variant_tools_config: str | None = None  # JSON string
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
