@@ -306,3 +306,97 @@ class VariantComparison(BaseModel):
     subject_name: str
     chaos_type: str
     variants: dict[str, VariantMetrics]  # variant_name -> metrics
+
+
+async def compare_variants(
+    db: EvalDB,
+    subject_name: str,
+    chaos_type: str,
+    variant_names: list[str] | None = None,
+) -> VariantComparison:
+    """Compare performance across variants for same subject/chaos combination.
+
+    CONF-03: Aggregate metrics per variant for A/B comparison.
+
+    Args:
+        db: EvalDB instance
+        subject_name: Filter by subject (e.g., "tikv")
+        chaos_type: Filter by chaos type (e.g., "node_kill")
+        variant_names: Optional list of variant names to include (None = all)
+
+    Returns:
+        VariantComparison with aggregate metrics per variant
+
+    Raises:
+        ValueError: If no campaigns found for criteria
+    """
+    import aiosqlite
+
+    async with aiosqlite.connect(db.db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+
+        # Check if variant_name column exists (for backward compatibility)
+        cursor = await conn.execute("PRAGMA table_info(campaigns)")
+        columns = await cursor.fetchall()
+        has_variant_column = any(col[1] == "variant_name" for col in columns)
+
+        if not has_variant_column:
+            raise ValueError("Database schema missing variant_name column. Run migration first.")
+
+        # Get all non-baseline campaigns matching criteria
+        query = """
+            SELECT id, variant_name
+            FROM campaigns
+            WHERE subject_name = ? AND chaos_type = ? AND baseline = 0
+        """
+        params: list = [subject_name, chaos_type]
+
+        if variant_names:
+            placeholders = ",".join("?" * len(variant_names))
+            query += f" AND variant_name IN ({placeholders})"
+            params.extend(variant_names)
+
+        cursor = await conn.execute(query, params)
+        campaigns = await cursor.fetchall()
+
+    if not campaigns:
+        raise ValueError(
+            f"No campaigns found for {subject_name}/{chaos_type}"
+            + (f" with variants {variant_names}" if variant_names else "")
+        )
+
+    # Group campaigns by variant, analyze each
+    variant_summaries: dict[str, list[CampaignSummary]] = {}
+    for campaign in campaigns:
+        summary = await analyze_campaign(db, campaign["id"])
+        variant_name = campaign["variant_name"] or "default"
+        if variant_name not in variant_summaries:
+            variant_summaries[variant_name] = []
+        variant_summaries[variant_name].append(summary)
+
+    # Aggregate metrics for each variant
+    def _safe_avg(values: list[float | None]) -> float | None:
+        filtered = [v for v in values if v is not None]
+        return sum(filtered) / len(filtered) if filtered else None
+
+    results: dict[str, VariantMetrics] = {}
+    for variant_name, summaries in variant_summaries.items():
+        total_trials = sum(s.trial_count for s in summaries)
+        total_success = sum(s.success_count for s in summaries)
+        total_commands = sum(s.total_commands for s in summaries)
+
+        results[variant_name] = VariantMetrics(
+            variant_name=variant_name,
+            trial_count=total_trials,
+            success_count=total_success,
+            win_rate=total_success / total_trials if total_trials > 0 else 0.0,
+            avg_time_to_detect_sec=_safe_avg([s.avg_time_to_detect_sec for s in summaries]),
+            avg_time_to_resolve_sec=_safe_avg([s.avg_time_to_resolve_sec for s in summaries]),
+            avg_commands=total_commands / total_trials if total_trials > 0 else 0.0,
+        )
+
+    return VariantComparison(
+        subject_name=subject_name,
+        chaos_type=chaos_type,
+        variants=results,
+    )

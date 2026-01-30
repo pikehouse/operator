@@ -5,8 +5,11 @@ from eval.analysis.scoring import score_trial, score_trial_with_commands, analyz
 from eval.analysis.comparison import (
     BaselineComparison,
     CampaignComparison,
+    VariantMetrics,
+    VariantComparison,
     compare_baseline,
     compare_campaigns,
+    compare_variants,
 )
 from eval.analysis.commands import (
     CommandCategory,
@@ -25,8 +28,11 @@ __all__ = [
     "analyze_campaign",
     "BaselineComparison",
     "CampaignComparison",
+    "VariantMetrics",
+    "VariantComparison",
     "compare_baseline",
     "compare_campaigns",
+    "compare_variants",
     "CommandCategory",
     "CommandClassification",
     "CommandAnalysis",
