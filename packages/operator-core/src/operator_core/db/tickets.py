@@ -116,6 +116,9 @@ class TicketDB:
             diagnosis=row["diagnosis"],
             metric_snapshot=metric_snapshot,
             subject_context=row["subject_context"],
+            variant_model=row["variant_model"],
+            variant_system_prompt=row["variant_system_prompt"],
+            variant_tools_config=row["variant_tools_config"],
             created_at=created_at,
             updated_at=updated_at,
         )

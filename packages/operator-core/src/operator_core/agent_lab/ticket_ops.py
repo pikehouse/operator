@@ -5,7 +5,6 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from warnings import warn
 
 from operator_core.monitor.types import Ticket, TicketStatus
 
@@ -46,9 +45,9 @@ class TicketOpsDB:
 
     def _ensure_schema(self) -> None:
         """Create tables and indexes if they don't exist."""
-        from operator_core.db.schema import SCHEMA_SQL, ACTIONS_SCHEMA_SQL
+        from operator_core.db.schema import SCHEMA_SQL, AGENT_SCHEMA_SQL
         self._conn.executescript(SCHEMA_SQL)
-        self._conn.executescript(ACTIONS_SCHEMA_SQL)
+        self._conn.executescript(AGENT_SCHEMA_SQL)
         self._conn.commit()
 
     def poll_for_open_ticket(self) -> Ticket | None:
@@ -82,6 +81,9 @@ class TicketOpsDB:
             diagnosis=row["diagnosis"],
             metric_snapshot=json.loads(row["metric_snapshot"]) if row["metric_snapshot"] else None,
             subject_context=row["subject_context"],
+            variant_model=row["variant_model"],
+            variant_system_prompt=row["variant_system_prompt"],
+            variant_tools_config=row["variant_tools_config"],
             created_at=datetime.fromisoformat(row["created_at"]),
             updated_at=datetime.fromisoformat(row["updated_at"]),
         )
@@ -135,53 +137,3 @@ class TicketOpsDB:
             (ticket_id,),
         )
         self._conn.commit()
-
-
-# Deprecated module-level functions for backward compatibility
-def poll_for_open_ticket(db_path: Path) -> Ticket | None:
-    """Poll for first open ticket.
-
-    .. deprecated::
-        Use TicketOpsDB context manager instead.
-
-    Args:
-        db_path: Path to SQLite database
-
-    Returns:
-        First open ticket, or None if no open tickets
-    """
-    warn("poll_for_open_ticket() is deprecated, use TicketOpsDB context manager", DeprecationWarning, stacklevel=2)
-    with TicketOpsDB(db_path) as db:
-        return db.poll_for_open_ticket()
-
-
-def update_ticket_resolved(db_path: Path, ticket_id: int, summary: str) -> None:
-    """Mark ticket as resolved.
-
-    .. deprecated::
-        Use TicketOpsDB context manager instead.
-
-    Args:
-        db_path: Path to SQLite database
-        ticket_id: ID of ticket to update
-        summary: Resolution summary
-    """
-    warn("update_ticket_resolved() is deprecated, use TicketOpsDB context manager", DeprecationWarning, stacklevel=2)
-    with TicketOpsDB(db_path) as db:
-        db.update_ticket_resolved(ticket_id, summary)
-
-
-def update_ticket_escalated(db_path: Path, ticket_id: int, reason: str) -> None:
-    """Mark ticket as escalated.
-
-    .. deprecated::
-        Use TicketOpsDB context manager instead.
-
-    Args:
-        db_path: Path to SQLite database
-        ticket_id: ID of ticket to update
-        reason: Escalation reason
-    """
-    warn("update_ticket_escalated() is deprecated, use TicketOpsDB context manager", DeprecationWarning, stacklevel=2)
-    with TicketOpsDB(db_path) as db:
-        db.update_ticket_escalated(ticket_id, reason)
