@@ -11,6 +11,7 @@ from rich.console import Console
 
 from eval.types import Campaign, EvalSubject, Trial
 from eval.runner.db import EvalDB
+from eval.runner.campaign import CampaignConfig, expand_campaign_matrix
 
 
 console = Console()
@@ -125,6 +126,7 @@ async def run_trial(
     campaign_id: int,
     baseline: bool = False,
     operator_db_path: Path | None = None,
+    chaos_params: dict[str, Any] | None = None,
 ) -> Trial:
     """Execute single trial with precise timing capture.
 
@@ -136,6 +138,7 @@ async def run_trial(
         campaign_id: Parent campaign ID
         baseline: If True, skip agent wait (RUN-05)
         operator_db_path: Path to operator.db for command extraction
+        chaos_params: Optional parameters for chaos injection (e.g., min_ms, max_ms)
 
     Returns:
         Completed Trial record
@@ -156,10 +159,10 @@ async def run_trial(
     console.print("[bold blue]Capturing initial state...[/bold blue]")
     initial_state = await subject.capture_state()
 
-    # Inject chaos
+    # Inject chaos (with params if provided)
     console.print(f"[bold yellow]Injecting chaos: {chaos_type}[/bold yellow]")
     chaos_injected_at = now()
-    chaos_metadata = await subject.inject_chaos(chaos_type)
+    chaos_metadata = await subject.inject_chaos(chaos_type, **(chaos_params or {}))
     console.print(f"[dim]Chaos metadata: {chaos_metadata}[/dim]")
 
     # Wait for resolution (unless baseline)
@@ -192,6 +195,15 @@ async def run_trial(
     final_state = await subject.capture_state()
 
     ended_at = now()
+
+    # Cleanup chaos AFTER final_state capture, BEFORE building Trial
+    # This ensures we capture the "during chaos" state before reverting
+    try:
+        await subject.cleanup_chaos(chaos_metadata)
+    except Exception as e:
+        # Handle gracefully - container may have been killed/restarted
+        # This is expected for node_kill chaos type
+        console.print(f"[dim]Cleanup note: {e}[/dim]")
 
     return Trial(
         campaign_id=campaign_id,
@@ -257,4 +269,96 @@ async def run_campaign(
         console.print(f"[green]Trial {trial_id} completed at {trial.ended_at}[/green]")
 
     console.print(f"\n[bold green]Campaign {campaign_id} complete[/bold green]")
+    return campaign_id
+
+
+async def run_campaign_from_config(
+    config: CampaignConfig,
+    db: EvalDB,
+    operator_db_path: Path | None = None,
+) -> int:
+    """Run campaign from YAML config with parallel execution.
+
+    This is a NEW function for YAML-based campaigns.
+    The existing run_campaign() function remains unchanged for backward compatibility.
+
+    Uses asyncio.Semaphore to limit concurrent trials.
+    Continues campaign even if individual trials fail.
+
+    Args:
+        config: Loaded CampaignConfig
+        db: EvalDB for persistence
+        operator_db_path: Path to operator.db for command extraction
+
+    Returns:
+        campaign_id for later analysis
+    """
+    from eval.subjects.tikv import TiKVEvalSubject
+
+    # Expand matrix to trial specs
+    trial_specs = expand_campaign_matrix(config)
+    total_trials = len(trial_specs)
+
+    # Create campaign record
+    campaign = Campaign(
+        subject_name=",".join(config.subjects),
+        chaos_type=",".join(c.type for c in config.chaos_types),
+        trial_count=total_trials,
+        baseline=config.include_baseline,
+        created_at=now(),
+    )
+    campaign_id = await db.insert_campaign(campaign)
+    console.print(f"[bold green]Campaign {campaign_id} started ({total_trials} trials)[/bold green]")
+
+    # Semaphore for parallelism control
+    semaphore = asyncio.Semaphore(config.parallel)
+    completed = 0
+    failed = 0
+
+    async def run_single_trial(spec: dict, trial_num: int) -> Trial | None:
+        nonlocal completed, failed
+        async with semaphore:
+            try:
+                console.print(f"\n[bold]Trial {trial_num}/{total_trials}: {spec['subject']}/{spec['chaos_type']}[/bold]")
+
+                # Get subject instance (fresh for each trial)
+                if spec["subject"] == "tikv":
+                    subject = TiKVEvalSubject()
+                else:
+                    raise ValueError(f"Unknown subject: {spec['subject']}")
+
+                trial = await run_trial(
+                    subject=subject,
+                    chaos_type=spec["chaos_type"] if not spec["baseline"] else "none",
+                    campaign_id=campaign_id,
+                    baseline=spec["baseline"],
+                    operator_db_path=operator_db_path,
+                    chaos_params=spec["chaos_params"],
+                )
+
+                trial_id = await db.insert_trial(trial)
+                console.print(f"[green]Trial {trial_id} completed[/green]")
+                completed += 1
+
+                # Cooldown between trials
+                if config.cooldown_seconds > 0:
+                    await asyncio.sleep(config.cooldown_seconds)
+
+                return trial
+
+            except Exception as e:
+                console.print(f"[red]Trial failed: {e}[/red]")
+                failed += 1
+                return None
+
+    # Run trials (semaphore limits concurrency)
+    tasks = [
+        run_single_trial(spec, i + 1)
+        for i, spec in enumerate(trial_specs)
+    ]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+    console.print(f"\n[bold green]Campaign {campaign_id} complete[/bold green]")
+    console.print(f"Completed: {completed}, Failed: {failed}")
+
     return campaign_id
