@@ -16,11 +16,13 @@ from dataclasses import dataclass
 
 import httpx
 
-from operator_core.types import Region, RegionId, Store
+from operator_protocols.types import Store
 from tikv_observer.types import (
     PDRegionResponse,
     PDRegionsResponse,
     PDStoresResponse,
+    Region,
+    RegionId,
 )
 
 

@@ -44,6 +44,9 @@ from tikv_observer.pd_client import PDClient
 from tikv_observer.prom_client import PrometheusClient
 from tikv_observer.subject import TiKVSubject
 from tikv_observer.types import (
+    # TiKV domain types
+    Region,
+    RegionId,
     # PD API types
     PDRegionLeader,
     PDRegionPeer,
@@ -81,6 +84,9 @@ __all__ = [
     "STORE_DOWN_CONFIG",
     "HIGH_LATENCY_CONFIG",
     "LOW_DISK_SPACE_CONFIG",
+    # TiKV domain types
+    "Region",
+    "RegionId",
     # PD API types
     "PDStoreInfo",
     "PDStoreStatus",

@@ -1,12 +1,9 @@
 """
-TiKV-specific Pydantic response types.
+TiKV-specific types and Pydantic response models.
 
-This module provides Pydantic models for parsing responses from:
-- PD API (Placement Driver): Cluster state, stores, regions
-- Prometheus HTTP API: Metrics queries
-
-These are API response types for external data validation. Internal
-types (Store, Region, etc.) are dataclasses in operator_core.types.
+This module provides:
+- TiKV domain types: Region, RegionId (dataclasses)
+- Pydantic models for parsing API responses from PD and Prometheus
 
 Notes:
 - PD API returns nested structures (see Pitfall 1 in RESEARCH.md)
@@ -14,7 +11,38 @@ Notes:
 - Store IDs may be int in PD API but string in Prometheus labels (Pitfall 3)
 """
 
+from dataclasses import dataclass
+
+from operator_protocols.types import StoreId
 from pydantic import BaseModel, ConfigDict, Field
+
+
+# =============================================================================
+# TiKV Domain Types
+# =============================================================================
+
+RegionId = int
+"""Unique identifier for a TiKV region (key range)."""
+
+
+@dataclass
+class Region:
+    """
+    Represents a TiKV region (key range).
+
+    A region is a contiguous range of keys, replicated across multiple stores
+    using Raft consensus. Each region has exactly one leader that handles
+    reads and writes, and multiple followers that replicate data.
+
+    Attributes:
+        id: Unique region identifier assigned by PD.
+        leader_store_id: ID of the store currently holding the region leader.
+        peer_store_ids: IDs of all stores holding replicas (including leader).
+    """
+
+    id: RegionId
+    leader_store_id: StoreId
+    peer_store_ids: list[StoreId]
 
 
 # =============================================================================

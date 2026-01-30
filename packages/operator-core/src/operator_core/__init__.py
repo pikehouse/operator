@@ -4,10 +4,11 @@ Operator Core Library
 Core abstractions and interfaces for the AI-powered operator for distributed systems.
 This package provides the foundational components including:
 
-- Subject Protocol: Interface for subject systems (TiKV, Kafka, etc.)
 - Deployment Protocol: Interface for deployment targets (local, cloud, etc.)
-- Data Types: Store, Region, StoreMetrics, ClusterMetrics
+- Data Types: Store, StoreMetrics, ClusterMetrics (re-exported from operator_protocols)
 - CLI infrastructure: Typer-based command structure
+- Monitor loop: Continuous invariant checking
+- Agent lab: Autonomous agent with shell access
 """
 
 __version__ = "0.1.0"
@@ -20,11 +21,8 @@ from operator_core.deploy import (
     ServiceStatus,
     create_local_deployment,
 )
-from operator_core.subject import Subject
 from operator_core.types import (
     ClusterMetrics,
-    Region,
-    RegionId,
     Store,
     StoreId,
     StoreMetrics,
@@ -34,13 +32,9 @@ from operator_protocols import InvariantViolation
 
 __all__ = [
     "__version__",
-    # Subject Protocol
-    "Subject",
-    # Data Types
+    # Data Types (re-exported from operator_protocols)
     "Store",
     "StoreId",
-    "Region",
-    "RegionId",
     "StoreMetrics",
     "ClusterMetrics",
     # Invariant types (from operator_protocols)

@@ -12,8 +12,9 @@ import pytest
 import httpx
 from httpx import Response, Request
 
-from operator_core.types import Store, Region
+from operator_protocols.types import Store
 from tikv_observer.pd_client import PDClient
+from tikv_observer.types import Region
 
 
 class MockTransport(httpx.AsyncBaseTransport):

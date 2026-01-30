@@ -25,7 +25,7 @@ from typing import Any
 
 import httpx
 
-from operator_core.types import StoreId, StoreMetrics
+from operator_protocols.types import StoreId, StoreMetrics
 from tikv_observer.types import PrometheusQueryResponse
 
 

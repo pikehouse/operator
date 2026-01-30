@@ -17,8 +17,8 @@ Per CONTEXT.md decisions:
 from dataclasses import dataclass
 from typing import Any
 
-from operator_core.types import Region
 from operator_protocols.types import ClusterMetrics, Store, StoreMetrics
+from tikv_observer.types import Region
 
 from tikv_observer.pd_client import PDClient
 from tikv_observer.prom_client import PrometheusClient

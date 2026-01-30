@@ -4,9 +4,9 @@ version = "0.1.0"
 description = "TiKV subject implementation for the AI-powered operator"
 requires-python = ">=3.11"
 dependencies = [
-    "operator-core",
     "operator-protocols",
     "httpx>=0.27.0",
+    "pydantic>=2.0.0",
 ]
 
 [build-system]
