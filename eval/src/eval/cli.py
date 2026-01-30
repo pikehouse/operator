@@ -10,7 +10,8 @@ from rich.console import Console
 from rich.table import Table
 
 from eval.runner.db import EvalDB
-from eval.runner.harness import run_trial, run_campaign
+from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config
+from eval.runner.campaign import load_campaign_config, CampaignConfig
 from eval.subjects.tikv import TiKVEvalSubject
 from eval.types import EvalSubject
 
@@ -168,6 +169,87 @@ def run_single(
             console.print(f"\n[bold green]Campaign {campaign_id} complete with {trials} trials[/bold green]")
 
     asyncio.run(run())
+
+
+@run_app.command("campaign")
+def run_campaign_cmd(
+    config_path: Path = typer.Argument(..., help="Path to campaign YAML config"),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    operator_db: Optional[Path] = typer.Option(
+        None,
+        "--operator-db",
+        help="Path to operator.db for command extraction",
+    ),
+) -> None:
+    """Run a campaign from YAML configuration file.
+
+    The config file specifies subjects, chaos types, and trial count.
+    Matrix expansion generates all combinations.
+
+    Example config:
+        name: tikv-chaos-campaign
+        subjects: [tikv]
+        chaos_types:
+          - type: node_kill
+          - type: latency
+            params: {min_ms: 50, max_ms: 150}
+          - type: disk_pressure
+            params: {fill_percent: 80}
+        trials_per_combination: 3
+        parallel: 2
+        cooldown_seconds: 5
+        include_baseline: true
+
+    Examples:
+        eval run campaign config.yaml
+        eval run campaign campaign.yaml --operator-db data/operator.db
+    """
+    # Validate config file exists
+    if not config_path.exists():
+        console.print(f"[red]Error: Config file not found: {config_path}[/red]")
+        raise typer.Exit(1)
+
+    # Load and validate config
+    try:
+        config = load_campaign_config(config_path)
+    except Exception as e:
+        console.print(f"[red]Error loading config: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Show campaign summary
+    console.print(f"\n[bold]Campaign: {config.name}[/bold]")
+    console.print(f"Subjects: {config.subjects}")
+    console.print(f"Chaos types: {[c.type for c in config.chaos_types]}")
+    console.print(f"Trials per combination: {config.trials_per_combination}")
+    console.print(f"Parallel: {config.parallel}")
+    console.print(f"Cooldown: {config.cooldown_seconds}s")
+    console.print(f"Include baseline: {config.include_baseline}")
+
+    # Auto-detect operator.db if not specified
+    if operator_db is None:
+        default_operator_db = Path("data/operator.db")
+        if default_operator_db.exists():
+            operator_db = default_operator_db
+            console.print(f"[dim]Using operator.db: {operator_db}[/dim]")
+
+    # Run campaign
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+
+        return await run_campaign_from_config(
+            config=config,
+            db=db,
+            operator_db_path=operator_db,
+        )
+
+    campaign_id = asyncio.run(run())
+    console.print(f"\n[bold green]Campaign {campaign_id} finished[/bold green]")
+    console.print(f"Analyze with: eval analyze {campaign_id}")
 
 
 @app.command()
