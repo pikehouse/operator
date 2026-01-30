@@ -31,6 +31,7 @@ class CampaignConfig(BaseModel):
     parallel: int = Field(default=1, ge=1, le=10)
     cooldown_seconds: int = Field(default=0, ge=0)
     include_baseline: bool = False
+    variant: str = Field(default="default", description="Variant name to use for agent configuration")
 
     @field_validator("subjects")
     @classmethod
@@ -62,6 +63,7 @@ def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
                 "chaos_params": chaos.params,
                 "trial_index": trial_idx,
                 "baseline": False,
+                "variant": config.variant,
             })
 
     # Optional baseline trials (one per subject, no chaos)
@@ -73,6 +75,7 @@ def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
                 "chaos_params": {},
                 "trial_index": 0,
                 "baseline": True,
+                "variant": config.variant,
             })
 
     return trials
