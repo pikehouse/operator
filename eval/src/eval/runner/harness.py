@@ -9,9 +9,10 @@ from typing import Any
 
 from rich.console import Console
 
-from eval.types import Campaign, EvalSubject, Trial
+from eval.types import Campaign, EvalSubject, Trial, VariantConfig
 from eval.runner.db import EvalDB
 from eval.runner.campaign import CampaignConfig, expand_campaign_matrix
+from eval.variants import get_variant
 
 
 console = Console()
@@ -299,12 +300,21 @@ async def run_campaign_from_config(
     trial_specs = expand_campaign_matrix(config)
     total_trials = len(trial_specs)
 
+    # Load variant configuration
+    try:
+        variant_config = get_variant(config.variant)
+        console.print(f"[dim]Using variant: {variant_config.name} (model: {variant_config.model})[/dim]")
+    except ValueError as e:
+        console.print(f"[red]Error loading variant: {e}[/red]")
+        raise
+
     # Create campaign record
     campaign = Campaign(
         subject_name=",".join(config.subjects),
         chaos_type=",".join(c.type for c in config.chaos_types),
         trial_count=total_trials,
         baseline=config.include_baseline,
+        variant_name=config.variant,
         created_at=now(),
     )
     campaign_id = await db.insert_campaign(campaign)

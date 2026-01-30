@@ -229,6 +229,7 @@ def run_campaign_cmd(
     console.print(f"Parallel: {config.parallel}")
     console.print(f"Cooldown: {config.cooldown_seconds}s")
     console.print(f"Include baseline: {config.include_baseline}")
+    console.print(f"Variant: {config.variant}")
 
     # Auto-detect operator.db if not specified
     if operator_db is None:
@@ -630,7 +631,7 @@ def list_campaigns(
     campaigns, total = asyncio.run(run())
 
     if json_output:
-        # Output JSON array with keys: id, subject_name, chaos_type, trial_count, baseline, created_at
+        # Output JSON array with keys: id, subject_name, chaos_type, trial_count, baseline, variant_name, created_at
         data = [
             {
                 "id": c.id,
@@ -638,6 +639,7 @@ def list_campaigns(
                 "chaos_type": c.chaos_type,
                 "trial_count": c.trial_count,
                 "baseline": c.baseline,
+                "variant_name": getattr(c, 'variant_name', 'default'),
                 "created_at": c.created_at,
             }
             for c in campaigns
@@ -652,13 +654,14 @@ def list_campaigns(
         print(f"Database: {db_path}")
         return
 
-    # Header row with fixed widths: ID(6), Date(12), Subject(10), Chaos(12), Trials(8), Baseline(8)
-    print(f"{'ID':<6} {'Date':<12} {'Subject':<10} {'Chaos':<12} {'Trials':<8} {'Baseline':<8}")
-    print("-" * 58)
+    # Header row with fixed widths: ID(6), Date(12), Subject(10), Chaos(12), Variant(12), Trials(8), Baseline(8)
+    print(f"{'ID':<6} {'Date':<12} {'Subject':<10} {'Chaos':<12} {'Variant':<12} {'Trials':<8} {'Baseline':<8}")
+    print("-" * 70)
     for c in campaigns:
         date_str = c.created_at[:10] if c.created_at else "N/A"
         baseline_str = "Yes" if c.baseline else "No"
-        print(f"{c.id:<6} {date_str:<12} {c.subject_name:<10} {c.chaos_type:<12} {c.trial_count:<8} {baseline_str:<8}")
+        variant_str = getattr(c, 'variant_name', 'default')[:10]
+        print(f"{c.id:<6} {date_str:<12} {c.subject_name:<10} {c.chaos_type:<12} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8}")
 
     # Show pagination info
     showing_end = min(offset + limit, total)
