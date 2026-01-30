@@ -91,8 +91,27 @@ async def get_trial(request: Request, trial_id: int):
         return HTMLResponse(content="Trial not found", status_code=404)
 
     # Parse commands and chaos metadata from JSON
-    commands = json.loads(trial.commands_json) if trial.commands_json else []
+    raw_commands = json.loads(trial.commands_json) if trial.commands_json else []
     chaos_meta = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
+
+    # Extract command strings from various formats
+    commands = []
+    for cmd in raw_commands:
+        if isinstance(cmd, str):
+            commands.append(cmd)
+        elif isinstance(cmd, dict):
+            # Try to get command from tool_params (JSON string)
+            tool_params = cmd.get("tool_params", "")
+            if tool_params:
+                try:
+                    params = json.loads(tool_params) if isinstance(tool_params, str) else tool_params
+                    commands.append(params.get("command", str(cmd)))
+                except json.JSONDecodeError:
+                    commands.append(cmd.get("command", str(cmd)))
+            else:
+                commands.append(cmd.get("command", str(cmd)))
+        else:
+            commands.append(str(cmd))
 
     # Get chaos description
     chaos_type = chaos_meta.get("chaos_type", "unknown")

@@ -753,8 +753,22 @@ def show_detail(
         if commands:
             print(f"Commands ({len(commands)}):")
             for i, cmd in enumerate(commands, 1):
-                # Each command is a string or dict with 'command' key
-                cmd_str = cmd if isinstance(cmd, str) else cmd.get("command", str(cmd))
+                # Extract command string - handle various formats
+                if isinstance(cmd, str):
+                    cmd_str = cmd
+                elif isinstance(cmd, dict):
+                    # Try to get command from tool_params (JSON string)
+                    tool_params = cmd.get("tool_params", "")
+                    if tool_params:
+                        try:
+                            params = json.loads(tool_params) if isinstance(tool_params, str) else tool_params
+                            cmd_str = params.get("command", str(cmd))
+                        except json.JSONDecodeError:
+                            cmd_str = cmd.get("command", str(cmd))
+                    else:
+                        cmd_str = cmd.get("command", str(cmd))
+                else:
+                    cmd_str = str(cmd)
                 # Indent and truncate long commands
                 cmd_display = cmd_str[:80] + "..." if len(cmd_str) > 80 else cmd_str
                 print(f"  {i}. {cmd_display}")
