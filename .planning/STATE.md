@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 38 - Chaos Expansion (COMPLETE)
-**Plan:** 2/2 complete
-**Status:** YAML campaign configuration with parallel execution and matrix expansion
-**Last activity:** 2026-01-30 — Completed 38-02-PLAN.md
+**Phase:** 39 - Config Variants (IN PROGRESS)
+**Plan:** 1/2 complete
+**Status:** Pydantic-validated YAML variant system with discovery and CLI listing
+**Last activity:** 2026-01-30 — Completed 39-01-PLAN.md
 
-Progress: ████████████░░░░░░░░ (v3.2: 60%)
+Progress: █████████████░░░░░░░ (v3.2: 65%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete (2/2 plans)
+**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete, Phase 39 in progress (1/2 plans)
 
-**Next:** Plan Phase 39 (Config Variants)
+**Next:** Plan 39-02 (Campaign Variant Integration)
 
 ## Session Continuity
 
-**Last session:** 2026-01-30T00:06:47Z
-**Stopped at:** Completed 38-02-PLAN.md (Phase 38 complete - 2/2 plans)
+**Last session:** 2026-01-30T01:59:33Z
+**Stopped at:** Completed 39-01-PLAN.md (Phase 39 in progress - 1/2 plans)
 **Resume file:** None
-**Next:** Plan Phase 39 (Config Variants)
+**Next:** Plan 39-02 (Campaign Variant Integration)
 
 ---
-*State updated: 2026-01-30 (Phase 38 complete - 2/2 plans)*
+*State updated: 2026-01-30 (Phase 39 in progress - 1/2 plans)*
 
 ## Decisions Made
 
@@ -111,6 +111,10 @@ See: .planning/MILESTONES.md
 | 38-02 | Campaign matrix expansion uses Cartesian product | itertools.product generates subjects x chaos_types x trials_per_combination efficiently |
 | 38-02 | Cleanup chaos after final_state capture | Ensures final_state snapshot reflects during-chaos conditions before reverting |
 | 38-02 | run_campaign_from_config is NEW function | Preserves backward compatibility - existing run_campaign() unchanged for CLI |
+| 39-01 | No runtime model validation in VariantConfig | Allows testing with new models without code changes, runtime errors acceptable for eval harness |
+| 39-01 | Inline system prompts in YAML | Self-contained variant files, easier version control than file path references |
+| 39-01 | tools_config structure: tool_choice and enabled_tools | Maps to Anthropic API parameters, extensible for future options |
+| 39-01 | Variant discovery via glob in eval/variants/ | One YAML file per variant, skips invalid files silently |
 
 ## Open Issues
 
