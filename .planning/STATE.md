@@ -4,9 +4,9 @@
 
 **Milestone:** v3.2 Evaluation Harness
 **Phase:** 39 - Config Variants (COMPLETE)
-**Plan:** 3/3 complete
-**Status:** Variant comparison analysis with balanced scorecard CLI command
-**Last activity:** 2026-01-30 — Completed 39-03-PLAN.md
+**Plan:** 4/4 complete
+**Status:** Gap closure - variant config flows from harness through database to agent
+**Last activity:** 2026-01-30 — Completed 39-04-PLAN.md
 
 Progress: ████████████████████ (v3.2: 100%)
 
@@ -89,8 +89,8 @@ See: .planning/MILESTONES.md
 
 ## Session Continuity
 
-**Last session:** 2026-01-30T01:05:08Z
-**Stopped at:** Completed 39-03-PLAN.md (Phase 39 complete, v3.2 milestone complete)
+**Last session:** 2026-01-30T01:50:38Z
+**Stopped at:** Completed 39-04-PLAN.md (Gap closure, Phase 39 complete, v3.2 milestone complete)
 **Resume file:** None
 **Next:** v3.2 milestone audit
 
@@ -123,6 +123,10 @@ See: .planning/MILESTONES.md
 | 39-03 | Filter non-baseline campaigns for comparison | Baseline campaigns test self-healing, not agent variants |
 | 39-03 | Sort variants by name | Consistent output order for reproducible comparisons |
 | 39-03 | Aggregate across campaigns per variant | Single variant may have multiple campaigns (re-runs, different dates) |
+| 39-04 | Store variant config in tickets table for cross-process communication | Agent runs in separate process, polls operator.db. Environment variables won't work across process boundary |
+| 39-04 | Harness writes variant via SQL UPDATE after ticket creation | Variant config is eval-harness-specific, not part of monitor loop. Direct SQL keeps monitor unchanged |
+| 39-04 | Agent reads variant from ticket with graceful fallbacks | ticket.variant_model or default preserves backward compatibility with existing tickets |
+| 39-04 | Write variant config after chaos injection, before agent polls | 2-second sleep gives monitor time to create ticket, update before agent reads ensures config is present |
 
 ## Open Issues
 
