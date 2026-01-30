@@ -14,6 +14,7 @@ from eval.runner.harness import run_trial, run_campaign, run_campaign_from_confi
 from eval.runner.campaign import load_campaign_config, CampaignConfig
 from eval.subjects.tikv import TiKVEvalSubject
 from eval.types import EvalSubject
+from eval.variants import load_all_variants
 
 app = typer.Typer(
     name="eval",
@@ -688,6 +689,66 @@ def viewer(
     app_instance = create_app(db_path, operator_db)
     console.print(f"Starting viewer at http://{host}:{port}")
     uvicorn.run(app_instance, host=host, port=port)
+
+
+@app.command("list-variants")
+def list_variants_cmd(
+    variants_dir: Optional[Path] = typer.Option(
+        None,
+        "--dir",
+        help="Path to variants directory (default: eval/variants/)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List available agent configuration variants.
+
+    Shows all variants found in the variants directory with their model and
+    system prompt preview.
+
+    Examples:
+        eval list-variants
+        eval list-variants --json
+        eval list-variants --dir ./my-variants/
+    """
+    variants = load_all_variants(variants_dir)
+
+    if not variants:
+        console.print("[yellow]No variants found[/yellow]")
+        if variants_dir:
+            console.print(f"Directory: {variants_dir}")
+        else:
+            console.print("Default directory: eval/variants/")
+        return
+
+    if json_output:
+        data = [
+            {
+                "name": v.name,
+                "model": v.model,
+                "system_prompt_preview": v.system_prompt[:100] + "..." if len(v.system_prompt) > 100 else v.system_prompt,
+                "tools_config": v.tools_config,
+            }
+            for v in variants.values()
+        ]
+        print(json.dumps(data, indent=2))
+        return
+
+    # Plain text table
+    table = Table(title="Available Variants")
+    table.add_column("Name", style="cyan")
+    table.add_column("Model")
+    table.add_column("System Prompt Preview")
+    table.add_column("Tools")
+
+    for v in sorted(variants.values(), key=lambda x: x.name):
+        prompt_preview = v.system_prompt.split('\n')[0][:50]
+        if len(v.system_prompt) > 50 or '\n' in v.system_prompt:
+            prompt_preview += "..."
+        tools = ", ".join(v.tools_config.get("enabled_tools", ["(default)"])[:3])
+        table.add_row(v.name, v.model, prompt_preview, tools)
+
+    console.print(table)
+    console.print(f"\n{len(variants)} variant(s) found")
 
 
 def main() -> None:
