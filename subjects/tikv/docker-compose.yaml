@@ -1,14 +1,21 @@
 # TiKV Cluster for Operator Testing
 # 3 PD nodes + 3 TiKV nodes + Prometheus + Grafana
 # Multi-arch images (v8.5.5)
+#
+# Supports parallel instances via:
+#   - COMPOSE_PROJECT_NAME or -p flag for container/volume isolation
+#   - Port env vars for host port isolation (default: standard ports)
+#
+# Example for second instance:
+#   PD_HOST_PORT=12379 TIKV_HOST_PORT=30160 PROM_HOST_PORT=19090 GRAFANA_HOST_PORT=13000 \
+#   docker-compose -p tikv-eval-1 up
 
 services:
   # PD Cluster (3 nodes)
   pd0:
     image: pingcap/pd:v8.5.5
-    container_name: pd0
     ports:
-      - "2379:2379"
+      - "${PD_HOST_PORT:-2379}:2379"
     volumes:
       - pd0-data:/data
     command: >
@@ -29,7 +36,6 @@ services:
 
   pd1:
     image: pingcap/pd:v8.5.5
-    container_name: pd1
     volumes:
       - pd1-data:/data
     command: >
@@ -50,7 +56,6 @@ services:
 
   pd2:
     image: pingcap/pd:v8.5.5
-    container_name: pd2
     volumes:
       - pd2-data:/data
     command: >
@@ -72,10 +77,9 @@ services:
   # TiKV Cluster (3 nodes)
   tikv0:
     image: pingcap/tikv:v8.5.5
-    container_name: tikv0
     ports:
-      - "20160:20160"
-      - "20180:20180"
+      - "${TIKV_HOST_PORT:-20160}:20160"
+      - "${TIKV_STATUS_HOST_PORT:-20180}:20180"
     volumes:
       - tikv0-data:/data
     cap_add:
@@ -104,7 +108,6 @@ services:
 
   tikv1:
     image: pingcap/tikv:v8.5.5
-    container_name: tikv1
     volumes:
       - tikv1-data:/data
     cap_add:
@@ -133,7 +136,6 @@ services:
 
   tikv2:
     image: pingcap/tikv:v8.5.5
-    container_name: tikv2
     volumes:
       - tikv2-data:/data
     cap_add:
@@ -163,9 +165,8 @@ services:
   # Observability Stack
   prometheus:
     image: prom/prometheus:latest
-    container_name: prometheus
     ports:
-      - "9090:9090"
+      - "${PROM_HOST_PORT:-9090}:9090"
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -181,9 +182,8 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
     volumes:
       - ./config/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - grafana-data:/var/lib/grafana
@@ -198,7 +198,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ycsb
-    container_name: ycsb
     profiles:
       - load
     volumes:
@@ -216,7 +215,6 @@ services:
     build:
       context: ../..
       dockerfile: subjects/tikv/Dockerfile.operator
-    container_name: operator
     environment:
       - PD_ENDPOINT=http://pd0:2379
       - PROMETHEUS_URL=http://prometheus:9090

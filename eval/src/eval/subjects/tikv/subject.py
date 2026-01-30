@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import random
 from pathlib import Path
 from typing import Any
@@ -23,18 +24,35 @@ from eval.subjects.tikv.chaos import (
 )
 
 
+# Port allocation for parallel instances
+# Instance 0: standard ports (2379, 20160, etc.)
+# Instance N: base + N*10000
+BASE_PD_PORT = 2379
+BASE_TIKV_PORT = 20160
+BASE_TIKV_STATUS_PORT = 20180
+BASE_PROM_PORT = 9090
+BASE_GRAFANA_PORT = 3000
+PORT_INCREMENT = 10000
+
+
 class TiKVEvalSubject:
     """TiKV cluster evaluation subject.
 
     Implements EvalSubject protocol for TiKV clusters managed via Docker Compose.
     Uses subjects/tikv/docker-compose.yaml by default.
+
+    Supports parallel instances via instance_id parameter, which:
+    - Sets Docker Compose project name for container/volume isolation
+    - Allocates unique host ports (instance N uses base_port + N*10000)
     """
 
-    def __init__(self, compose_file: Path | None = None):
+    def __init__(self, compose_file: Path | None = None, instance_id: int = 0):
         """Initialize TiKV eval subject.
 
         Args:
             compose_file: Path to docker-compose.yaml. Defaults to subjects/tikv/docker-compose.yaml.
+            instance_id: Instance number for parallel execution (0, 1, 2, ...).
+                         Each instance gets isolated containers/volumes and unique ports.
         """
         if compose_file is None:
             # Default to subjects/tikv/docker-compose.yaml relative to repo root
@@ -44,8 +62,41 @@ class TiKVEvalSubject:
             )
 
         self.compose_file = compose_file
-        self.docker = DockerClient(compose_files=[compose_file])
-        self.pd_endpoint = "http://localhost:2379"  # PD API endpoint
+        self.instance_id = instance_id
+
+        # Calculate ports for this instance
+        port_offset = instance_id * PORT_INCREMENT
+        self.pd_port = BASE_PD_PORT + port_offset
+        self.tikv_port = BASE_TIKV_PORT + port_offset
+        self.tikv_status_port = BASE_TIKV_STATUS_PORT + port_offset
+        self.prom_port = BASE_PROM_PORT + port_offset
+        self.grafana_port = BASE_GRAFANA_PORT + port_offset
+
+        # Project name for Docker Compose isolation
+        self.project_name = f"tikv-eval-{instance_id}" if instance_id > 0 else "tikv"
+
+        # Environment variables for compose file port substitution
+        self._compose_env = {
+            "PD_HOST_PORT": str(self.pd_port),
+            "TIKV_HOST_PORT": str(self.tikv_port),
+            "TIKV_STATUS_HOST_PORT": str(self.tikv_status_port),
+            "PROM_HOST_PORT": str(self.prom_port),
+            "GRAFANA_HOST_PORT": str(self.grafana_port),
+        }
+
+        # Merge with existing environment
+        env_with_ports = os.environ.copy()
+        env_with_ports.update(self._compose_env)
+
+        # Create Docker client with project name
+        self.docker = DockerClient(
+            compose_files=[compose_file],
+            compose_project_name=self.project_name,
+            compose_env=env_with_ports,
+        )
+
+        # PD API endpoint (host port)
+        self.pd_endpoint = f"http://localhost:{self.pd_port}"
 
     async def reset(self) -> None:
         """Reset TiKV cluster via docker-compose down/up with volume wipe."""

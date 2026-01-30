@@ -345,6 +345,72 @@ async def run_campaign(
     return campaign_id
 
 
+class SubjectPool:
+    """Pool of EvalSubject instances for parallel trial execution.
+
+    Each instance has its own isolated cluster (different Docker Compose project,
+    different host ports) to enable true parallel execution without conflicts.
+    """
+
+    def __init__(self, pool_size: int, subject_type: str = "tikv"):
+        """Initialize pool with N subject instances.
+
+        Args:
+            pool_size: Number of parallel instances (each gets unique ports)
+            subject_type: Subject type to create (currently only "tikv")
+        """
+        from eval.subjects.tikv import TiKVEvalSubject
+
+        self.pool_size = pool_size
+        self.subject_type = subject_type
+
+        # Create instances with unique instance_ids
+        self._instances: list[EvalSubject] = []
+        for i in range(pool_size):
+            if subject_type == "tikv":
+                self._instances.append(TiKVEvalSubject(instance_id=i))
+            else:
+                raise ValueError(f"Unknown subject type: {subject_type}")
+
+        # Track which instances are available
+        self._available: asyncio.Queue[int] = asyncio.Queue()
+        for i in range(pool_size):
+            self._available.put_nowait(i)
+
+        console.print(f"[dim]Created pool of {pool_size} {subject_type} instances[/dim]")
+        for i, inst in enumerate(self._instances):
+            if hasattr(inst, 'pd_port'):
+                console.print(f"[dim]  Instance {i}: project={inst.project_name}, pd_port={inst.pd_port}[/dim]")
+
+    async def acquire(self) -> tuple[int, EvalSubject]:
+        """Acquire an available instance from the pool.
+
+        Returns:
+            Tuple of (instance_id, subject_instance)
+        """
+        instance_id = await self._available.get()
+        return instance_id, self._instances[instance_id]
+
+    def release(self, instance_id: int) -> None:
+        """Release instance back to the pool."""
+        self._available.put_nowait(instance_id)
+
+    async def shutdown(self) -> None:
+        """Shutdown all instances in the pool."""
+        console.print("[dim]Shutting down subject pool...[/dim]")
+        for i, instance in enumerate(self._instances):
+            try:
+                # Down the compose project
+                await asyncio.to_thread(
+                    instance.docker.compose.down,
+                    volumes=True,
+                    remove_orphans=True,
+                )
+                console.print(f"[dim]  Instance {i} shut down[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]  Instance {i} shutdown warning: {e}[/yellow]")
+
+
 async def run_campaign_from_config(
     config: CampaignConfig,
     db: EvalDB,
@@ -355,8 +421,8 @@ async def run_campaign_from_config(
     This is a NEW function for YAML-based campaigns.
     The existing run_campaign() function remains unchanged for backward compatibility.
 
-    Uses asyncio.Semaphore to limit concurrent trials.
-    Continues campaign even if individual trials fail.
+    Uses a pool of isolated subject instances for TRUE parallel execution.
+    Each parallel slot has its own Docker Compose project with unique ports.
 
     Args:
         config: Loaded CampaignConfig
@@ -366,8 +432,6 @@ async def run_campaign_from_config(
     Returns:
         campaign_id for later analysis
     """
-    from eval.subjects.tikv import TiKVEvalSubject
-
     # Expand matrix to trial specs
     trial_specs = expand_campaign_matrix(config)
     total_trials = len(trial_specs)
@@ -392,54 +456,65 @@ async def run_campaign_from_config(
     campaign_id = await db.insert_campaign(campaign)
     console.print(f"[bold green]Campaign {campaign_id} started ({total_trials} trials)[/bold green]")
 
-    # Semaphore for parallelism control
-    semaphore = asyncio.Semaphore(config.parallel)
+    # Determine subject type (all subjects in config should be same type for now)
+    subject_type = config.subjects[0] if config.subjects else "tikv"
+
+    # Create pool of isolated subject instances
+    pool = SubjectPool(pool_size=config.parallel, subject_type=subject_type)
+
     completed = 0
     failed = 0
 
     async def run_single_trial(spec: dict, trial_num: int) -> Trial | None:
         nonlocal completed, failed
-        async with semaphore:
-            try:
-                console.print(f"\n[bold]Trial {trial_num}/{total_trials}: {spec['subject']}/{spec['chaos_type']}[/bold]")
 
-                # Get subject instance (fresh for each trial)
-                if spec["subject"] == "tikv":
-                    subject = TiKVEvalSubject()
-                else:
-                    raise ValueError(f"Unknown subject: {spec['subject']}")
+        # Acquire instance from pool (blocks until one is available)
+        instance_id, subject = await pool.acquire()
+        try:
+            console.print(
+                f"\n[bold]Trial {trial_num}/{total_trials}: "
+                f"{spec['subject']}/{spec['chaos_type']} "
+                f"(instance {instance_id})[/bold]"
+            )
 
-                trial = await run_trial(
-                    subject=subject,
-                    chaos_type=spec["chaos_type"] if not spec["baseline"] else "none",
-                    campaign_id=campaign_id,
-                    baseline=spec["baseline"],
-                    operator_db_path=operator_db_path,
-                    chaos_params=spec["chaos_params"],
-                    variant_config=variant_config,
-                )
+            trial = await run_trial(
+                subject=subject,
+                chaos_type=spec["chaos_type"] if not spec["baseline"] else "none",
+                campaign_id=campaign_id,
+                baseline=spec["baseline"],
+                operator_db_path=operator_db_path,
+                chaos_params=spec["chaos_params"],
+                variant_config=variant_config,
+            )
 
-                trial_id = await db.insert_trial(trial)
-                console.print(f"[green]Trial {trial_id} completed[/green]")
-                completed += 1
+            trial_id = await db.insert_trial(trial)
+            console.print(f"[green]Trial {trial_id} completed (instance {instance_id})[/green]")
+            completed += 1
 
-                # Cooldown between trials
-                if config.cooldown_seconds > 0:
-                    await asyncio.sleep(config.cooldown_seconds)
+            # Cooldown between trials
+            if config.cooldown_seconds > 0:
+                await asyncio.sleep(config.cooldown_seconds)
 
-                return trial
+            return trial
 
-            except Exception as e:
-                console.print(f"[red]Trial failed: {e}[/red]")
-                failed += 1
-                return None
+        except Exception as e:
+            console.print(f"[red]Trial failed (instance {instance_id}): {e}[/red]")
+            failed += 1
+            return None
 
-    # Run trials (semaphore limits concurrency)
+        finally:
+            # Always release instance back to pool
+            pool.release(instance_id)
+
+    # Run all trials - pool manages parallelism
     tasks = [
         run_single_trial(spec, i + 1)
         for i, spec in enumerate(trial_specs)
     ]
     await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Shutdown pool (optional - leaves clusters running for inspection)
+    # await pool.shutdown()
 
     console.print(f"\n[bold green]Campaign {campaign_id} complete[/bold green]")
     console.print(f"Completed: {completed}, Failed: {failed}")
