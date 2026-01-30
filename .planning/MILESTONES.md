@@ -1,5 +1,32 @@
 # Project Milestones: Operator
 
+## v3.2 Evaluation Harness (Shipped: 2026-01-30)
+
+**Delivered:** Standalone eval/ harness that injects chaos, monitors agent problem-solving, grades performance, and provides historical analysis with A/B testing support.
+
+**Phases completed:** 35-39 (16 plans total)
+
+**Key accomplishments:**
+- EvalSubject protocol with TiKV implementation (reset, inject, capture state)
+- 4 chaos types: node_kill, latency, disk_pressure, network_partition
+- Trial scoring with time-to-detect, time-to-resolve, command analysis
+- Campaign YAML config with matrix expansion and parallel execution
+- Config variants for A/B testing different agent configurations
+- Managed operator mode (auto-start/stop monitor and agent)
+- Web viewer for browsing campaigns and trial reasoning
+
+**Stats:**
+- 21 Python files, 3,703 lines in eval/
+- 5 phases, 16 plans
+- 32 requirements shipped
+- 2 days from start to ship
+
+**Git range:** `feat(35-01)` → `f533433` (fix: delete old operator.db)
+
+**What's next:** Additional subjects, automated regression testing, production operator deployment
+
+---
+
 ## v3.1 Demo Update (Shipped: 2026-01-29)
 
 **Delivered:** Fixed TUI demo to work with v3.0 agent_lab architecture. Both TiKV and ratelimiter demos run end-to-end with autonomous agent diagnosis and remediation.

@@ -2,13 +2,13 @@
 
 ## Current Position
 
-**Milestone:** v3.2 Evaluation Harness
-**Phase:** 39 - Config Variants (COMPLETE)
-**Plan:** 4/4 complete
-**Status:** Gap closure - variant config flows from harness through database to agent
-**Last activity:** 2026-01-30 — Completed 39-04-PLAN.md
+**Milestone:** v3.2 SHIPPED
+**Phase:** —
+**Plan:** —
+**Status:** Awaiting next milestone definition
+**Last activity:** 2026-01-30 — v3.2 Evaluation Harness shipped
 
-Progress: ████████████████████ (v3.2: 100%)
+Progress: ████████████████████ 100%
 
 ## Project Reference
 
@@ -30,25 +30,27 @@ See: .planning/PROJECT.md (updated 2026-01-28 after v3.0)
 | v2.3 | ARCHIVED | 2026-01-28 |
 | v3.0 | SHIPPED | 2026-01-28 |
 | v3.1 | SHIPPED | 2026-01-29 |
-| v3.2 | IN PROGRESS | 2026-01-29 |
+| v3.2 | SHIPPED | 2026-01-30 |
 
 See: .planning/MILESTONES.md
 
-## v3.0 Delivered
+## v3.2 Delivered
 
-**Philosophy:** Give Claude autonomy and a well-equipped environment. Safety via isolation (Docker container), not restrictions. Audit everything, approve nothing.
+**Philosophy:** Evaluate how well Claude operates through chaos events — compare to baseline, detect regressions, analyze trends.
 
 **Key deliverables:**
-- Agent container with Python 3.12, Docker CLI, SRE tools
-- shell(command, reasoning) tool with 120s timeout
-- Core agent loop (198 lines) using tool_runner
-- Database audit logging with reasoning, tool_call, tool_result entries
-- Haiku summarization for concise audit trail
-- Docker Compose integration with TiKV network
-- CLI audit commands (operator audit list/show)
-- Autonomous diagnosis and remediation validated (TiKV failure scenario)
+- EvalSubject protocol with TiKV implementation (reset, inject, capture state)
+- 4 chaos types: node_kill, latency, disk_pressure, network_partition
+- Trial scoring with time-to-detect, time-to-resolve, command analysis
+- Campaign YAML config with matrix expansion and parallel execution
+- Config variants for A/B testing different agent configurations
+- Managed operator mode (auto-start/stop monitor and agent)
+- Web viewer for browsing campaigns and trial reasoning
 
-**Evidence:** Session 2026-01-28T20-54-48-3a029c12 shows Claude diagnosing and fixing TiKV failure autonomously.
+**Stats:**
+- 21 Python files, 3,703 lines in eval/
+- 5 phases, 16 plans
+- 32 requirements shipped
 
 ## Archives
 
@@ -68,34 +70,19 @@ See: .planning/MILESTONES.md
 | milestones/v3.0-REQUIREMENTS.md | v3.0 requirements (14 total) |
 | milestones/v3.0-MILESTONE-AUDIT.md | v3.0 audit report |
 | milestones/v3.1-ROADMAP.md | v3.1 roadmap (2 phases) |
-
-## Current Milestone: v3.2 Evaluation Harness
-
-**Milestone Goal:** Build eval/ — a standalone harness that injects chaos, monitors agent problem-solving, grades performance, and provides historical analysis.
-
-**Roadmap:** .planning/milestones/v3.2-ROADMAP.md
-**Requirements:** .planning/REQUIREMENTS.md (30 requirements)
-
-**Phases:**
-- Phase 35: Runner Layer (11 requirements)
-- Phase 36: Analysis Layer (9 requirements)
-- Phase 37: Viewer Layer (5 requirements)
-- Phase 38: Chaos Expansion (4 requirements)
-- Phase 39: Config Variants (3 requirements)
-
-**Status:** Phase 35 complete (11/11), Phase 36 complete (9/9), Phase 37 complete (5/5), Phase 38 complete (4/4), Phase 39 complete (3/3)
-
-**Next:** v3.2 milestone audit
+| milestones/v3.2-ROADMAP.md | v3.2 roadmap (5 phases) |
+| milestones/v3.2-REQUIREMENTS.md | v3.2 requirements (32 total) |
+| milestones/v3.2-MILESTONE-AUDIT.md | v3.2 audit report |
 
 ## Session Continuity
 
-**Last session:** 2026-01-30T01:50:38Z
-**Stopped at:** Completed 39-04-PLAN.md (Gap closure, Phase 39 complete, v3.2 milestone complete)
+**Last session:** 2026-01-30
+**Stopped at:** v3.2 milestone shipped
 **Resume file:** None
-**Next:** v3.2 milestone audit
+**Next:** /gsd:new-milestone to define v3.3 or v4.0
 
 ---
-*State updated: 2026-01-30 (v3.2 milestone complete - all 5 phases delivered)*
+*State updated: 2026-01-30 (v3.2 Evaluation Harness shipped)*
 
 ## Decisions Made
 
