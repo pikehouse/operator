@@ -32,8 +32,12 @@ class OperatorProcesses:
         eval_subject: Optional["EvalSubject"] = None,
     ):
         self.subject_name = subject_name
-        self.operator_db_path = operator_db_path
         self.project_root = project_root or self._find_project_root()
+        # Resolve operator_db_path relative to project_root if not absolute
+        if operator_db_path.is_absolute():
+            self.operator_db_path = operator_db_path
+        else:
+            self.operator_db_path = (self.project_root / operator_db_path).resolve()
         self.eval_subject = eval_subject  # Used to reset cluster before starting
         self.monitor_proc: Optional[subprocess.Popen] = None
         self.agent_proc: Optional[subprocess.Popen] = None

@@ -130,8 +130,9 @@ def run_single(
         managed_mode = not operator_running and not baseline
         console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'skipped (baseline)'}\n")
 
-        async def execute_trials(skip_reset: bool = False):
+        async def execute_trials(skip_reset: bool = False, resolved_db_path: Path | None = None):
             """Execute the actual trials."""
+            db_path_to_use = resolved_db_path or operator_db
             if trials == 1:
                 # Single trial (CLI-01, CLI-02)
                 from eval.types import Campaign
@@ -151,7 +152,7 @@ def run_single(
                     chaos_type=chaos,
                     campaign_id=campaign_id,
                     baseline=baseline,
-                    operator_db_path=operator_db,
+                    operator_db_path=db_path_to_use,
                     skip_reset=skip_reset,
                 )
 
@@ -178,7 +179,7 @@ def run_single(
                     trial_count=trials,
                     db=db,
                     baseline=baseline,
-                    operator_db_path=operator_db,
+                    operator_db_path=db_path_to_use,
                 )
 
                 console.print(f"\n[bold green]Campaign {campaign_id} complete with {trials} trials[/bold green]")
@@ -189,7 +190,8 @@ def run_single(
             # Pass eval_subject so it can reset cluster before starting monitor
             async with OperatorProcesses(subject, operator_db, eval_subject=eval_subject) as op:
                 # skip_reset=True because OperatorProcesses already reset the cluster
-                await execute_trials(skip_reset=True)
+                # Use op.operator_db_path which is resolved to absolute path
+                await execute_trials(skip_reset=True, resolved_db_path=op.operator_db_path)
         else:
             # External mode or baseline: just run trials
             await execute_trials(skip_reset=False)
