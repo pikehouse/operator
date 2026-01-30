@@ -80,7 +80,7 @@ async def run_tui_test():
     # Step 3: Manually initialize components (simulating what run() does)
     print("Step 3: Starting subprocesses and health poller...")
 
-    from operator_core.tui.subprocess import SubprocessManager
+    from demo.tui.subprocess import SubprocessManager
 
     controller._subprocess_mgr = SubprocessManager()
 

@@ -2,7 +2,7 @@
 TUI-integrated demo controller for full-featured demos.
 
 This module provides TUIDemoController which combines:
-- Existing Rich TUI 5-panel layout (from operator_core.tui.layout)
+- Rich TUI 5-panel layout (from demo.tui.layout)
 - Subject-agnostic demo infrastructure (chapters, health pollers, chaos)
 - Real subprocess management (monitor and agent daemons)
 
@@ -34,14 +34,14 @@ from rich.console import Console
 from rich.live import Live
 
 from demo.status import demo_status
-from demo.types import Chapter, DemoState, HealthPollerProtocol
-from operator_core.tui.keyboard import KeyboardTask
-from operator_core.tui.layout import (
+from demo.tui.keyboard import KeyboardTask
+from demo.tui.layout import (
     create_layout,
     make_cluster_panel,
     make_panel,
 )
-from operator_core.tui.subprocess import SubprocessManager
+from demo.tui.subprocess import SubprocessManager
+from demo.types import Chapter, DemoState, HealthPollerProtocol
 
 
 # Unicode symbols for health indicators
