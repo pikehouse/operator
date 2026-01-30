@@ -25,15 +25,13 @@ def now() -> str:
 
 async def extract_commands_from_operator_db(
     operator_db_path: Path,
-    started_after: str,
 ) -> list[dict[str, Any]]:
-    """Extract agent commands from operator.db after a timestamp.
+    """Extract agent commands from operator.db for the most recent session.
 
     This implements RUN-04: Commands extracted from agent session for post-hoc analysis.
 
     Args:
         operator_db_path: Path to operator.db
-        started_after: ISO8601 timestamp to filter entries
 
     Returns:
         List of command dicts with tool_name, tool_params, exit_code
@@ -45,15 +43,17 @@ async def extract_commands_from_operator_db(
     def query_commands():
         conn = sqlite3.connect(operator_db_path)
         conn.row_factory = sqlite3.Row
+        # Get commands from the most recent session (handles fresh databases in managed mode)
         cursor = conn.execute(
             """
             SELECT tool_name, tool_params, exit_code, timestamp
             FROM agent_log_entries
             WHERE entry_type = 'tool_call'
-              AND timestamp > ?
+              AND session_id = (
+                  SELECT session_id FROM agent_sessions ORDER BY started_at DESC LIMIT 1
+              )
             ORDER BY timestamp
-            """,
-            (started_after,),
+            """
         )
         rows = cursor.fetchall()
         conn.close()
@@ -260,9 +260,7 @@ async def run_trial(
 
             # Extract commands (RUN-04)
             if ticket_created_at:
-                commands = await extract_commands_from_operator_db(
-                    operator_db_path, started_at
-                )
+                commands = await extract_commands_from_operator_db(operator_db_path)
                 console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
 
     # Capture final state (RUN-03)
