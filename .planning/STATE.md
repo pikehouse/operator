@@ -6,7 +6,7 @@
 **Phase:** —
 **Plan:** —
 **Status:** Awaiting next milestone definition
-**Last activity:** 2026-01-30 — v3.2 Evaluation Harness shipped
+**Last activity:** 2026-01-30 — Quick task 002: Enhance eval CLI and web viewer with chaos details
 
 Progress: ████████████████████ 100%
 
@@ -124,3 +124,4 @@ See: .planning/MILESTONES.md
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
+| 002 | Enhance eval CLI and web viewer with chaos details | 2026-01-30 | a650a17 | [002-enhance-eval-cli-and-web-viewer-with-chaos-details](./quick/002-enhance-eval-cli-and-web-viewer-with-chaos-details/) |
