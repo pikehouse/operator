@@ -3,12 +3,18 @@
 import asyncio
 import logging
 import random
+import re
 import time
 from typing import Any
 
 from python_on_whales import DockerClient
 
 logger = logging.getLogger(__name__)
+
+# Pattern to match TiKV service containers: {project}-tikv{N}-{index}
+# e.g., tikv-tikv0-1, tikv-eval-1-tikv0-1
+# Avoids matching project prefix (tikv-eval-1-grafana-1 should NOT match)
+TIKV_CONTAINER_PATTERN = re.compile(r"-tikv\d+-")
 
 
 async def kill_random_tikv(docker: DockerClient) -> dict[str, Any]:
@@ -28,9 +34,10 @@ async def kill_random_tikv(docker: DockerClient) -> dict[str, Any]:
     # Get running containers in thread pool (python-on-whales is sync)
     containers = await asyncio.to_thread(docker.compose.ps)
 
-    # Filter to running TiKV containers
+    # Filter to running TiKV containers (service names: tikv0, tikv1, tikv2)
     tikv_containers = [
-        c for c in containers if "tikv" in c.name.lower() and c.state.running
+        c for c in containers
+        if TIKV_CONTAINER_PATTERN.search(c.name.lower()) and c.state.running
     ]
 
     if not tikv_containers:
@@ -239,7 +246,7 @@ async def get_tikv_peer_ips(
     tikv_peers = [
         c
         for c in containers
-        if "tikv" in c.name.lower()
+        if TIKV_CONTAINER_PATTERN.search(c.name.lower())
         and c.state.running
         and c.name != exclude_container
     ]

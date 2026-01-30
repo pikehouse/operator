@@ -13,6 +13,7 @@ from python_on_whales import DockerClient
 logger = logging.getLogger(__name__)
 
 from eval.subjects.tikv.chaos import (
+    TIKV_CONTAINER_PATTERN,
     cleanup_disk_pressure,
     cleanup_latency_chaos,
     cleanup_network_partition,
@@ -211,7 +212,8 @@ class TiKVEvalSubject:
         # Get a random running TiKV container for other chaos types
         containers = await asyncio.to_thread(self.docker.compose.ps)
         tikv_containers = [
-            c for c in containers if "tikv" in c.name.lower() and c.state.running
+            c for c in containers
+            if TIKV_CONTAINER_PATTERN.search(c.name.lower()) and c.state.running
         ]
 
         if not tikv_containers:
