@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     chaos_type TEXT NOT NULL,
     trial_count INTEGER NOT NULL,
     baseline INTEGER NOT NULL DEFAULT 0,
+    variant_name TEXT DEFAULT 'default',
     created_at TEXT NOT NULL
 );
 
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS trials (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_trials_campaign ON trials(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_campaigns_variant ON campaigns(variant_name);
 """
 
 
@@ -54,24 +56,46 @@ class EvalDB:
         self.db_path = db_path
 
     async def ensure_schema(self) -> None:
-        """Create tables if not exist."""
+        """Create tables if not exist and run migrations."""
         async with aiosqlite.connect(self.db_path) as db:
             await db.executescript(SCHEMA_SQL)
             await db.commit()
+        await self.migrate_schema()
+
+    async def migrate_schema(self) -> None:
+        """Run schema migrations for new columns.
+
+        Safe to call multiple times - checks if columns exist before adding.
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            # Check if variant_name column exists
+            cursor = await db.execute("PRAGMA table_info(campaigns)")
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "variant_name" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN variant_name TEXT DEFAULT 'default'"
+                )
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_campaigns_variant ON campaigns(variant_name)"
+                )
+                await db.commit()
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, trial_count, baseline, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO campaigns (subject_name, chaos_type, trial_count, baseline, variant_name, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign.subject_name,
                     campaign.chaos_type,
                     campaign.trial_count,
                     1 if campaign.baseline else 0,
+                    campaign.variant_name,
                     campaign.created_at,
                 ),
             )
@@ -120,6 +144,7 @@ class EvalDB:
                     chaos_type=row["chaos_type"],
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
+                    variant_name=row["variant_name"] if "variant_name" in row.keys() else "default",
                     created_at=row["created_at"],
                 )
             return None
@@ -174,6 +199,7 @@ class EvalDB:
                     chaos_type=row["chaos_type"],
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
+                    variant_name=row["variant_name"] if "variant_name" in row.keys() else "default",
                     created_at=row["created_at"],
                 )
                 for row in rows
