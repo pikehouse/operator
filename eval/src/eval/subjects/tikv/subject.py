@@ -76,6 +76,7 @@ class TiKVEvalSubject:
         self.project_name = f"tikv-eval-{instance_id}" if instance_id > 0 else "tikv"
 
         # Environment variables for compose file port substitution
+        # Write to a temporary env file to avoid race conditions between instances
         self._compose_env = {
             "PD_HOST_PORT": str(self.pd_port),
             "TIKV_HOST_PORT": str(self.tikv_port),
@@ -84,15 +85,17 @@ class TiKVEvalSubject:
             "GRAFANA_HOST_PORT": str(self.grafana_port),
         }
 
-        # Merge with existing environment
-        env_with_ports = os.environ.copy()
-        env_with_ports.update(self._compose_env)
+        # Create env file in compose directory for this instance
+        self._env_file = compose_file.parent / f".env.instance-{instance_id}"
+        with open(self._env_file, "w") as f:
+            for key, value in self._compose_env.items():
+                f.write(f"{key}={value}\n")
 
-        # Create Docker client with project name
+        # Create Docker client with project name and env file
         self.docker = DockerClient(
             compose_files=[compose_file],
             compose_project_name=self.project_name,
-            compose_env=env_with_ports,
+            compose_env_files=[self._env_file],
         )
 
         # PD API endpoint (host port)
