@@ -179,7 +179,7 @@ Plans:
 - [x] 39-01-PLAN.md — Variant types, loading, and list-variants CLI
 - [x] 39-02-PLAN.md — Campaign integration with variant field and database migration
 - [x] 39-03-PLAN.md — Variant comparison analysis and compare-variants CLI
-- [ ] 39-04-PLAN.md — Gap closure: Wire variant config to agent execution
+- [x] 39-04-PLAN.md — Gap closure: Wire variant config to agent execution
 
 ---
 
@@ -221,7 +221,7 @@ Phases execute in numeric order: 35 -> 36 -> 37 -> 38 -> 39
 | 36. Analysis Layer | v3.2 | 4/4 | Complete | 2026-01-29 |
 | 37. Viewer Layer | v3.2 | 2/2 | Complete | 2026-01-29 |
 | 38. Chaos Expansion | v3.2 | 2/2 | Complete | 2026-01-30 |
-| 39. Config Variants | v3.2 | 3/4 | Gap Closure | - |
+| 39. Config Variants | v3.2 | 4/4 | Complete | 2026-01-30 |
 
 ---
-*Updated: 2026-01-30 — Phase 39 planning complete*
+*Updated: 2026-01-30 — v3.2 Evaluation Harness complete (all 5 phases)*

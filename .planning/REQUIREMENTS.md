@@ -44,9 +44,9 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ### Config Variants
 
-- [ ] **CONF-01**: Config variants define model, system_prompt, tools_config
-- [ ] **CONF-02**: Campaigns can specify which variant to use
-- [ ] **CONF-03**: Analysis compares performance across variants
+- [x] **CONF-01**: Config variants define model, system_prompt, tools_config
+- [x] **CONF-02**: Campaigns can specify which variant to use
+- [x] **CONF-03**: Analysis compares performance across variants
 
 ### CLI
 
@@ -113,9 +113,9 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | CLI-04 | Phase 36 | Complete |
 | CLI-05 | Phase 36 | Complete |
 | CLI-06 | Phase 36 | Complete |
-| CONF-01 | Phase 39 | Pending |
-| CONF-02 | Phase 39 | Pending |
-| CONF-03 | Phase 39 | Pending |
+| CONF-01 | Phase 39 | Complete |
+| CONF-02 | Phase 39 | Complete |
+| CONF-03 | Phase 39 | Complete |
 
 **Coverage:**
 - v3.2 requirements: 32 total
@@ -124,4 +124,4 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-30 after Phase 38 complete*
+*Last updated: 2026-01-30 after Phase 39 complete*
