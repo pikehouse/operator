@@ -9,25 +9,106 @@
 
 <h1 class="text-2xl font-bold mb-4">Trial {{ trial.id }}</h1>
 
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <!-- Chaos Injection Section -->
+    <div class="bg-orange-50 border border-orange-200 shadow rounded p-4">
+        <h2 class="text-lg font-semibold mb-2 text-orange-800">Chaos Injection</h2>
+        <dl class="space-y-1 text-sm">
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Type:</dt>
+                <dd class="font-medium">{{ chaos_meta.chaos_type if chaos_meta.chaos_type else "unknown" }}</dd>
+            </div>
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Description:</dt>
+                <dd class="text-orange-700 font-medium">{{ chaos_description }}</dd>
+            </div>
+            {% if chaos_meta.target_container %}
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Target:</dt>
+                <dd class="font-mono">{{ chaos_meta.target_container }}</dd>
+            </div>
+            {% endif %}
+            {% if chaos_meta.signal %}
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Signal:</dt>
+                <dd class="font-mono">{{ chaos_meta.signal }}</dd>
+            </div>
+            {% endif %}
+            {% if chaos_meta.min_ms is defined %}
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Latency:</dt>
+                <dd>{{ chaos_meta.min_ms }}-{{ chaos_meta.max_ms }}ms</dd>
+            </div>
+            {% endif %}
+            {% if chaos_meta.fill_percent is defined %}
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Disk Fill:</dt>
+                <dd>{{ chaos_meta.fill_percent }}%</dd>
+            </div>
+            {% endif %}
+            {% if chaos_meta.blocked_ips %}
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Blocked IPs:</dt>
+                <dd class="font-mono text-xs">{{ chaos_meta.blocked_ips | join(", ") }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    <!-- Monitor Detection Section -->
+    <div class="bg-purple-50 border border-purple-200 shadow rounded p-4">
+        <h2 class="text-lg font-semibold mb-2 text-purple-800">Monitor Detection</h2>
+        {% if monitor_detection %}
+        <dl class="space-y-1 text-sm">
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Violation:</dt>
+                <dd class="font-medium text-purple-700">{{ monitor_detection.violation_type }}</dd>
+            </div>
+            <div class="flex">
+                <dt class="text-gray-600 w-24">Detected:</dt>
+                <dd>{{ monitor_detection.detected_at[:19] if monitor_detection.detected_at else "N/A" }}</dd>
+            </div>
+            {% if monitor_detection.violation_details %}
+            <div class="mt-2">
+                <dt class="text-gray-600 mb-1">Details:</dt>
+                <dd class="bg-white p-2 rounded text-xs font-mono overflow-x-auto">{{ monitor_detection.violation_details }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+        {% else %}
+        <p class="text-gray-500 text-sm">No monitor detection data available.</p>
+        <p class="text-gray-400 text-xs mt-1">(Requires operator.db from the same session)</p>
+        {% endif %}
+    </div>
+</div>
+
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-2">Timing</h2>
     <dl class="grid grid-cols-2 gap-2 text-sm">
         <dt class="text-gray-500">Started:</dt>
-        <dd>{{ trial.started_at }}</dd>
+        <dd>{{ trial.started_at[:19] if trial.started_at else "N/A" }}</dd>
         <dt class="text-gray-500">Chaos Injected:</dt>
-        <dd>{{ trial.chaos_injected_at }}</dd>
+        <dd>{{ trial.chaos_injected_at[:19] if trial.chaos_injected_at else "N/A" }}</dd>
         <dt class="text-gray-500">Ticket Created:</dt>
-        <dd>{{ trial.ticket_created_at if trial.ticket_created_at else "N/A" }}</dd>
+        <dd>
+            {{ trial.ticket_created_at[:19] if trial.ticket_created_at else "N/A" }}
+            {% if timing.detect_seconds is defined %}
+            <span class="text-blue-600 text-xs ml-1">(+{{ timing.detect_seconds | int }}s after chaos)</span>
+            {% endif %}
+        </dd>
         <dt class="text-gray-500">Resolved:</dt>
         <dd>
             {% if trial.resolved_at %}
-            <span class="text-green-600">{{ trial.resolved_at }}</span>
+            <span class="text-green-600">{{ trial.resolved_at[:19] }}</span>
+            {% if timing.resolve_seconds is defined %}
+            <span class="text-green-600 text-xs ml-1">(+{{ timing.resolve_seconds | int }}s to resolve)</span>
+            {% endif %}
             {% else %}
             <span class="text-red-600">Not resolved</span>
             {% endif %}
         </dd>
         <dt class="text-gray-500">Ended:</dt>
-        <dd>{{ trial.ended_at }}</dd>
+        <dd>{{ trial.ended_at[:19] if trial.ended_at else "N/A" }}</dd>
     </dl>
 </div>
 

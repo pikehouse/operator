@@ -16,10 +16,12 @@
         <dd>{{ campaign.subject_name }}</dd>
         <dt class="text-gray-500">Chaos Type:</dt>
         <dd>{{ campaign.chaos_type }}</dd>
+        <dt class="text-gray-500">Chaos Description:</dt>
+        <dd class="font-medium text-orange-600">{{ chaos_description }}</dd>
         <dt class="text-gray-500">Trial Count:</dt>
         <dd>{{ campaign.trial_count }}</dd>
         <dt class="text-gray-500">Baseline:</dt>
-        <dd>{% if campaign.baseline %}Yes{% else %}No{% endif %}</dd>
+        <dd>{% if campaign.baseline %}<span class="text-blue-600">Yes (self-healing test)</span>{% else %}No{% endif %}</dd>
         <dt class="text-gray-500">Created:</dt>
         <dd>{{ campaign.created_at }}</dd>
     </dl>
@@ -33,6 +35,7 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Status</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Started</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Chaos Injected</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Resolved</th>
@@ -40,21 +43,32 @@
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
-            {% for trial in trials %}
+            {% for item in trials %}
             <tr class="hover:bg-gray-50">
                 <td class="px-4 py-2">
-                    <a href="/trial/{{ trial.id }}" class="text-blue-600 hover:underline">{{ trial.id }}</a>
+                    <a href="/trial/{{ item.trial.id }}" class="text-blue-600 hover:underline">{{ item.trial.id }}</a>
                 </td>
-                <td class="px-4 py-2 text-sm">{{ trial.started_at[:19] if trial.started_at else "N/A" }}</td>
-                <td class="px-4 py-2 text-sm">{{ trial.chaos_injected_at[:19] if trial.chaos_injected_at else "N/A" }}</td>
+                <td class="px-4 py-2">
+                    {% if item.outcome == 'success' %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                        Success
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                        Timeout
+                    </span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-sm">{{ item.trial.started_at[:19] if item.trial.started_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">{{ item.trial.chaos_injected_at[:19] if item.trial.chaos_injected_at else "N/A" }}</td>
                 <td class="px-4 py-2 text-sm">
-                    {% if trial.resolved_at %}
-                    <span class="text-green-600">{{ trial.resolved_at[:19] }}</span>
+                    {% if item.trial.resolved_at %}
+                    <span class="text-green-600">{{ item.trial.resolved_at[:19] }}</span>
                     {% else %}
                     <span class="text-red-600">Not resolved</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-sm">{{ trial.ended_at[:19] if trial.ended_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">{{ item.trial.ended_at[:19] if item.trial.ended_at else "N/A" }}</td>
             </tr>
             {% endfor %}
         </tbody>
