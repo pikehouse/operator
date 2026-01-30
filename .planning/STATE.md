@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 37 - Viewer Layer (COMPLETE)
-**Plan:** 2/2 complete
-**Status:** All viewer layer functionality complete - CLI commands (list, show) and web viewer with reasoning timeline
-**Last activity:** 2026-01-29 — Completed 37-02-PLAN.md
+**Phase:** 38 - Chaos Expansion (IN PROGRESS)
+**Plan:** 1/1 complete
+**Status:** Extended TiKV chaos types - latency, disk pressure, network partition with cleanup protocol
+**Last activity:** 2026-01-29 — Completed 38-01-PLAN.md
 
-Progress: ██████████░░░░░░░░░░ (v3.2: 50%)
+Progress: ███████████░░░░░░░░░ (v3.2: 55%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete
+**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete
 
-**Next:** Plan Phase 38 (Chaos Expansion)
+**Next:** Plan Phase 39 (Config Variants)
 
 ## Session Continuity
 
-**Last session:** 2026-01-29T23:04:23Z
-**Stopped at:** Completed 37-02-PLAN.md (Phase 37 complete)
+**Last session:** 2026-01-29T23:58:41Z
+**Stopped at:** Completed 38-01-PLAN.md (Phase 38 complete)
 **Resume file:** None
-**Next:** Plan Phase 38 (Chaos Expansion)
+**Next:** Plan Phase 39 (Config Variants)
 
 ---
-*State updated: 2026-01-29 (Phase 37 complete)*
+*State updated: 2026-01-29 (Phase 38 complete)*
 
 ## Decisions Made
 
@@ -104,6 +104,10 @@ See: .planning/MILESTONES.md
 | 37-02 | Use FastAPI + Jinja2 for web viewer with server-side rendering | Simple static views, no need for complex frontend framework |
 | 37-02 | Use Tailwind CDN for styling | No build step needed, fast prototyping with modern utility classes |
 | 37-02 | Query operator.db by timerange for reasoning entries | Trial timestamps define the relevant agent session window |
+| 38-01 | Use tc netem for latency injection | tc netem is built into Linux kernel, provides precise control over delay/jitter without additional containers |
+| 38-01 | Use fallocate for disk pressure | fallocate is instant (allocates space without writing), simpler than dd or filesystem quotas |
+| 38-01 | Use iptables for network partition | iptables allows selective blocking of specific peer IPs, better than coarse docker network disconnect |
+| 38-01 | Chaos metadata contains cleanup fields | Makes cleanup stateless - inject_chaos returns all fields needed by cleanup_chaos for reversibility |
 
 ## Open Issues
 
