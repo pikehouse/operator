@@ -3,12 +3,12 @@
 ## Current Position
 
 **Milestone:** v3.2 Evaluation Harness
-**Phase:** 39 - Config Variants (IN PROGRESS)
-**Plan:** 1/2 complete
-**Status:** Pydantic-validated YAML variant system with discovery and CLI listing
-**Last activity:** 2026-01-30 — Completed 39-01-PLAN.md
+**Phase:** 39 - Config Variants (COMPLETE)
+**Plan:** 2/2 complete
+**Status:** Campaign YAML with variant field, database stores variant_name, harness integrates variant config
+**Last activity:** 2026-01-30 — Completed 39-02-PLAN.md
 
-Progress: █████████████░░░░░░░ (v3.2: 65%)
+Progress: ██████████████░░░░░░ (v3.2: 70%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete, Phase 39 in progress (1/2 plans)
+**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete, Phase 39 complete
 
-**Next:** Plan 39-02 (Campaign Variant Integration)
+**Next:** v3.2 milestone complete
 
 ## Session Continuity
 
-**Last session:** 2026-01-30T01:59:33Z
-**Stopped at:** Completed 39-01-PLAN.md (Phase 39 in progress - 1/2 plans)
+**Last session:** 2026-01-30T03:05:54Z
+**Stopped at:** Completed 39-02-PLAN.md (Phase 39 complete)
 **Resume file:** None
-**Next:** Plan 39-02 (Campaign Variant Integration)
+**Next:** v3.2 milestone complete - ready for milestone audit
 
 ---
-*State updated: 2026-01-30 (Phase 39 in progress - 1/2 plans)*
+*State updated: 2026-01-30 (Phase 39 complete - v3.2 milestone complete)*
 
 ## Decisions Made
 
@@ -115,6 +115,10 @@ See: .planning/MILESTONES.md
 | 39-01 | Inline system prompts in YAML | Self-contained variant files, easier version control than file path references |
 | 39-01 | tools_config structure: tool_choice and enabled_tools | Maps to Anthropic API parameters, extensible for future options |
 | 39-01 | Variant discovery via glob in eval/variants/ | One YAML file per variant, skips invalid files silently |
+| 39-02 | Schema migration pattern with PRAGMA checks | Idempotent migrations safe to run multiple times, backward compatible |
+| 39-02 | Variant defaults to "default" | Backward compatibility with existing campaigns and YAMLs |
+| 39-02 | Variant loading in harness | Load variant early to fail fast if variant not found |
+| 39-02 | Defensive variant_name reads with getattr() | Compatible with old databases created before variant_name column |
 
 ## Open Issues
 
