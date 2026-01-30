@@ -41,6 +41,15 @@ htmlcov/
 # uv
 .uv/
 
+# Environment and secrets
+.env
+.env.*
+*.env
+.envrc
+secrets/
+*.pem
+*.key
+
 # OS
 .DS_Store
 Thumbs.db
