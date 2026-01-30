@@ -21,9 +21,9 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 - [x] **SUBJ-01**: EvalSubject protocol defines reset(), wait_healthy(), capture_state(), get_chaos_types()
 - [x] **SUBJ-02**: TiKVEvalSubject implements protocol with Docker Compose reset
 - [x] **SUBJ-03**: TiKV chaos: node_kill (SIGKILL container)
-- [ ] **SUBJ-04**: TiKV chaos: latency injection (tc netem)
-- [ ] **SUBJ-05**: TiKV chaos: disk pressure (fallocate)
-- [ ] **SUBJ-06**: TiKV chaos: network partition (iptables)
+- [x] **SUBJ-04**: TiKV chaos: latency injection (tc netem)
+- [x] **SUBJ-05**: TiKV chaos: disk pressure (fallocate)
+- [x] **SUBJ-06**: TiKV chaos: network partition (iptables)
 
 ### Analysis Layer
 
@@ -52,7 +52,7 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 - [x] **CLI-01**: eval run --subject tikv --chaos node_kill runs single trial
 - [x] **CLI-02**: eval run --baseline runs without agent
-- [ ] **CLI-03**: eval run campaign config.yaml runs full campaign
+- [x] **CLI-03**: eval run campaign config.yaml runs full campaign
 - [x] **CLI-04**: eval analyze <campaign_id> computes scores
 - [x] **CLI-05**: eval compare <campaign_a> <campaign_b> compares campaigns
 - [x] **CLI-06**: eval compare-baseline <campaign_id> compares to baseline
@@ -104,12 +104,12 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 | VIEW-03 | Phase 37 | Complete |
 | VIEW-04 | Phase 37 | Complete |
 | VIEW-05 | Phase 37 | Complete |
-| SUBJ-04 | Phase 38 | Pending |
-| SUBJ-05 | Phase 38 | Pending |
-| SUBJ-06 | Phase 38 | Pending |
+| SUBJ-04 | Phase 38 | Complete |
+| SUBJ-05 | Phase 38 | Complete |
+| SUBJ-06 | Phase 38 | Complete |
 | CLI-01 | Phase 35 | Complete |
 | CLI-02 | Phase 35 | Complete |
-| CLI-03 | Phase 38 | Pending |
+| CLI-03 | Phase 38 | Complete |
 | CLI-04 | Phase 36 | Complete |
 | CLI-05 | Phase 36 | Complete |
 | CLI-06 | Phase 36 | Complete |
@@ -124,4 +124,4 @@ Requirements for evaluation harness. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 after Phase 37 complete*
+*Last updated: 2026-01-30 after Phase 38 complete*
