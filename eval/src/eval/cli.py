@@ -28,6 +28,36 @@ app.add_typer(run_app, name="run")
 console = Console()
 
 
+def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
+    """Get human-readable chaos type description.
+
+    Args:
+        chaos_type: Chaos type identifier
+        chaos_meta: Optional chaos metadata dict for param details
+
+    Returns:
+        Human-readable description
+    """
+    descriptions = {
+        "node_kill": "Container killed with SIGKILL",
+        "latency": "Network latency injection",
+        "disk_pressure": "Disk space exhaustion",
+        "network_partition": "Network partition from peers",
+    }
+    desc = descriptions.get(chaos_type, chaos_type)
+
+    # Add param details if available
+    if chaos_meta:
+        if chaos_type == "latency" and chaos_meta.get("min_ms") is not None:
+            desc = f"Network latency ({chaos_meta['min_ms']}-{chaos_meta['max_ms']}ms)"
+        elif chaos_type == "disk_pressure" and chaos_meta.get("fill_percent") is not None:
+            desc = f"Disk filled to {chaos_meta['fill_percent']}%"
+        elif chaos_type == "node_kill" and chaos_meta.get("target_container"):
+            desc = f"Kill {chaos_meta['target_container']} (SIGKILL)"
+
+    return desc
+
+
 def get_subject(subject_name: str) -> EvalSubject:
     """Load eval subject by name.
 
@@ -633,6 +663,8 @@ def show_detail(
     if result_type == "trial":
         # Trial detail output
         t = obj
+        chaos_meta = json.loads(t.chaos_metadata) if t.chaos_metadata else {}
+
         if json_output:
             # Parse commands_json for output
             commands = json.loads(t.commands_json) if t.commands_json else []
@@ -646,7 +678,7 @@ def show_detail(
                 "ended_at": t.ended_at,
                 "initial_state": json.loads(t.initial_state) if t.initial_state else None,
                 "final_state": json.loads(t.final_state) if t.final_state else None,
-                "chaos_metadata": json.loads(t.chaos_metadata) if t.chaos_metadata else None,
+                "chaos_metadata": chaos_meta,
                 "commands": commands,
             }
             print(json.dumps(data, indent=2))
@@ -655,19 +687,71 @@ def show_detail(
         # Plain text trial detail
         print(f"Trial {t.id} (Campaign {t.campaign_id})")
         print("-" * 40)
-        print(f"Started:        {t.started_at}")
-        print(f"Chaos injected: {t.chaos_injected_at}")
-        if t.ticket_created_at:
-            print(f"Ticket created: {t.ticket_created_at}")
-        if t.resolved_at:
-            print(f"Resolved:       {t.resolved_at}")
-        print(f"Ended:          {t.ended_at}")
+
+        # Chaos injection details
+        print("Chaos Injection:")
+        chaos_type = chaos_meta.get("chaos_type", "unknown")
+        print(f"  Type:   {chaos_type}")
+        if chaos_meta.get("target_container"):
+            print(f"  Target: {chaos_meta['target_container']}")
+        if chaos_meta.get("signal"):
+            print(f"  Signal: {chaos_meta['signal']}")
+        if chaos_meta.get("min_ms") is not None:
+            print(f"  Latency: {chaos_meta.get('min_ms')}-{chaos_meta.get('max_ms')}ms")
+        if chaos_meta.get("fill_percent") is not None:
+            print(f"  Disk fill: {chaos_meta['fill_percent']}%")
+        if chaos_meta.get("blocked_ips"):
+            print(f"  Blocked IPs: {', '.join(chaos_meta['blocked_ips'])}")
+        print()
+
+        # Timing with deltas
+        print("Timing:")
+        print(f"  Started:        {t.started_at[:19] if t.started_at else 'N/A'}")
+        print(f"  Chaos injected: {t.chaos_injected_at[:19] if t.chaos_injected_at else 'N/A'}")
+
+        # Calculate time deltas
+        if t.ticket_created_at and t.chaos_injected_at:
+            from datetime import datetime, timezone
+            try:
+                chaos_time = datetime.fromisoformat(t.chaos_injected_at.replace("Z", "+00:00"))
+                ticket_time = datetime.fromisoformat(t.ticket_created_at.replace("Z", "+00:00"))
+                # Handle timezone-naive timestamps (assume UTC)
+                if chaos_time.tzinfo is None:
+                    chaos_time = chaos_time.replace(tzinfo=timezone.utc)
+                if ticket_time.tzinfo is None:
+                    ticket_time = ticket_time.replace(tzinfo=timezone.utc)
+                delta_detect = (ticket_time - chaos_time).total_seconds()
+                print(f"  Ticket created: {t.ticket_created_at[:19]} (+{delta_detect:.0f}s after chaos)")
+            except Exception:
+                print(f"  Ticket created: {t.ticket_created_at[:19] if t.ticket_created_at else 'N/A'}")
+        elif t.ticket_created_at:
+            print(f"  Ticket created: {t.ticket_created_at[:19]}")
+
+        if t.resolved_at and t.ticket_created_at:
+            from datetime import datetime, timezone
+            try:
+                ticket_time = datetime.fromisoformat(t.ticket_created_at.replace("Z", "+00:00"))
+                resolve_time = datetime.fromisoformat(t.resolved_at.replace("Z", "+00:00"))
+                if ticket_time.tzinfo is None:
+                    ticket_time = ticket_time.replace(tzinfo=timezone.utc)
+                if resolve_time.tzinfo is None:
+                    resolve_time = resolve_time.replace(tzinfo=timezone.utc)
+                delta_resolve = (resolve_time - ticket_time).total_seconds()
+                print(f"  Resolved:       {t.resolved_at[:19]} (+{delta_resolve:.0f}s to resolve)")
+            except Exception:
+                print(f"  Resolved:       {t.resolved_at[:19] if t.resolved_at else 'N/A'}")
+        elif t.resolved_at:
+            print(f"  Resolved:       {t.resolved_at[:19]}")
+        else:
+            print(f"  Resolved:       Not resolved")
+
+        print(f"  Ended:          {t.ended_at[:19] if t.ended_at else 'N/A'}")
         print()
 
         # Commands list
         commands = json.loads(t.commands_json) if t.commands_json else []
         if commands:
-            print("Commands:")
+            print(f"Commands ({len(commands)}):")
             for i, cmd in enumerate(commands, 1):
                 # Each command is a string or dict with 'command' key
                 cmd_str = cmd if isinstance(cmd, str) else cmd.get("command", str(cmd))
@@ -715,6 +799,8 @@ def show_detail(
         # Plain text campaign detail
         print(f"Campaign {campaign.id}: {campaign.subject_name}/{campaign.chaos_type}")
         print("-" * 50)
+        chaos_desc = get_chaos_description(campaign.chaos_type)
+        print(f"Chaos:    {chaos_desc}")
         print(f"Created:  {campaign.created_at}")
         print(f"Trials:   {campaign.trial_count}")
         print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
@@ -736,12 +822,19 @@ def show_detail(
         # Trial list table
         if trials:
             print("Trials:")
-            # Header: ID(6), Started(20), Resolved(20), Status
-            print(f"  {'ID':<6} {'Started':<20} {'Resolved':<20}")
+            # Header: ID(6), Started(20), Resolved(20), Status(10)
+            print(f"  {'ID':<6} {'Started':<20} {'Resolved':<20} {'Status':<10}")
             for t in trials:
                 resolved_str = t.resolved_at[:19] if t.resolved_at else "N/A"
                 started_str = t.started_at[:19] if t.started_at else "N/A"
-                print(f"  {t.id:<6} {started_str:<20} {resolved_str:<20}")
+                # Determine status
+                if t.resolved_at:
+                    status = "Success"
+                elif t.ended_at:
+                    status = "Timeout"
+                else:
+                    status = "Running"
+                print(f"  {t.id:<6} {started_str:<20} {resolved_str:<20} {status:<10}")
         else:
             print("No trials recorded.")
 
