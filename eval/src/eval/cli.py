@@ -79,13 +79,22 @@ def run_single(
         "--trials", "-n",
         help="Number of trials to run",
     ),
+    operator_running: bool = typer.Option(
+        False,
+        "--operator-running",
+        help="Operator monitor/agent already running externally (skip managed mode)",
+    ),
 ) -> None:
     """Run evaluation trial(s) against a subject.
+
+    By default, starts operator monitor and agent automatically (managed mode).
+    Use --operator-running if you already have them running externally.
 
     Examples:
         eval run --subject tikv --chaos node_kill
         eval run --baseline
         eval run --trials 5
+        eval run --operator-running  # Skip managed mode
     """
     # If subcommand was invoked, skip
     if ctx.invoked_subcommand is not None:
@@ -100,74 +109,87 @@ def run_single(
             f"Unknown chaos type: {chaos}. Available for {subject}: {available_chaos}"
         )
 
-    # Auto-detect operator.db if not specified
-    if operator_db is None and not baseline:
-        default_operator_db = Path("data/operator.db")
-        if default_operator_db.exists():
-            operator_db = default_operator_db
-            console.print(f"[dim]Using operator.db: {operator_db}[/dim]")
+    # Set operator.db path
+    # In managed mode, we control the path; in external mode, try to auto-detect
+    if operator_db is None:
+        operator_db = Path("data/operator.db")
 
     # Run evaluation
     async def run():
+        from eval.runner.operator import OperatorProcesses
+
         db = EvalDB(db_path)
         await db.ensure_schema()
 
-        if trials == 1:
-            # Single trial (CLI-01, CLI-02)
-            console.print(f"\n[bold]Running single trial[/bold]")
-            console.print(f"Subject: {subject}")
-            console.print(f"Chaos: {chaos}")
-            console.print(f"Baseline: {baseline}")
-            console.print(f"Database: {db_path}\n")
+        # Display config
+        console.print(f"\n[bold]Running {'single trial' if trials == 1 else f'{trials} trials'}[/bold]")
+        console.print(f"Subject: {subject}")
+        console.print(f"Chaos: {chaos}")
+        console.print(f"Baseline: {baseline}")
+        console.print(f"Database: {db_path}")
+        managed_mode = not operator_running and not baseline
+        console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'skipped (baseline)'}\n")
 
-            # Create a single-trial campaign
-            from eval.types import Campaign
-            from eval.runner.harness import now
+        async def execute_trials():
+            """Execute the actual trials."""
+            if trials == 1:
+                # Single trial (CLI-01, CLI-02)
+                from eval.types import Campaign
+                from eval.runner.harness import now
 
-            campaign = Campaign(
-                subject_name=subject,
-                chaos_type=chaos,
-                trial_count=1,
-                baseline=baseline,
-                created_at=now(),
-            )
-            campaign_id = await db.insert_campaign(campaign)
+                campaign = Campaign(
+                    subject_name=subject,
+                    chaos_type=chaos,
+                    trial_count=1,
+                    baseline=baseline,
+                    created_at=now(),
+                )
+                campaign_id = await db.insert_campaign(campaign)
 
-            trial = await run_trial(
-                subject=eval_subject,
-                chaos_type=chaos,
-                campaign_id=campaign_id,
-                baseline=baseline,
-                operator_db_path=operator_db,
-            )
+                trial = await run_trial(
+                    subject=eval_subject,
+                    chaos_type=chaos,
+                    campaign_id=campaign_id,
+                    baseline=baseline,
+                    operator_db_path=operator_db,
+                )
 
-            trial_id = await db.insert_trial(trial)
+                trial_id = await db.insert_trial(trial)
 
-            # Print summary
-            console.print(f"\n[bold green]Trial complete![/bold green]")
-            console.print(f"Campaign ID: {campaign_id}")
-            console.print(f"Trial ID: {trial_id}")
-            console.print(f"Started: {trial.started_at}")
-            console.print(f"Chaos injected: {trial.chaos_injected_at}")
-            if trial.ticket_created_at:
-                console.print(f"Ticket created: {trial.ticket_created_at}")
-            if trial.resolved_at:
-                console.print(f"Resolved: {trial.resolved_at}")
-            console.print(f"Ended: {trial.ended_at}")
+                # Print summary
+                console.print(f"\n[bold green]Trial complete![/bold green]")
+                console.print(f"Campaign ID: {campaign_id}")
+                console.print(f"Trial ID: {trial_id}")
+                console.print(f"Started: {trial.started_at}")
+                console.print(f"Chaos injected: {trial.chaos_injected_at}")
+                if trial.ticket_created_at:
+                    console.print(f"Ticket created: {trial.ticket_created_at}")
+                if trial.resolved_at:
+                    console.print(f"Resolved: {trial.resolved_at}")
+                console.print(f"Ended: {trial.ended_at}")
 
+            else:
+                # Multiple trials (campaign)
+                campaign_id = await run_campaign(
+                    subject=eval_subject,
+                    subject_name=subject,
+                    chaos_type=chaos,
+                    trial_count=trials,
+                    db=db,
+                    baseline=baseline,
+                    operator_db_path=operator_db,
+                )
+
+                console.print(f"\n[bold green]Campaign {campaign_id} complete with {trials} trials[/bold green]")
+
+        # Run with managed operator or external
+        if managed_mode:
+            # Managed mode: start/stop operator automatically
+            async with OperatorProcesses(subject, operator_db) as op:
+                await execute_trials()
         else:
-            # Multiple trials (campaign)
-            campaign_id = await run_campaign(
-                subject=eval_subject,
-                subject_name=subject,
-                chaos_type=chaos,
-                trial_count=trials,
-                db=db,
-                baseline=baseline,
-                operator_db_path=operator_db,
-            )
-
-            console.print(f"\n[bold green]Campaign {campaign_id} complete with {trials} trials[/bold green]")
+            # External mode or baseline: just run trials
+            await execute_trials()
 
     asyncio.run(run())
 
@@ -185,11 +207,19 @@ def run_campaign_cmd(
         "--operator-db",
         help="Path to operator.db for command extraction",
     ),
+    operator_running: bool = typer.Option(
+        False,
+        "--operator-running",
+        help="Operator monitor/agent already running externally (skip managed mode)",
+    ),
 ) -> None:
     """Run a campaign from YAML configuration file.
 
     The config file specifies subjects, chaos types, and trial count.
     Matrix expansion generates all combinations.
+
+    By default, starts operator monitor and agent automatically (managed mode).
+    Use --operator-running if you already have them running externally.
 
     Example config:
         name: tikv-chaos-campaign
@@ -207,8 +237,10 @@ def run_campaign_cmd(
 
     Examples:
         eval run campaign config.yaml
-        eval run campaign campaign.yaml --operator-db data/operator.db
+        eval run campaign config.yaml --operator-running
     """
+    from eval.runner.operator import OperatorProcesses
+
     # Validate config file exists
     if not config_path.exists():
         console.print(f"[red]Error: Config file not found: {config_path}[/red]")
@@ -221,6 +253,13 @@ def run_campaign_cmd(
         console.print(f"[red]Error loading config: {e}[/red]")
         raise typer.Exit(1)
 
+    # Set operator.db path
+    if operator_db is None:
+        operator_db = Path("data/operator.db")
+
+    # Determine if managed mode
+    managed_mode = not operator_running and not config.include_baseline
+
     # Show campaign summary
     console.print(f"\n[bold]Campaign: {config.name}[/bold]")
     console.print(f"Subjects: {config.subjects}")
@@ -230,24 +269,28 @@ def run_campaign_cmd(
     console.print(f"Cooldown: {config.cooldown_seconds}s")
     console.print(f"Include baseline: {config.include_baseline}")
     console.print(f"Variant: {config.variant}")
-
-    # Auto-detect operator.db if not specified
-    if operator_db is None:
-        default_operator_db = Path("data/operator.db")
-        if default_operator_db.exists():
-            operator_db = default_operator_db
-            console.print(f"[dim]Using operator.db: {operator_db}[/dim]")
+    console.print(f"Operator: {'managed' if managed_mode else 'external'}")
 
     # Run campaign
     async def run():
         db = EvalDB(db_path)
         await db.ensure_schema()
 
-        return await run_campaign_from_config(
-            config=config,
-            db=db,
-            operator_db_path=operator_db,
-        )
+        async def execute_campaign():
+            return await run_campaign_from_config(
+                config=config,
+                db=db,
+                operator_db_path=operator_db,
+            )
+
+        if managed_mode:
+            # Managed mode: start/stop operator for the campaign
+            # Use first subject for monitor (campaigns usually test one subject)
+            subject_name = config.subjects[0] if config.subjects else "tikv"
+            async with OperatorProcesses(subject_name, operator_db) as op:
+                return await execute_campaign()
+        else:
+            return await execute_campaign()
 
     campaign_id = asyncio.run(run())
     console.print(f"\n[bold green]Campaign {campaign_id} finished[/bold green]")
