@@ -1,7 +1,7 @@
 """Trial scoring and campaign analysis functions."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from statistics import mean
 
 from eval.types import Trial
@@ -10,11 +10,22 @@ from eval.analysis.types import TrialScore, CampaignSummary, TrialOutcome
 
 
 def compute_duration_seconds(start_iso: str, end_iso: str | None) -> float | None:
-    """Compute duration in seconds between ISO8601 timestamps."""
+    """Compute duration in seconds between ISO8601 timestamps.
+
+    Handles mixed timezone-aware and timezone-naive timestamps by assuming
+    naive timestamps are UTC.
+    """
     if end_iso is None:
         return None
     start = datetime.fromisoformat(start_iso)
     end = datetime.fromisoformat(end_iso)
+
+    # Make both timezone-aware (assume naive timestamps are UTC)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+
     return (end - start).total_seconds()
 
 
