@@ -125,4 +125,4 @@ See: .planning/MILESTONES.md
 |---|-------------|------|--------|-----------|
 | 001 | Remove demo logic from operator-core | 2026-01-27 | 0770fee | [001-ensure-no-demo-logic-inside-operator-cor](./quick/001-ensure-no-demo-logic-inside-operator-cor/) |
 | 002 | Enhance eval CLI and web viewer with chaos details | 2026-01-30 | a650a17 | [002-enhance-eval-cli-and-web-viewer-with-chaos-details](./quick/002-enhance-eval-cli-and-web-viewer-with-chaos-details/) |
-| 003 | True parallel campaign execution | 2026-01-30 | 2d70257 | [003-true-parallel-campaign-execution](./quick/003-true-parallel-campaign-execution/) |
+| 003 | True parallel campaign execution | 2026-01-30 | ee7ef6d | [003-true-parallel-campaign-execution](./quick/003-true-parallel-campaign-execution/) |
