@@ -453,6 +453,91 @@ def compare_baseline_cmd(
     print(f"Reason: {result.winner_reason}")
 
 
+@app.command("compare-variants")
+def compare_variants_cmd(
+    subject: str = typer.Argument(..., help="Subject name (e.g., 'tikv')"),
+    chaos: str = typer.Argument(..., help="Chaos type (e.g., 'node_kill')"),
+    variants: Optional[str] = typer.Option(
+        None,
+        "--variants", "-v",
+        help="Comma-separated variant names to compare (default: all)",
+    ),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+) -> None:
+    """Compare agent performance across variants.
+
+    Shows balanced scorecard of metrics for each variant tested against
+    the same subject and chaos type. No winner determination - user
+    interprets tradeoffs.
+
+    Requires campaigns to have been run with different variant configurations.
+
+    Examples:
+        eval compare-variants tikv node_kill
+        eval compare-variants tikv node_kill --variants haiku-v1,sonnet-v1
+        eval compare-variants tikv latency --json
+    """
+    from eval.analysis import compare_variants, VariantComparison
+
+    # Parse variant names if provided
+    variant_list: list[str] | None = None
+    if variants:
+        variant_list = [v.strip() for v in variants.split(",")]
+
+    async def run():
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        return await compare_variants(db, subject, chaos, variant_list)
+
+    try:
+        result: VariantComparison = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        print(result.model_dump_json(indent=2))
+        return
+
+    # Rich table output - balanced scorecard
+    table = Table(title=f"Variant Comparison: {result.subject_name}/{result.chaos_type}")
+
+    table.add_column("Variant", style="cyan")
+    table.add_column("Trials", justify="right")
+    table.add_column("Success Rate", justify="right")
+    table.add_column("Avg TTD", justify="right", header_style="dim")
+    table.add_column("Avg TTR", justify="right", header_style="dim")
+    table.add_column("Avg Commands", justify="right")
+
+    # Sort by variant name for consistent output
+    for variant_name in sorted(result.variants.keys()):
+        metrics = result.variants[variant_name]
+        ttd = f"{metrics.avg_time_to_detect_sec:.1f}s" if metrics.avg_time_to_detect_sec else "N/A"
+        ttr = f"{metrics.avg_time_to_resolve_sec:.1f}s" if metrics.avg_time_to_resolve_sec else "N/A"
+
+        table.add_row(
+            variant_name,
+            str(metrics.trial_count),
+            f"{metrics.win_rate:.1%}",
+            ttd,
+            ttr,
+            f"{metrics.avg_commands:.1f}",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]TTD = Time to Detect, TTR = Time to Resolve[/dim]")
+    console.print(f"[dim]{len(result.variants)} variant(s) compared[/dim]")
+
+
 @app.command("show")
 def show_detail(
     id: int = typer.Argument(..., help="Campaign or trial ID"),
