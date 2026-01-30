@@ -153,6 +153,7 @@ async def run_trial(
     operator_db_path: Path | None = None,
     chaos_params: dict[str, Any] | None = None,
     variant_config: VariantConfig | None = None,
+    skip_reset: bool = False,
 ) -> Trial:
     """Execute single trial with precise timing capture.
 
@@ -165,21 +166,26 @@ async def run_trial(
         baseline: If True, skip agent wait (RUN-05)
         operator_db_path: Path to operator.db for command extraction
         chaos_params: Optional parameters for chaos injection (e.g., min_ms, max_ms)
+        variant_config: Optional variant config for A/B testing
+        skip_reset: If True, skip reset (already done by OperatorProcesses)
 
     Returns:
         Completed Trial record
     """
     started_at = now()
 
-    # Reset subject to clean state
-    console.print("[bold blue]Resetting subject...[/bold blue]")
-    await subject.reset()
+    # Reset subject to clean state (unless already done)
+    if skip_reset:
+        console.print("[dim]Skipping reset (already done)[/dim]")
+    else:
+        console.print("[bold blue]Resetting subject...[/bold blue]")
+        await subject.reset()
 
-    # Wait for healthy state
-    console.print("[bold blue]Waiting for healthy state...[/bold blue]")
-    healthy = await subject.wait_healthy(timeout_sec=120.0)
-    if not healthy:
-        console.print("[bold red]Subject failed to become healthy[/bold red]")
+        # Wait for healthy state
+        console.print("[bold blue]Waiting for healthy state...[/bold blue]")
+        healthy = await subject.wait_healthy(timeout_sec=120.0)
+        if not healthy:
+            console.print("[bold red]Subject failed to become healthy[/bold red]")
 
     # Capture initial state (RUN-03)
     console.print("[bold blue]Capturing initial state...[/bold blue]")

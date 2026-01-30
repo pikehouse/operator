@@ -130,7 +130,7 @@ def run_single(
         managed_mode = not operator_running and not baseline
         console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'skipped (baseline)'}\n")
 
-        async def execute_trials():
+        async def execute_trials(skip_reset: bool = False):
             """Execute the actual trials."""
             if trials == 1:
                 # Single trial (CLI-01, CLI-02)
@@ -152,6 +152,7 @@ def run_single(
                     campaign_id=campaign_id,
                     baseline=baseline,
                     operator_db_path=operator_db,
+                    skip_reset=skip_reset,
                 )
 
                 trial_id = await db.insert_trial(trial)
@@ -185,11 +186,13 @@ def run_single(
         # Run with managed operator or external
         if managed_mode:
             # Managed mode: start/stop operator automatically
-            async with OperatorProcesses(subject, operator_db) as op:
-                await execute_trials()
+            # Pass eval_subject so it can reset cluster before starting monitor
+            async with OperatorProcesses(subject, operator_db, eval_subject=eval_subject) as op:
+                # skip_reset=True because OperatorProcesses already reset the cluster
+                await execute_trials(skip_reset=True)
         else:
             # External mode or baseline: just run trials
-            await execute_trials()
+            await execute_trials(skip_reset=False)
 
     asyncio.run(run())
 
