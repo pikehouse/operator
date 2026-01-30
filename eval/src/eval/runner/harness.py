@@ -70,6 +70,30 @@ async def extract_commands_from_operator_db(
     return await asyncio.to_thread(query_commands)
 
 
+async def update_ticket_variant(
+    operator_db_path: Path,
+    variant_config: VariantConfig,
+) -> None:
+    """Update most recent ticket with variant config."""
+    def update():
+        conn = sqlite3.connect(operator_db_path)
+        conn.execute(
+            """
+            UPDATE tickets
+            SET variant_model = ?, variant_system_prompt = ?, variant_tools_config = ?
+            WHERE id = (SELECT MAX(id) FROM tickets)
+            """,
+            (
+                variant_config.model,
+                variant_config.system_prompt,
+                json.dumps(variant_config.tools_config),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    await asyncio.to_thread(update)
+
+
 async def wait_for_ticket_resolution(
     operator_db_path: Path,
     timeout_sec: float = 300.0,
@@ -128,6 +152,7 @@ async def run_trial(
     baseline: bool = False,
     operator_db_path: Path | None = None,
     chaos_params: dict[str, Any] | None = None,
+    variant_config: VariantConfig | None = None,
 ) -> Trial:
     """Execute single trial with precise timing capture.
 
@@ -165,6 +190,14 @@ async def run_trial(
     chaos_injected_at = now()
     chaos_metadata = await subject.inject_chaos(chaos_type, **(chaos_params or {}))
     console.print(f"[dim]Chaos metadata: {chaos_metadata}[/dim]")
+
+    # Write variant config to ticket (if variant and operator_db provided)
+    # Do this early so the agent picks it up when it polls
+    if variant_config and operator_db_path and not baseline:
+        # Wait briefly for ticket to be created by monitor
+        await asyncio.sleep(2.0)
+        await update_ticket_variant(operator_db_path, variant_config)
+        console.print(f"[dim]Variant config written to ticket: {variant_config.model}[/dim]")
 
     # Wait for resolution (unless baseline)
     ticket_created_at = None
@@ -344,6 +377,7 @@ async def run_campaign_from_config(
                     baseline=spec["baseline"],
                     operator_db_path=operator_db_path,
                     chaos_params=spec["chaos_params"],
+                    variant_config=variant_config,
                 )
 
                 trial_id = await db.insert_trial(trial)
