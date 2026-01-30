@@ -25,6 +25,9 @@ def process_ticket(
 ) -> tuple[str, str]:
     """Process ticket with Claude using tool_runner.
 
+    Variant config is read from ticket.variant_model and ticket.variant_system_prompt
+    if set by the eval harness. Otherwise uses defaults.
+
     Args:
         client: Anthropic client
         ticket: Ticket to process
@@ -39,17 +42,21 @@ def process_ticket(
     if ticket.metric_snapshot:
         ticket_text += f"\n\nMetrics:\n{json.dumps(ticket.metric_snapshot, indent=2)}"
 
-    # Build system prompt with subject context if available
-    system_prompt = SYSTEM_PROMPT
+    # Use variant model if set, otherwise default
+    effective_model = ticket.variant_model or "claude-opus-4-20250514"
+
+    # Build system prompt: variant override > default, then append subject context
+    base_prompt = ticket.variant_system_prompt or SYSTEM_PROMPT
+    effective_system_prompt = base_prompt
     if ticket.subject_context:
-        system_prompt += "\n\n" + ticket.subject_context
+        effective_system_prompt += "\n\n" + ticket.subject_context
 
     # Run Claude with tool_runner
     runner = client.beta.messages.tool_runner(
-        model="claude-opus-4-20250514",
+        model=effective_model,
         max_tokens=8192,
         tools=[shell],
-        system=system_prompt,
+        system=effective_system_prompt,
         messages=[{"role": "user", "content": ticket_text}],
     )
 
@@ -96,12 +103,11 @@ def process_ticket(
     return "escalated", f"Session ended: {final_message.stop_reason if final_message else 'unknown'}"
 
 
-def run_agent_loop(db_path: Path, audit_dir: Path | None = None) -> None:
+def run_agent_loop(db_path: Path) -> None:
     """Run agent polling loop. Blocks until Ctrl+C.
 
     Args:
         db_path: Path to tickets database
-        audit_dir: Unused, kept for API compatibility
     """
     client = anthropic.Anthropic()
     print(f"Agent loop starting. Database: {db_path}\nPress Ctrl+C to stop.\n")
