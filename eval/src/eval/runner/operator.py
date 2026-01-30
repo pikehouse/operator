@@ -84,9 +84,19 @@ class OperatorProcesses:
         # Ensure operator.db directory exists
         self.operator_db_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Environment for subprocesses
+        # Environment for subprocesses - start with current env
         env = os.environ.copy()
         env["OPERATOR_DB_PATH"] = str(self.operator_db_path)
+
+        # Load .env file from project root if it exists (for ANTHROPIC_API_KEY etc)
+        env_file = self.project_root / ".env"
+        if env_file.exists():
+            with open(env_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, value = line.split("=", 1)
+                        env[key.strip()] = value.strip()
 
         console.print(f"[dim]Starting operator in: {self.project_root}[/dim]")
         console.print(f"[dim]Using database: {self.operator_db_path}[/dim]")
