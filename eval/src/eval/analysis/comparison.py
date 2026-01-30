@@ -284,3 +284,25 @@ async def _find_baseline_campaign(
         )
         row = await cursor.fetchone()
         return row["id"] if row else None
+
+
+class VariantMetrics(BaseModel):
+    """Aggregate metrics for a single variant across all its campaigns/trials."""
+    variant_name: str
+    trial_count: int
+    success_count: int
+    win_rate: float
+    avg_time_to_detect_sec: float | None
+    avg_time_to_resolve_sec: float | None
+    avg_commands: float
+
+
+class VariantComparison(BaseModel):
+    """Comparison of multiple variants for the same subject/chaos combination.
+
+    Shows balanced scorecard - all metrics equally, no winner determination.
+    User interprets tradeoffs.
+    """
+    subject_name: str
+    chaos_type: str
+    variants: dict[str, VariantMetrics]  # variant_name -> metrics
