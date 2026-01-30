@@ -14,6 +14,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "jinja2>=3.1.0",
     "uvicorn>=0.32.0",
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
