@@ -84,6 +84,11 @@ class OperatorProcesses:
         # Ensure operator.db directory exists
         self.operator_db_path.parent.mkdir(parents=True, exist_ok=True)
 
+        # Delete old operator.db to ensure fresh state for this trial
+        if self.operator_db_path.exists():
+            console.print("[dim]Removing old operator.db for fresh trial...[/dim]")
+            self.operator_db_path.unlink()
+
         # Environment for subprocesses - start with current env
         env = os.environ.copy()
         env["OPERATOR_DB_PATH"] = str(self.operator_db_path)
