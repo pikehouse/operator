@@ -4,11 +4,11 @@
 
 **Milestone:** v3.2 Evaluation Harness
 **Phase:** 39 - Config Variants (COMPLETE)
-**Plan:** 2/2 complete
-**Status:** Campaign YAML with variant field, database stores variant_name, harness integrates variant config
-**Last activity:** 2026-01-30 — Completed 39-02-PLAN.md
+**Plan:** 3/3 complete
+**Status:** Variant comparison analysis with balanced scorecard CLI command
+**Last activity:** 2026-01-30 — Completed 39-03-PLAN.md
 
-Progress: ██████████████░░░░░░ (v3.2: 70%)
+Progress: ████████████████████ (v3.2: 100%)
 
 ## Project Reference
 
@@ -83,19 +83,19 @@ See: .planning/MILESTONES.md
 - Phase 38: Chaos Expansion (4 requirements)
 - Phase 39: Config Variants (3 requirements)
 
-**Status:** Phase 35 complete, Phase 36 complete, Phase 37 complete, Phase 38 complete, Phase 39 complete
+**Status:** Phase 35 complete (11/11), Phase 36 complete (9/9), Phase 37 complete (5/5), Phase 38 complete (4/4), Phase 39 complete (3/3)
 
-**Next:** v3.2 milestone complete
+**Next:** v3.2 milestone audit
 
 ## Session Continuity
 
-**Last session:** 2026-01-30T03:05:54Z
-**Stopped at:** Completed 39-02-PLAN.md (Phase 39 complete)
+**Last session:** 2026-01-30T01:05:08Z
+**Stopped at:** Completed 39-03-PLAN.md (Phase 39 complete, v3.2 milestone complete)
 **Resume file:** None
-**Next:** v3.2 milestone complete - ready for milestone audit
+**Next:** v3.2 milestone audit
 
 ---
-*State updated: 2026-01-30 (Phase 39 complete - v3.2 milestone complete)*
+*State updated: 2026-01-30 (v3.2 milestone complete - all 5 phases delivered)*
 
 ## Decisions Made
 
@@ -119,6 +119,10 @@ See: .planning/MILESTONES.md
 | 39-02 | Variant defaults to "default" | Backward compatibility with existing campaigns and YAMLs |
 | 39-02 | Variant loading in harness | Load variant early to fail fast if variant not found |
 | 39-02 | Defensive variant_name reads with getattr() | Compatible with old databases created before variant_name column |
+| 39-03 | Balanced scorecard approach for variant comparison | User requirement specified no winner determination, show all metrics equally |
+| 39-03 | Filter non-baseline campaigns for comparison | Baseline campaigns test self-healing, not agent variants |
+| 39-03 | Sort variants by name | Consistent output order for reproducible comparisons |
+| 39-03 | Aggregate across campaigns per variant | Single variant may have multiple campaigns (re-runs, different dates) |
 
 ## Open Issues
 
