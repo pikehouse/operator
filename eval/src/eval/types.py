@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
+from pydantic import BaseModel, Field
+
 
 class ChaosType(str, Enum):
     """Chaos types supported by evaluation harness."""
@@ -112,3 +114,17 @@ class Trial:
     final_state: str = ""  # JSON blob
     chaos_metadata: str = ""  # JSON blob
     commands_json: str = "[]"  # JSON array of commands
+
+
+class VariantConfig(BaseModel):
+    """Agent configuration variant for A/B testing.
+
+    Defines model, system prompt, and tool configuration for an agent variant.
+    """
+    name: str = Field(..., min_length=1, description="Human-readable variant name")
+    model: str = Field(..., description="Anthropic model ID (e.g., claude-opus-4-20250514)")
+    system_prompt: str = Field(..., min_length=1, description="System prompt text (inline)")
+    tools_config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Tool configuration (tool_choice, enabled_tools)"
+    )
