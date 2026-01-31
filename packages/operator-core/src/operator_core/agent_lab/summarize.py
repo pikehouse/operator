@@ -19,7 +19,7 @@ def summarize_with_haiku(client: anthropic.Anthropic, text: str) -> str:
         return text
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20250929",
+            model="claude-3-5-haiku-20241022",
             max_tokens=300,  # Increased from 150 for better summaries
             messages=[{"role": "user", "content": f"{HAIKU_SUMMARIZE_PROMPT}\n\n{text}"}],
         )

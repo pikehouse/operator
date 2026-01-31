@@ -43,7 +43,7 @@ def process_ticket(
         ticket_text += f"\n\nMetrics:\n{json.dumps(ticket.metric_snapshot, indent=2)}"
 
     # Use variant model if set, otherwise default
-    effective_model = ticket.variant_model or "claude-sonnet-4-5-20250929"
+    effective_model = ticket.variant_model or "claude-sonnet-4-20250514"
 
     # Build system prompt: variant override > default, then append subject context
     base_prompt = ticket.variant_system_prompt or SYSTEM_PROMPT
