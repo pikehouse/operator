@@ -9,6 +9,20 @@
 
 <h1 class="text-2xl font-bold mb-4">Trial {{ trial.id }}</h1>
 
+{% if agent_conclusion %}
+<div class="bg-green-50 border border-green-300 shadow rounded p-4 mb-4">
+    <div class="flex items-center justify-between mb-2">
+        <h2 class="text-lg font-semibold text-green-800">🤖 Agent Conclusion</h2>
+        <span class="text-xs px-2 py-1 rounded {% if agent_conclusion.status == 'resolved' %}bg-green-200 text-green-800{% else %}bg-yellow-200 text-yellow-800{% endif %}">
+            {{ agent_conclusion.status }}
+        </span>
+    </div>
+    <div class="prose prose-sm max-w-none text-gray-800">
+        {{ agent_conclusion.outcome_summary | replace('\n', '<br>') | safe }}
+    </div>
+</div>
+{% endif %}
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <!-- Chaos Injection Section -->
     <div class="bg-orange-50 border border-orange-200 shadow rounded p-4">
@@ -114,7 +128,22 @@
 
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-2">Commands ({{ commands|length }})</h2>
-    {% if commands %}
+    {% if commands_with_reasoning %}
+    <div class="space-y-3">
+        {% for cmd in commands_with_reasoning %}
+        <div class="border border-gray-200 rounded overflow-hidden">
+            {% if cmd.reasoning %}
+            <div class="bg-blue-50 px-3 py-2 text-sm text-blue-800 border-b border-gray-200">
+                <span class="font-medium">💭</span> {{ cmd.reasoning }}
+            </div>
+            {% endif %}
+            <div class="bg-gray-50 p-2 font-mono text-sm overflow-x-auto">
+                {{ cmd.command }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% elif commands %}
     <div class="space-y-2">
         {% for cmd in commands %}
         <div class="bg-gray-50 p-2 rounded font-mono text-sm overflow-x-auto">
@@ -133,20 +162,26 @@
 
 {% if reasoning_entries %}
 <div class="bg-white shadow rounded p-4 mb-4">
-    <h2 class="text-lg font-semibold mb-4">Agent Reasoning Timeline</h2>
+    <h2 class="text-lg font-semibold mb-4">Agent Reasoning Timeline ({{ reasoning_entries|length }} entries)</h2>
     <div class="space-y-2">
         {% for entry in reasoning_entries %}
-        <div class="{% if entry.entry_type == 'reasoning' %}bg-blue-50 border-l-4 border-blue-400{% elif entry.entry_type == 'tool_call' %}bg-yellow-50 border-l-4 border-yellow-400{% else %}bg-green-50 border-l-4 border-green-400{% endif %} p-3 rounded-r">
+        <div class="{% if entry.entry_type == 'reasoning' %}bg-blue-50 border-l-4 border-blue-400{% elif entry.entry_type == 'tool_call' %}bg-yellow-50 border-l-4 border-yellow-400{% else %}bg-gray-50 border-l-4 border-gray-400{% endif %} p-3 rounded-r">
             <div class="flex justify-between items-start mb-1">
-                <span class="text-xs font-medium uppercase tracking-wide {% if entry.entry_type == 'reasoning' %}text-blue-600{% elif entry.entry_type == 'tool_call' %}text-yellow-600{% else %}text-green-600{% endif %}">
-                    {{ entry.entry_type }}
+                <span class="text-xs font-medium uppercase tracking-wide {% if entry.entry_type == 'reasoning' %}text-blue-600{% elif entry.entry_type == 'tool_call' %}text-yellow-600{% else %}text-gray-600{% endif %}">
+                    {% if entry.entry_type == 'reasoning' %}💭 reasoning{% elif entry.entry_type == 'tool_call' %}🔧 tool_call{% else %}📤 {{ entry.entry_type }}{% endif %}
                 </span>
-                <span class="text-xs text-gray-500">{{ entry.timestamp }}</span>
+                <span class="text-xs text-gray-500">{{ entry.timestamp[11:19] if entry.timestamp else "" }}</span>
             </div>
             {% if entry.tool_name %}
             <div class="font-mono text-sm text-gray-700 mb-1">{{ entry.tool_name }}</div>
             {% endif %}
-            <div class="text-sm text-gray-800 whitespace-pre-wrap">{{ entry.content }}</div>
+            {% if entry.reasoning %}
+            <div class="text-sm text-blue-700 italic mb-1">{{ entry.reasoning }}</div>
+            {% endif %}
+            <details class="text-sm text-gray-800">
+                <summary class="cursor-pointer hover:text-blue-600">{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</summary>
+                <pre class="mt-2 p-2 bg-white rounded text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
+            </details>
         </div>
         {% endfor %}
     </div>

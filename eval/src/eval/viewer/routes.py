@@ -145,78 +145,167 @@ async def get_trial(request: Request, trial_id: int):
         except Exception:
             pass
 
-    # Fetch reasoning entries and monitor detection if operator.db path is available
+    # Fetch reasoning entries, agent conclusion, and monitor detection if operator.db path is available
     reasoning_entries = []
     monitor_detection = None
+    agent_conclusion = None
     operator_db_path = request.app.state.operator_db_path
 
     if operator_db_path and operator_db_path.exists():
-        from operator_core.db.audit_log import AuditLogDB
+        import sqlite3
 
-        def get_entries():
-            """Sync function to query audit log."""
-            from datetime import datetime
-
-            with AuditLogDB(operator_db_path) as audit_db:
-                # Query entries within trial time window
-                start_time = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
-                end_time = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
-
-                entries = audit_db.get_entries_by_timerange(start_time, end_time)
-                return [
-                    {
-                        "entry_type": e["entry_type"],
-                        "content": e["content"][:500] if len(e["content"]) > 500 else e["content"],
-                        "tool_name": e["tool_name"],
-                        "timestamp": e["timestamp"],
-                    }
-                    for e in entries
-                ]
-
-        def get_monitor_detection():
-            """Query tickets table for what the monitor detected."""
-            import sqlite3
-            from datetime import datetime
+        def get_ticket_and_session():
+            """Query ticket and agent session for this trial."""
+            from datetime import datetime, timezone
 
             try:
                 conn = sqlite3.connect(operator_db_path)
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                # Find ticket created around trial time
-                start_time = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
-                end_time = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
+                # Convert trial UTC times to local time for comparison
+                # (operator.db stores local time without timezone)
+                trial_start = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
+                trial_end = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
 
+                # Convert to local time strings (without timezone) for SQLite comparison
+                local_start = trial_start.astimezone().replace(tzinfo=None).isoformat()
+                local_end = trial_end.astimezone().replace(tzinfo=None).isoformat()
+
+                # Find ticket created during trial (use first_seen_at which is in local time)
                 cursor.execute("""
-                    SELECT violation_type, violation_details, created_at
+                    SELECT id, invariant_name, message, first_seen_at as detected_at
                     FROM tickets
-                    WHERE created_at BETWEEN ? AND ?
-                    ORDER BY created_at ASC
+                    WHERE first_seen_at BETWEEN ? AND ?
+                    ORDER BY first_seen_at ASC
                     LIMIT 1
-                """, (start_time.isoformat(), end_time.isoformat()))
+                """, (local_start, local_end))
+                ticket_row = cursor.fetchone()
 
-                row = cursor.fetchone()
+                ticket_info = None
+                session_info = None
+
+                if ticket_row:
+                    ticket_id = ticket_row["id"]
+                    ticket_info = {
+                        "violation_type": ticket_row["invariant_name"],
+                        "violation_details": ticket_row["message"],
+                        "detected_at": ticket_row["detected_at"],
+                    }
+
+                    # Find agent session for this ticket
+                    cursor.execute("""
+                        SELECT session_id, status, outcome_summary, started_at, ended_at
+                        FROM agent_sessions
+                        WHERE ticket_id = ?
+                        ORDER BY started_at DESC
+                        LIMIT 1
+                    """, (ticket_id,))
+                    session_row = cursor.fetchone()
+
+                    if session_row and session_row["outcome_summary"]:
+                        session_info = {
+                            "session_id": session_row["session_id"],
+                            "status": session_row["status"],
+                            "outcome_summary": session_row["outcome_summary"],
+                        }
+
+                conn.close()
+                return ticket_info, session_info
+            except Exception as e:
+                return None, None
+
+        def get_reasoning_entries(session_id: str | None, local_start: str, local_end: str):
+            """Get reasoning entries by session_id or time range."""
+            try:
+                conn = sqlite3.connect(operator_db_path)
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+
+                if session_id:
+                    # Prefer querying by session_id (more reliable)
+                    cursor.execute("""
+                        SELECT entry_type, content, raw_content, tool_name, tool_params, timestamp
+                        FROM agent_log_entries
+                        WHERE session_id = ?
+                        ORDER BY timestamp ASC
+                    """, (session_id,))
+                else:
+                    # Fallback to time range
+                    cursor.execute("""
+                        SELECT entry_type, content, raw_content, tool_name, tool_params, timestamp
+                        FROM agent_log_entries
+                        WHERE timestamp BETWEEN ? AND ?
+                        ORDER BY timestamp ASC
+                    """, (local_start, local_end))
+
+                rows = cursor.fetchall()
                 conn.close()
 
-                if row:
-                    return {
-                        "violation_type": row["violation_type"],
-                        "violation_details": row["violation_details"],
-                        "detected_at": row["created_at"],
-                    }
+                entries = []
+                for e in rows:
+                    # Get full content (prefer raw_content if available)
+                    content = e["raw_content"] or e["content"] or ""
+
+                    # For tool_calls, extract reasoning from tool_params
+                    reasoning = None
+                    if e["entry_type"] == "tool_call" and e["tool_params"]:
+                        try:
+                            params = json.loads(e["tool_params"])
+                            reasoning = params.get("reasoning")
+                        except:
+                            pass
+
+                    entries.append({
+                        "entry_type": e["entry_type"],
+                        "content": content,
+                        "tool_name": e["tool_name"],
+                        "timestamp": e["timestamp"],
+                        "reasoning": reasoning,
+                    })
+                return entries
             except Exception:
-                pass
-            return None
+                return []
 
         try:
-            reasoning_entries = await asyncio.to_thread(get_entries)
+            ticket_info, session_info = await asyncio.to_thread(get_ticket_and_session)
+            monitor_detection = ticket_info
+            agent_conclusion = session_info
+
+            # Get reasoning entries
+            from datetime import datetime
+            trial_start = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
+            trial_end = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
+            local_start = trial_start.astimezone().replace(tzinfo=None).isoformat()
+            local_end = trial_end.astimezone().replace(tzinfo=None).isoformat()
+
+            session_id = session_info["session_id"] if session_info else None
+            reasoning_entries = await asyncio.to_thread(
+                get_reasoning_entries, session_id, local_start, local_end
+            )
         except Exception:
             pass
 
-        try:
-            monitor_detection = await asyncio.to_thread(get_monitor_detection)
-        except Exception:
-            pass
+    # Extract reasoning from commands for display
+    commands_with_reasoning = []
+    for cmd in raw_commands:
+        if isinstance(cmd, dict):
+            tool_params = cmd.get("tool_params", "")
+            command_str = ""
+            reasoning = ""
+            try:
+                params = json.loads(tool_params) if isinstance(tool_params, str) else tool_params
+                command_str = params.get("command", "")
+                reasoning = params.get("reasoning", "")
+            except:
+                command_str = str(cmd)
+            commands_with_reasoning.append({
+                "command": command_str,
+                "reasoning": reasoning,
+                "timestamp": cmd.get("timestamp", ""),
+            })
+        elif isinstance(cmd, str):
+            commands_with_reasoning.append({"command": cmd, "reasoning": "", "timestamp": ""})
 
     return request.app.state.templates.TemplateResponse(
         "trial.html",
@@ -224,10 +313,12 @@ async def get_trial(request: Request, trial_id: int):
             "request": request,
             "trial": trial,
             "commands": commands,
+            "commands_with_reasoning": commands_with_reasoning,
             "chaos_meta": chaos_meta,
             "chaos_description": chaos_description,
             "timing": timing,
             "monitor_detection": monitor_detection,
+            "agent_conclusion": agent_conclusion,
             "reasoning_entries": reasoning_entries,
         },
     )

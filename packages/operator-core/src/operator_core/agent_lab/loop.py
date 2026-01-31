@@ -92,14 +92,14 @@ def process_ticket(
 
         final_message = message
 
-    # Determine outcome
+    # Determine outcome - keep full text, don't summarize (Claude already writes a summary)
     if final_message and final_message.stop_reason == "end_turn":
         summary_text = "Completed"
         if final_message.content and len(final_message.content) > 0:
             first_block = final_message.content[0]
             if hasattr(first_block, "text"):
                 summary_text = first_block.text  # type: ignore
-        return "resolved", summarize_with_haiku(client, summary_text)
+        return "resolved", summary_text
     return "escalated", f"Session ended: {final_message.stop_reason if final_message else 'unknown'}"
 
 
