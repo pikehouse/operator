@@ -247,6 +247,11 @@ def run_campaign_cmd(
         "--operator-running",
         help="Operator monitor/agent already running externally (skip managed mode)",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model", "-m",
+        help="Override model (e.g., 'claude-sonnet-4-20250514', 'claude-opus-4-20250514')",
+    ),
 ) -> None:
     """Run a campaign from YAML configuration file.
 
@@ -293,7 +298,9 @@ def run_campaign_cmd(
         operator_db = Path("data/operator.db")
 
     # Determine if managed mode
-    managed_mode = not operator_running and not config.include_baseline
+    # Note: include_baseline doesn't affect this - baseline trials run without
+    # chaos but still need the operator running for non-baseline trials
+    managed_mode = not operator_running
 
     # Show campaign summary
     console.print(f"\n[bold]Campaign: {config.name}[/bold]")
@@ -304,6 +311,8 @@ def run_campaign_cmd(
     console.print(f"Cooldown: {config.cooldown_seconds}s")
     console.print(f"Include baseline: {config.include_baseline}")
     console.print(f"Variant: {config.variant}")
+    if model:
+        console.print(f"Model override: {model}")
     console.print(f"Operator: {'managed' if managed_mode else 'external'}")
 
     # Run campaign
@@ -311,11 +320,12 @@ def run_campaign_cmd(
         db = EvalDB(db_path)
         await db.ensure_schema()
 
-        async def execute_campaign():
+        async def execute_campaign(resolved_db_path: Path):
             return await run_campaign_from_config(
                 config=config,
                 db=db,
-                operator_db_path=operator_db,
+                operator_db_path=resolved_db_path,
+                model_override=model,
             )
 
         if managed_mode:
@@ -323,9 +333,11 @@ def run_campaign_cmd(
             # Use first subject for monitor (campaigns usually test one subject)
             subject_name = config.subjects[0] if config.subjects else "tikv"
             async with OperatorProcesses(subject_name, operator_db) as op:
-                return await execute_campaign()
+                # Use the resolved path from OperatorProcesses (relative to project root)
+                return await execute_campaign(op.operator_db_path)
         else:
-            return await execute_campaign()
+            # External mode: use path as-is (user is responsible for correct path)
+            return await execute_campaign(operator_db)
 
     campaign_id = asyncio.run(run())
     console.print(f"\n[bold green]Campaign {campaign_id} finished[/bold green]")

@@ -1,5 +1,5 @@
 name: default
-model: claude-opus-4-20250514
+model: claude-sonnet-4-5-20250929
 system_prompt: |
   You are an SRE operator responsible for diagnosing and fixing infrastructure issues.
 
