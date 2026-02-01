@@ -243,6 +243,7 @@ async def get_trial(request: Request, trial_id: int):
                 conn.close()
 
                 entries = []
+                prev_ts = None
                 for e in rows:
                     # Get full content (prefer raw_content if available)
                     content = e["raw_content"] or e["content"] or ""
@@ -256,12 +257,32 @@ async def get_trial(request: Request, trial_id: int):
                         except:
                             pass
 
+                    # Calculate elapsed time from previous entry
+                    elapsed_seconds = None
+                    curr_ts = e["timestamp"]
+                    if curr_ts and prev_ts:
+                        try:
+                            from datetime import datetime, timezone
+                            curr_time = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                            prev_time = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
+                            if curr_time.tzinfo is None:
+                                curr_time = curr_time.replace(tzinfo=timezone.utc)
+                            if prev_time.tzinfo is None:
+                                prev_time = prev_time.replace(tzinfo=timezone.utc)
+                            elapsed_seconds = (curr_time - prev_time).total_seconds()
+                        except Exception:
+                            pass
+
+                    if curr_ts:
+                        prev_ts = curr_ts
+
                     entries.append({
                         "entry_type": e["entry_type"],
                         "content": content,
                         "tool_name": e["tool_name"],
                         "timestamp": e["timestamp"],
                         "reasoning": reasoning,
+                        "elapsed_seconds": elapsed_seconds,
                     })
                 return entries
             except Exception:
@@ -286,8 +307,12 @@ async def get_trial(request: Request, trial_id: int):
         except Exception:
             pass
 
-    # Extract reasoning from commands for display
+    # Extract reasoning from commands for display with elapsed time calculation
+    from datetime import datetime, timezone
+
     commands_with_reasoning = []
+    prev_timestamp = None
+
     for cmd in raw_commands:
         if isinstance(cmd, dict):
             tool_params = cmd.get("tool_params", "")
@@ -299,13 +324,39 @@ async def get_trial(request: Request, trial_id: int):
                 reasoning = params.get("reasoning", "")
             except:
                 command_str = str(cmd)
+
+            timestamp = cmd.get("timestamp", "")
+            elapsed_seconds = None
+
+            # Calculate elapsed time from previous command
+            if timestamp and prev_timestamp:
+                try:
+                    curr_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                    prev_time = datetime.fromisoformat(prev_timestamp.replace("Z", "+00:00"))
+                    if curr_time.tzinfo is None:
+                        curr_time = curr_time.replace(tzinfo=timezone.utc)
+                    if prev_time.tzinfo is None:
+                        prev_time = prev_time.replace(tzinfo=timezone.utc)
+                    elapsed_seconds = (curr_time - prev_time).total_seconds()
+                except Exception:
+                    pass
+
+            if timestamp:
+                prev_timestamp = timestamp
+
             commands_with_reasoning.append({
                 "command": command_str,
                 "reasoning": reasoning,
-                "timestamp": cmd.get("timestamp", ""),
+                "timestamp": timestamp,
+                "elapsed_seconds": elapsed_seconds,
             })
         elif isinstance(cmd, str):
-            commands_with_reasoning.append({"command": cmd, "reasoning": "", "timestamp": ""})
+            commands_with_reasoning.append({
+                "command": cmd,
+                "reasoning": "",
+                "timestamp": "",
+                "elapsed_seconds": None,
+            })
 
     return request.app.state.templates.TemplateResponse(
         "trial.html",

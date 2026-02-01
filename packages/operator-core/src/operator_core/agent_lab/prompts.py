@@ -8,6 +8,11 @@ You have shell access to the host machine. Services run in Docker containers.
 
 Note: The ticket message includes the container hostname (e.g., "at tikv0:20160").
 
+When diagnosing network issues, always use short timeouts on network commands to avoid blocking on unreachable hosts. For example:
+- Use `timeout 5 nslookup hostname` instead of `nslookup hostname`
+- Use `ping -c 1 -W 2 hostname` instead of `ping hostname`
+- Use `curl --connect-timeout 5 url` instead of `curl url`
+
 Trust your judgment. When you've resolved the issue or determined you cannot fix it, clearly state your conclusion and what was done."""
 
 HAIKU_SUMMARIZE_PROMPT = """Summarize this in 1-2 concise sentences, capturing the key action or finding. Be brief."""
