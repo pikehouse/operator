@@ -10,7 +10,7 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 
 ## Current State
 
-**Shipped:** v3.1 (2026-01-29)
+**Shipped:** v3.2 (2026-01-30)
 **Code:** ~21,500 lines Python across 5 packages (operator-core, operator-protocols, operator-tikv, operator-ratelimiter, ratelimiter-service)
 **Tech stack:** Python, Typer CLI, SQLite, Claude API, Docker Compose, TiKV/PD, Redis, FastAPI, Rich TUI, Pydantic
 
@@ -112,14 +112,21 @@ AI demonstrates real diagnostic reasoning about distributed systems — not just
 - Both TiKV and ratelimiter demos functional end-to-end — v3.1
 - Demo chapters flow correctly with new architecture — v3.1
 
+**v3.2:**
+- Standalone eval/ harness for chaos experimentation — v3.2
+- EvalSubject protocol with TiKV implementation — v3.2
+- 4 chaos types: node_kill, latency, disk_pressure, network_partition — v3.2
+- Trial scoring with time-to-detect, time-to-resolve — v3.2
+- Campaign YAML config with matrix expansion — v3.2
+- Config variants for A/B testing agent configurations — v3.2
+- Web viewer for browsing campaigns and trial reasoning — v3.2
+
 ### Active
 
-**v3.2 Evaluation Harness:**
-- Standalone eval/ harness for chaos experimentation
-- Three-layer architecture: Runner → Analysis → Viewer
-- Subject-agnostic (TiKV, rate limiter, future subjects)
-- Post-hoc scoring and baseline comparison
-- Config variants for testing different agent configurations
+**v3.3 Extended TiKV Chaos:**
+- cpu_pressure chaos type (SIGSTOP or stress-ng) — triggers Raft election stalls
+- memory_pressure chaos type (cgroups limit) — triggers OOM behavior
+- io_latency chaos type (tc on block device) — triggers slow store detection
 
 ### Future
 
@@ -180,4 +187,4 @@ The audit layer carries forward unchanged. Production adds an approval gate befo
 | Database audit over JSON files | Better queryability, CLI integration | Good — operator audit commands work |
 
 ---
-*Last updated: 2026-01-29 after v3.1 milestone shipped*
+*Last updated: 2026-02-01 after v3.3 milestone started*
