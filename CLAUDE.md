@@ -165,6 +165,33 @@ uv run operator tickets list
 cd eval && uv run eval run campaign campaigns/smoke-test.yaml
 ```
 
+## Development Workflow
+
+### Test as You Go
+
+When making changes, add or update tests alongside the code - not as a separate step later. If a change needs a test, write it as part of the same work.
+
+- **New function or class?** Add a test file or test cases immediately
+- **Bug fix?** Add a regression test that would have caught it
+- **Changing behavior?** Update existing tests to match
+
+Run tests for the package you're modifying:
+```bash
+# operator-core tests
+uv run pytest packages/operator-core/tests/
+
+# tikv-observer tests
+uv run pytest subjects/tikv/observer/tests/
+
+# eval tests
+cd eval && uv run pytest tests/
+```
+
+### Commit Hygiene
+
+- Commit working code with passing tests
+- Tests and implementation go in the same commit when they're for the same change
+
 ## Design Principles
 
 1. **operator-protocols has ZERO dependencies** - Can be imported anywhere
