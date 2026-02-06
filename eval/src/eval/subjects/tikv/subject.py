@@ -17,11 +17,13 @@ from eval.subjects.tikv.chaos import (
     cleanup_disk_pressure,
     cleanup_latency_chaos,
     cleanup_network_partition,
+    get_pd_ips,
     get_tikv_peer_ips,
     inject_disk_pressure,
     inject_latency_chaos,
     inject_network_partition,
     kill_random_tikv,
+    restore_node_restart_policy,
 )
 
 
@@ -138,21 +140,30 @@ class TiKVEvalSubject:
                 ]
 
                 # All containers must be running with healthy status
-                all_healthy = all(
-                    c.state.running and c.state.health in ("healthy", None)
-                    for c in cluster_containers
-                )
+                # c.state.health is None (no healthcheck) or ContainerHealth object with .status
+                def is_healthy(c):
+                    if not c.state.running:
+                        return False
+                    if c.state.health is None:
+                        return True  # No healthcheck defined
+                    return c.state.health.status == "healthy"
+
+                all_healthy = all(is_healthy(c) for c in cluster_containers)
 
                 if all_healthy:
                     # Additional verification: PD reports 3 stores
                     if await self._verify_stores_up():
+                        logger.debug("Cluster healthy: all containers running and 3 stores up")
                         return True
+                    else:
+                        logger.debug("Containers healthy but waiting for stores to register with PD")
 
-            except Exception:
-                pass  # Container not ready yet
+            except Exception as e:
+                logger.debug(f"Health check error: {e}")
 
             await asyncio.sleep(2.0)
 
+        logger.warning(f"Health check timeout after {timeout_sec}s")
         return False
 
     async def capture_state(self) -> dict[str, Any]:
@@ -189,9 +200,22 @@ class TiKVEvalSubject:
         except Exception as e:
             return {"error": str(e)}
 
+    # Chaos types safe for local execution
+    LOCAL_SAFE_CHAOS_TYPES = ["node_kill", "latency", "network_partition"]
+
+    # Chaos types that require cloud VMs (dangerous on laptops)
+    CLOUD_ONLY_CHAOS_TYPES = ["disk_pressure", "memory_exhaustion", "cpu_starvation"]
+
     def get_chaos_types(self) -> list[str]:
-        """Return supported chaos types for TiKV."""
-        return ["node_kill", "latency", "disk_pressure", "network_partition"]
+        """Return supported chaos types for local TiKV.
+
+        Note: disk_pressure, memory_exhaustion, and cpu_starvation are
+        excluded because they can damage the host system. These require
+        --cloud mode which runs on isolated VMs.
+
+        Use `eval run campaign config.yaml --cloud=gcp` for dangerous chaos.
+        """
+        return self.LOCAL_SAFE_CHAOS_TYPES
 
     async def inject_chaos(self, chaos_type: str, **params: Any) -> dict[str, Any]:
         """Inject specified chaos type.
@@ -204,8 +228,16 @@ class TiKVEvalSubject:
             Chaos metadata dict
 
         Raises:
-            ValueError: If chaos_type not supported
+            ValueError: If chaos_type not supported or requires cloud mode
         """
+        # Check for cloud-only chaos types
+        if chaos_type in self.CLOUD_ONLY_CHAOS_TYPES:
+            raise ValueError(
+                f"Chaos type '{chaos_type}' requires cloud mode. "
+                f"Use: eval run campaign config.yaml --cloud=gcp\n"
+                f"Local-safe types: {self.LOCAL_SAFE_CHAOS_TYPES}"
+            )
+
         if chaos_type == "node_kill":
             return await kill_random_tikv(self.docker)
 
@@ -232,7 +264,8 @@ class TiKVEvalSubject:
 
         elif chaos_type == "network_partition":
             peer_ips = await get_tikv_peer_ips(self.docker, target.name)
-            return await inject_network_partition(self.docker, target.name, peer_ips)
+            pd_ips = await get_pd_ips(self.docker)
+            return await inject_network_partition(self.docker, target.name, peer_ips, pd_ips)
 
         raise ValueError(
             f"Unknown chaos type: {chaos_type}. Supported: {self.get_chaos_types()}"
@@ -254,18 +287,29 @@ class TiKVEvalSubject:
             elif chaos_type == "disk_pressure":
                 target_container = chaos_metadata["target_container"]
                 fill_file = chaos_metadata["fill_file"]
-                await cleanup_disk_pressure(self.docker, target_container, fill_file)
+                target_path = chaos_metadata.get("target_path", "/tmp/chaos-disk")
+                await cleanup_disk_pressure(self.docker, target_container, fill_file, target_path)
 
             elif chaos_type == "network_partition":
                 isolated_container = chaos_metadata["isolated_container"]
                 target_ips = chaos_metadata["target_ips"]
+                pd_ips = chaos_metadata.get("pd_ips", [])
                 await cleanup_network_partition(
-                    self.docker, isolated_container, target_ips
+                    self.docker, isolated_container, target_ips, pd_ips
                 )
 
             elif chaos_type == "node_kill":
-                # No cleanup needed - container restarts naturally or via reset
-                pass
+                # Restore restart policy and restart the container
+                target_container = chaos_metadata["target_container"]
+                restart_policy = chaos_metadata.get("original_restart_policy", "on-failure")
+                await restore_node_restart_policy(
+                    self.docker, target_container, restart_policy
+                )
+                # Start the container back up
+                try:
+                    await asyncio.to_thread(self.docker.start, target_container)
+                except Exception as e:
+                    logger.debug(f"Failed to start {target_container}: {e}")
 
             else:
                 logger.warning(f"Unknown chaos type for cleanup: {chaos_type}")

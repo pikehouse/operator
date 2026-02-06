@@ -1,9 +1,58 @@
-"""Async SQLite persistence for evaluation data."""
+"""Async SQLite persistence for evaluation data.
+
+This module provides the default SQLite backend for local eval execution.
+For distributed cloud execution, see db_postgres.py.
+
+Both backends implement the same interface (EvalDBProtocol) for compatibility.
+"""
+
+from pathlib import Path
+from typing import Protocol, runtime_checkable
 
 import aiosqlite
-from pathlib import Path
 
 from eval.types import Campaign, Trial
+
+
+@runtime_checkable
+class EvalDBProtocol(Protocol):
+    """Protocol for eval database backends.
+
+    Both SQLite (EvalDB) and PostgreSQL (PostgresDB) implement this interface,
+    allowing code to work with either backend transparently.
+    """
+
+    async def ensure_schema(self) -> None:
+        """Create tables if not exist and run migrations."""
+        ...
+
+    async def insert_campaign(self, campaign: Campaign) -> int:
+        """Insert campaign record, return campaign_id."""
+        ...
+
+    async def insert_trial(self, trial: Trial) -> int:
+        """Insert trial record, return trial_id."""
+        ...
+
+    async def get_campaign(self, campaign_id: int) -> Campaign | None:
+        """Get campaign by ID."""
+        ...
+
+    async def get_trials(self, campaign_id: int) -> list[Trial]:
+        """Get all trials for a campaign."""
+        ...
+
+    async def get_trial(self, trial_id: int) -> Trial | None:
+        """Get trial by ID."""
+        ...
+
+    async def get_all_campaigns(self, limit: int = 100, offset: int = 0) -> list[Campaign]:
+        """Get all campaigns with pagination."""
+        ...
+
+    async def count_campaigns(self) -> int:
+        """Count total number of campaigns."""
+        ...
 
 
 SCHEMA_SQL = """

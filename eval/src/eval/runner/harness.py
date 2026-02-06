@@ -472,25 +472,26 @@ class SubjectPool:
     different host ports) to enable true parallel execution without conflicts.
     """
 
-    def __init__(self, pool_size: int, subject_type: str = "tikv"):
+    def __init__(self, pool_size: int, subject_type: str = "tikv", mode: str = "local"):
         """Initialize pool with N subject instances.
 
         Args:
             pool_size: Number of parallel instances (each gets unique ports)
-            subject_type: Subject type to create (currently only "tikv")
+            subject_type: Subject type to create (e.g., "tikv")
+            mode: Execution mode ("local" or "cloud-gcp")
         """
-        from eval.subjects.tikv import TiKVEvalSubject
+        from eval.subjects.factory import SubjectRegistry
 
         self.pool_size = pool_size
         self.subject_type = subject_type
+        self.mode = mode
 
-        # Create instances with unique instance_ids
+        # Create instances with unique instance_ids using factory
         self._instances: list[EvalSubject] = []
         for i in range(pool_size):
-            if subject_type == "tikv":
-                self._instances.append(TiKVEvalSubject(instance_id=i))
-            else:
-                raise ValueError(f"Unknown subject type: {subject_type}")
+            self._instances.append(
+                SubjectRegistry.create(subject_type, instance_id=i, mode=mode)
+            )
 
         # Track which instances are available
         self._available: asyncio.Queue[int] = asyncio.Queue()

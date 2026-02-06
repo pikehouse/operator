@@ -10,15 +10,39 @@ from pydantic import BaseModel, Field, field_validator
 
 class ChaosSpec(BaseModel):
     """Per-chaos-type configuration."""
-    type: str  # "node_kill", "latency", "disk_pressure", "network_partition"
+    type: str  # "node_kill", "latency", "disk_pressure", "network_partition", etc.
     params: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("type")
     @classmethod
     def validate_chaos_type(cls, v: str) -> str:
-        valid_types = ["node_kill", "latency", "disk_pressure", "network_partition"]
+        # Base types always allowed; cloud-only types validated at runtime
+        valid_types = [
+            "node_kill", "latency", "disk_pressure", "network_partition",
+            "memory_exhaustion", "cpu_starvation",  # Cloud-only
+        ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")
+        return v
+
+
+class CloudConfig(BaseModel):
+    """Cloud execution configuration."""
+    provider: str = Field(default="gcp", description="Cloud provider (gcp)")
+    project: str | None = Field(default=None, description="GCP project ID")
+    zone: str = Field(default="us-central1-a", description="GCP zone")
+    machine_type: str = Field(default="e2-standard-4", description="VM machine type")
+    database_url: str | None = Field(
+        default=None,
+        description="PostgreSQL connection URL for distributed execution"
+    )
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        valid_providers = ["gcp"]
+        if v not in valid_providers:
+            raise ValueError(f"Invalid provider: {v}. Must be one of {valid_providers}")
         return v
 
 
@@ -32,6 +56,10 @@ class CampaignConfig(BaseModel):
     cooldown_seconds: int = Field(default=0, ge=0)
     include_baseline: bool = False
     variant: str = Field(default="default", description="Variant name to use for agent configuration")
+    cloud: CloudConfig | None = Field(
+        default=None,
+        description="Cloud execution configuration (optional)"
+    )
 
     @field_validator("subjects")
     @classmethod

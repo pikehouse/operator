@@ -12,7 +12,7 @@ from rich.table import Table
 from eval.runner.db import EvalDB
 from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config
 from eval.runner.campaign import load_campaign_config, CampaignConfig
-from eval.subjects.tikv import TiKVEvalSubject
+from eval.subjects.factory import SubjectRegistry
 from eval.types import EvalSubject
 from eval.variants import load_all_variants
 
@@ -24,6 +24,9 @@ app = typer.Typer(
 
 run_app = typer.Typer(help="Run evaluation trials")
 app.add_typer(run_app, name="run")
+
+worker_app = typer.Typer(help="Distributed worker commands")
+app.add_typer(worker_app, name="worker")
 
 console = Console()
 
@@ -43,6 +46,8 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
         "latency": "Network latency injection",
         "disk_pressure": "Disk space exhaustion",
         "network_partition": "Network partition from peers",
+        "memory_exhaustion": "Memory pressure via stress (cloud-only)",
+        "cpu_starvation": "CPU starvation via stress (cloud-only)",
     }
     desc = descriptions.get(chaos_type, chaos_type)
 
@@ -58,11 +63,12 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
     return desc
 
 
-def get_subject(subject_name: str) -> EvalSubject:
-    """Load eval subject by name.
+def get_subject(subject_name: str, mode: str = "local") -> EvalSubject:
+    """Load eval subject by name and mode.
 
     Args:
         subject_name: Subject identifier (e.g., 'tikv')
+        mode: Execution mode ('local' or 'cloud-gcp')
 
     Returns:
         EvalSubject implementation
@@ -70,10 +76,11 @@ def get_subject(subject_name: str) -> EvalSubject:
     Raises:
         typer.BadParameter: If subject not found
     """
-    if subject_name.lower() == "tikv":
-        return TiKVEvalSubject()
-
-    raise typer.BadParameter(f"Unknown subject: {subject_name}. Available: tikv")
+    try:
+        return SubjectRegistry.create(subject_name.lower(), instance_id=0, mode=mode)
+    except ValueError as e:
+        available = SubjectRegistry.list_subjects()
+        raise typer.BadParameter(f"Unknown subject: {subject_name}. Available: {available}")
 
 
 @run_app.callback(invoke_without_command=True)
@@ -252,6 +259,16 @@ def run_campaign_cmd(
         "--model", "-m",
         help="Override model (e.g., 'claude-sonnet-4-20250514', 'claude-opus-4-20250514')",
     ),
+    cloud: Optional[str] = typer.Option(
+        None,
+        "--cloud",
+        help="Run on cloud (e.g., 'gcp'). Enables dangerous chaos types.",
+    ),
+    parallel_workers: int = typer.Option(
+        1,
+        "--parallel",
+        help="Number of parallel workers (cloud mode only)",
+    ),
 ) -> None:
     """Run a campaign from YAML configuration file.
 
@@ -260,6 +277,11 @@ def run_campaign_cmd(
 
     By default, starts operator monitor and agent automatically (managed mode).
     Use --operator-running if you already have them running externally.
+
+    Cloud Mode (--cloud=gcp):
+        - Uses GCP VMs for execution
+        - Enables dangerous chaos types (disk_pressure, memory_exhaustion)
+        - Requires EVAL_DATABASE_URL env var for PostgreSQL
 
     Example config:
         name: tikv-chaos-campaign
@@ -278,7 +300,9 @@ def run_campaign_cmd(
     Examples:
         eval run campaign config.yaml
         eval run campaign config.yaml --operator-running
+        eval run campaign config.yaml --cloud=gcp --parallel 5
     """
+    import os
     from eval.runner.operator import OperatorProcesses
 
     # Validate config file exists
@@ -293,6 +317,21 @@ def run_campaign_cmd(
         console.print(f"[red]Error loading config: {e}[/red]")
         raise typer.Exit(1)
 
+    # Determine cloud mode (CLI flag takes precedence over config)
+    cloud_mode = cloud or (config.cloud.provider if config.cloud else None)
+    execution_mode = f"cloud-{cloud_mode}" if cloud_mode else "local"
+
+    # Validate cloud-only chaos types
+    if not cloud_mode:
+        cloud_only_types = {"disk_pressure", "memory_exhaustion", "cpu_starvation"}
+        requested_types = {c.type for c in config.chaos_types}
+        invalid_types = requested_types & cloud_only_types
+        if invalid_types:
+            console.print(
+                f"[red]Error: Chaos types {invalid_types} require --cloud flag[/red]"
+            )
+            raise typer.Exit(1)
+
     # Set operator.db path
     if operator_db is None:
         operator_db = Path("data/operator.db")
@@ -300,22 +339,87 @@ def run_campaign_cmd(
     # Determine if managed mode
     # Note: include_baseline doesn't affect this - baseline trials run without
     # chaos but still need the operator running for non-baseline trials
-    managed_mode = not operator_running
+    managed_mode = not operator_running and not cloud_mode
 
     # Show campaign summary
     console.print(f"\n[bold]Campaign: {config.name}[/bold]")
     console.print(f"Subjects: {config.subjects}")
     console.print(f"Chaos types: {[c.type for c in config.chaos_types]}")
     console.print(f"Trials per combination: {config.trials_per_combination}")
-    console.print(f"Parallel: {config.parallel}")
+    console.print(f"Parallel: {parallel_workers if cloud_mode else config.parallel}")
     console.print(f"Cooldown: {config.cooldown_seconds}s")
     console.print(f"Include baseline: {config.include_baseline}")
     console.print(f"Variant: {config.variant}")
     if model:
         console.print(f"Model override: {model}")
-    console.print(f"Operator: {'managed' if managed_mode else 'external'}")
+    console.print(f"Mode: {execution_mode}")
+    console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'cloud'}")
 
-    # Run campaign
+    # Cloud mode execution
+    if cloud_mode:
+        async def run_cloud():
+            from eval.runner.db_postgres import PostgresDB
+            from eval.runner.queue import WorkQueue
+            from eval.runner.campaign import expand_campaign_matrix
+
+            # Get PostgreSQL connection URL
+            db_url = os.environ.get("EVAL_DATABASE_URL")
+            if config.cloud and config.cloud.database_url:
+                db_url = config.cloud.database_url
+
+            if not db_url:
+                console.print(
+                    "[red]Error: EVAL_DATABASE_URL env var or cloud.database_url required for cloud mode[/red]"
+                )
+                raise typer.Exit(1)
+
+            # Connect to PostgreSQL
+            db = PostgresDB(db_url)
+            await db.ensure_schema()
+            queue = WorkQueue(db)
+
+            # Create campaign
+            from eval.types import Campaign
+            from eval.runner.harness import now
+
+            trial_specs = expand_campaign_matrix(config)
+            campaign = Campaign(
+                subject_name=config.subjects[0] if config.subjects else "tikv",
+                chaos_type=config.chaos_types[0].type if config.chaos_types else "unknown",
+                trial_count=len(trial_specs),
+                baseline=config.include_baseline,
+                variant_name=config.variant,
+                created_at=now(),
+            )
+            campaign_id = await db.insert_campaign(campaign)
+            console.print(f"[green]Created campaign {campaign_id} in cloud database[/green]")
+
+            # Enqueue work items
+            work_items = [
+                {
+                    "subject_type": spec["subject"],
+                    "chaos_type": spec["chaos_type"],
+                    "chaos_params": spec["chaos_params"],
+                    "baseline": spec["baseline"],
+                }
+                for spec in trial_specs
+            ]
+            work_ids = await queue.enqueue(campaign_id, work_items)
+            console.print(f"[green]Enqueued {len(work_ids)} work items[/green]")
+
+            # In cloud mode, we just enqueue - workers run separately
+            console.print(f"\n[bold cyan]Work enqueued. Start workers with:[/bold cyan]")
+            console.print(f"  eval worker start --cloud={cloud_mode}")
+
+            await db.close()
+            return campaign_id
+
+        campaign_id = asyncio.run(run_cloud())
+        console.print(f"\n[bold green]Campaign {campaign_id} created (cloud mode)[/bold green]")
+        console.print(f"Monitor with: eval show {campaign_id}")
+        return
+
+    # Local mode execution
     async def run():
         db = EvalDB(db_path)
         await db.ensure_schema()
@@ -1004,6 +1108,162 @@ def list_variants_cmd(
 
     console.print(table)
     console.print(f"\n{len(variants)} variant(s) found")
+
+
+# --- Worker commands ---
+
+@worker_app.command("start")
+def worker_start(
+    cloud: str = typer.Option(
+        "gcp",
+        "--cloud",
+        help="Cloud provider (gcp)",
+    ),
+    worker_id: Optional[str] = typer.Option(
+        None,
+        "--id",
+        help="Worker ID (auto-generated if not provided)",
+    ),
+    poll_interval: float = typer.Option(
+        5.0,
+        "--poll-interval",
+        help="Seconds between queue polls",
+    ),
+) -> None:
+    """Start a distributed worker process.
+
+    Workers poll the PostgreSQL queue for pending work items, execute
+    trials on cloud VMs, and report results back to the database.
+
+    Requires EVAL_DATABASE_URL environment variable.
+
+    Examples:
+        eval worker start --cloud=gcp
+        eval worker start --cloud=gcp --id=worker-1
+    """
+    import os
+    from eval.runner.worker import run_worker
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL environment variable required[/red]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[bold cyan]Starting worker...[/bold cyan]")
+    console.print(f"Cloud: {cloud}")
+    console.print(f"Database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
+
+    asyncio.run(
+        run_worker(
+            db_url=db_url,
+            worker_id=worker_id,
+            mode=f"cloud-{cloud}",
+        )
+    )
+
+
+@worker_app.command("status")
+def worker_status(
+    campaign_id: Optional[int] = typer.Option(
+        None,
+        "--campaign",
+        "-c",
+        help="Campaign ID to check (default: all)",
+    ),
+) -> None:
+    """Check work queue status.
+
+    Shows pending, running, completed, and failed work items.
+
+    Requires EVAL_DATABASE_URL environment variable.
+
+    Examples:
+        eval worker status
+        eval worker status --campaign 1
+    """
+    import os
+    from eval.runner.db_postgres import PostgresDB
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL environment variable required[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        if campaign_id:
+            counts = await queue.get_campaign_status(campaign_id)
+            console.print(f"\n[bold]Campaign {campaign_id} work queue:[/bold]")
+        else:
+            # Get overall pending count
+            pending = await queue.get_pending_count()
+            console.print(f"\n[bold]Work queue status:[/bold]")
+            counts = {"pending": pending}
+
+        for status, count in counts.items():
+            color = {
+                "pending": "yellow",
+                "running": "cyan",
+                "completed": "green",
+                "failed": "red",
+            }.get(status, "white")
+            console.print(f"  [{color}]{status.capitalize()}: {count}[/{color}]")
+
+        await db.close()
+
+    asyncio.run(run())
+
+
+@worker_app.command("release-stale")
+def worker_release_stale(
+    timeout: int = typer.Option(
+        3600,
+        "--timeout",
+        "-t",
+        help="Seconds before considering a claim stale",
+    ),
+) -> None:
+    """Release stale work items back to pending.
+
+    Used to recover from worker crashes. Items running longer than
+    timeout are reset to pending for other workers to claim.
+
+    Requires EVAL_DATABASE_URL environment variable.
+
+    Examples:
+        eval worker release-stale
+        eval worker release-stale --timeout 1800
+    """
+    import os
+    from eval.runner.db_postgres import PostgresDB
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL environment variable required[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        released = await queue.release_stale(timeout_seconds=timeout)
+        console.print(f"[green]Released {released} stale work item(s)[/green]")
+
+        await db.close()
+
+    asyncio.run(run())
 
 
 def main() -> None:
