@@ -18,15 +18,17 @@ TIKV_CONTAINER_PATTERN = re.compile(r"-tikv\d+-")
 
 
 async def kill_random_tikv(docker: DockerClient) -> dict[str, Any]:
-    """Kill a random TiKV container with SIGKILL.
+    """Kill a random TiKV container with SIGKILL and prevent restart.
 
-    Simulates sudden node failure (crash, hardware fault).
+    Simulates sudden node failure (crash, hardware fault). Disables the
+    container's restart policy first to prevent Docker from automatically
+    restarting it.
 
     Args:
         docker: DockerClient configured with compose file
 
     Returns:
-        Chaos metadata dict with target_container, signal
+        Chaos metadata dict with target_container, signal, original_restart_policy
 
     Raises:
         RuntimeError: If no running TiKV containers found
@@ -46,6 +48,15 @@ async def kill_random_tikv(docker: DockerClient) -> dict[str, Any]:
     # Random selection
     target = random.choice(tikv_containers)
 
+    # Get original restart policy before disabling
+    inspect_data = await asyncio.to_thread(docker.container.inspect, target.name)
+    original_restart = inspect_data.host_config.restart_policy.name
+
+    # Disable restart policy so container stays dead
+    await asyncio.to_thread(
+        docker.container.update, target.name, restart="no"
+    )
+
     # Kill with SIGKILL in thread pool
     await asyncio.to_thread(docker.kill, target.name)
 
@@ -53,7 +64,27 @@ async def kill_random_tikv(docker: DockerClient) -> dict[str, Any]:
         "chaos_type": "node_kill",
         "target_container": target.name,
         "signal": "SIGKILL",
+        "original_restart_policy": original_restart,
     }
+
+
+async def restore_node_restart_policy(
+    docker: DockerClient, target_container: str, restart_policy: str
+) -> None:
+    """Restore container restart policy after node_kill chaos.
+
+    Args:
+        docker: DockerClient configured with compose file
+        target_container: Container name to restore
+        restart_policy: Original restart policy to restore (e.g., 'on-failure')
+    """
+    try:
+        await asyncio.to_thread(
+            docker.container.update, target_container, restart=restart_policy
+        )
+    except Exception as e:
+        # Container may not exist or policy may already be set
+        logger.debug(f"Failed to restore restart policy on {target_container}: {e}")
 
 
 async def inject_latency_chaos(
@@ -102,19 +133,28 @@ async def cleanup_latency_chaos(docker: DockerClient, target_container: str) -> 
         logger.debug(f"Failed to cleanup latency chaos on {target_container}: {e}")
 
 
+# Disk pressure uses a tmpfs to avoid consuming host disk
+# Size of tmpfs in bytes (256MB is enough to stress TiKV)
+DISK_PRESSURE_TMPFS_SIZE = 256 * 1024 * 1024  # 256MB
+
+
 async def inject_disk_pressure(
     docker: DockerClient,
     target_container: str,
     fill_percent: int,
-    target_path: str = "/data",
+    target_path: str = "/tmp/chaos-disk",
 ) -> dict[str, Any]:
-    """Inject disk pressure by filling disk space.
+    """Inject disk pressure using a size-limited tmpfs.
+
+    Creates a tmpfs mount, fills it to the specified percentage, then
+    monitors TiKV's response to low disk conditions. The tmpfs is isolated
+    from host storage - it uses container memory, not host disk.
 
     Args:
         docker: DockerClient configured with compose file
         target_container: Container name to inject disk pressure on
-        fill_percent: Percentage of available space to fill (0-100)
-        target_path: Path to fill (default: /data)
+        fill_percent: Percentage of tmpfs to fill (0-100)
+        target_path: Path to mount tmpfs (default: /tmp/chaos-disk)
 
     Returns:
         Chaos metadata dict with target_container, fill_file, fill_bytes, fill_percent
@@ -125,22 +165,24 @@ async def inject_disk_pressure(
     if not 0 <= fill_percent <= 100:
         raise ValueError(f"fill_percent must be 0-100, got {fill_percent}")
 
-    # Get available space in KB
-    df_cmd = f"df --output=avail {target_path} | tail -n 1"
-    result = await asyncio.to_thread(
-        docker.execute, target_container, ["sh", "-c", df_cmd]
+    tmpfs_size = DISK_PRESSURE_TMPFS_SIZE
+    fill_bytes = int(tmpfs_size * (fill_percent / 100))
+
+    # Create and mount tmpfs (uses container memory, not host disk)
+    setup_cmd = f"mkdir -p {target_path} && mount -t tmpfs -o size={tmpfs_size} tmpfs {target_path}"
+    await asyncio.to_thread(
+        docker.execute, target_container, ["sh", "-c", setup_cmd]
     )
-    avail_kb = int(result.strip())
 
-    # Calculate bytes to fill
-    fill_bytes = int(avail_kb * (fill_percent / 100) * 1024)
-
-    # Create fill file with timestamp
+    # Fill the tmpfs
     timestamp = int(time.time())
     fill_file = f"{target_path}/chaos-fill-{timestamp}.tmp"
-    fallocate_cmd = f"fallocate -l {fill_bytes} {fill_file}"
+    # Use dd instead of fallocate for tmpfs compatibility
+    block_size = 1024 * 1024  # 1MB blocks
+    count = fill_bytes // block_size
+    fill_cmd = f"dd if=/dev/zero of={fill_file} bs={block_size} count={count} 2>/dev/null"
     await asyncio.to_thread(
-        docker.execute, target_container, ["sh", "-c", fallocate_cmd]
+        docker.execute, target_container, ["sh", "-c", fill_cmd]
     )
 
     return {
@@ -149,42 +191,55 @@ async def inject_disk_pressure(
         "fill_percent": fill_percent,
         "fill_file": fill_file,
         "fill_bytes": fill_bytes,
+        "tmpfs_size": tmpfs_size,
+        "target_path": target_path,
     }
 
 
 async def cleanup_disk_pressure(
-    docker: DockerClient, target_container: str, fill_file: str
+    docker: DockerClient, target_container: str, fill_file: str, target_path: str = "/tmp/chaos-disk"
 ) -> None:
-    """Clean up disk fill file.
+    """Clean up tmpfs mount used for disk pressure.
 
     Args:
         docker: DockerClient configured with compose file
         target_container: Container name to clean up
-        fill_file: Path to fill file to remove
+        fill_file: Path to fill file to remove (unused, kept for compatibility)
+        target_path: Path where tmpfs was mounted
     """
     try:
-        cmd = f"rm -f {fill_file}"
+        # Unmount tmpfs and remove directory
+        cmd = f"umount {target_path} 2>/dev/null; rm -rf {target_path}"
         await asyncio.to_thread(docker.execute, target_container, ["sh", "-c", cmd])
     except Exception as e:
-        # Container may have restarted or file doesn't exist
+        # Container may have restarted or mount doesn't exist
         logger.debug(f"Failed to cleanup disk pressure on {target_container}: {e}")
 
 
 async def inject_network_partition(
-    docker: DockerClient, isolated_container: str, target_ips: list[str]
+    docker: DockerClient,
+    isolated_container: str,
+    target_ips: list[str],
+    pd_ips: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Inject network partition by blocking traffic to target IPs.
+    """Inject network partition by blocking traffic to peers AND PD.
+
+    Blocks traffic to both TiKV peers and PD nodes, causing the isolated
+    node to be marked as Down by PD (can't send heartbeats).
 
     Args:
         docker: DockerClient configured with compose file
         isolated_container: Container to isolate from peers
         target_ips: List of peer IPs to block
+        pd_ips: List of PD IPs to block (causes store to go Down)
 
     Returns:
-        Chaos metadata dict with isolated_container, target_ips
+        Chaos metadata dict with isolated_container, target_ips, pd_ips
     """
+    all_ips = target_ips + (pd_ips or [])
+
     # Block outbound and inbound traffic for each target IP
-    for ip in target_ips:
+    for ip in all_ips:
         output_cmd = f"iptables -I OUTPUT -d {ip} -j DROP"
         input_cmd = f"iptables -I INPUT -s {ip} -j DROP"
         await asyncio.to_thread(
@@ -198,11 +253,15 @@ async def inject_network_partition(
         "chaos_type": "network_partition",
         "isolated_container": isolated_container,
         "target_ips": target_ips,
+        "pd_ips": pd_ips or [],
     }
 
 
 async def cleanup_network_partition(
-    docker: DockerClient, isolated_container: str, target_ips: list[str]
+    docker: DockerClient,
+    isolated_container: str,
+    target_ips: list[str],
+    pd_ips: list[str] | None = None,
 ) -> None:
     """Clean up iptables network partition rules.
 
@@ -210,8 +269,11 @@ async def cleanup_network_partition(
         docker: DockerClient configured with compose file
         isolated_container: Container to restore connectivity
         target_ips: List of peer IPs to unblock
+        pd_ips: List of PD IPs to unblock
     """
-    for ip in target_ips:
+    all_ips = target_ips + (pd_ips or [])
+
+    for ip in all_ips:
         try:
             output_cmd = f"iptables -D OUTPUT -d {ip} -j DROP || true"
             input_cmd = f"iptables -D INPUT -s {ip} -j DROP || true"
@@ -254,7 +316,7 @@ async def get_tikv_peer_ips(
     # Get IP addresses from container inspect
     peer_ips = []
     for container in tikv_peers:
-        inspect_data = await asyncio.to_thread(docker.inspect, container.name)
+        inspect_data = await asyncio.to_thread(docker.container.inspect, container.name)
         # Extract IP from default bridge network
         networks = inspect_data.network_settings.networks
         if networks:
@@ -264,3 +326,38 @@ async def get_tikv_peer_ips(
                 peer_ips.append(ip)
 
     return peer_ips
+
+
+# Pattern to match PD containers: {project}-pd{N}-{index}
+PD_CONTAINER_PATTERN = re.compile(r"-pd\d+-")
+
+
+async def get_pd_ips(docker: DockerClient) -> list[str]:
+    """Get IP addresses of all PD containers.
+
+    Args:
+        docker: DockerClient configured with compose file
+
+    Returns:
+        List of IP addresses for PD nodes
+    """
+    containers = await asyncio.to_thread(docker.compose.ps)
+
+    # Filter to running PD containers
+    pd_containers = [
+        c
+        for c in containers
+        if PD_CONTAINER_PATTERN.search(c.name.lower()) and c.state.running
+    ]
+
+    # Get IP addresses from container inspect
+    pd_ips = []
+    for container in pd_containers:
+        inspect_data = await asyncio.to_thread(docker.container.inspect, container.name)
+        networks = inspect_data.network_settings.networks
+        if networks:
+            ip = next(iter(networks.values())).ip_address
+            if ip:
+                pd_ips.append(ip)
+
+    return pd_ips

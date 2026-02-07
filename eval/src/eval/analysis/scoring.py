@@ -12,19 +12,30 @@ from eval.analysis.types import TrialScore, CampaignSummary, TrialOutcome
 def compute_duration_seconds(start_iso: str, end_iso: str | None) -> float | None:
     """Compute duration in seconds between ISO8601 timestamps.
 
-    Handles mixed timezone-aware and timezone-naive timestamps by assuming
-    naive timestamps are UTC.
+    Handles mixed timezone-aware and timezone-naive timestamps:
+    - If start has timezone and end doesn't, assume end is local time and convert
+    - If both naive, assume both are UTC
     """
     if end_iso is None:
         return None
     start = datetime.fromisoformat(start_iso)
     end = datetime.fromisoformat(end_iso)
 
-    # Make both timezone-aware (assume naive timestamps are UTC)
-    if start.tzinfo is None:
+    # Handle timezone mismatches
+    if start.tzinfo is not None and end.tzinfo is None:
+        # Start is UTC (from harness), end is local time (from operator DB)
+        # Convert end from local to UTC by getting local timezone offset
+        local_tz = datetime.now().astimezone().tzinfo
+        end = end.replace(tzinfo=local_tz).astimezone(timezone.utc)
+    elif start.tzinfo is None and end.tzinfo is not None:
+        # Opposite case - make start aware
+        local_tz = datetime.now().astimezone().tzinfo
+        start = start.replace(tzinfo=local_tz).astimezone(timezone.utc)
+    elif start.tzinfo is None and end.tzinfo is None:
+        # Both naive - assume both are UTC
         start = start.replace(tzinfo=timezone.utc)
-    if end.tzinfo is None:
         end = end.replace(tzinfo=timezone.utc)
+    # If both are timezone-aware, they can be compared directly
 
     return (end - start).total_seconds()
 
