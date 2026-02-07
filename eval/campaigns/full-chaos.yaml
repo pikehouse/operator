@@ -1,0 +1,29 @@
+name: full-chaos-campaign
+subjects: [tikv]
+
+chaos_types:
+  # Sudden node failure (SIGKILL)
+  - type: node_kill
+
+  # Network latency injection (tc netem)
+  - type: latency
+    params:
+      min_ms: 50
+      max_ms: 150
+
+  # Higher latency scenario
+  - type: latency
+    params:
+      min_ms: 200
+      max_ms: 500
+
+  # Network partition (iptables blocking)
+  - type: network_partition
+
+# Note: disk_pressure excluded - Docker volumes share host storage,
+# making it unsafe for local testing. Use Kubernetes with volume quotas.
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

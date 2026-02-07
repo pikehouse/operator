@@ -1,0 +1,16 @@
+name: smoke-test
+subjects: [tikv]
+
+# One trial of each chaos type to verify everything works
+chaos_types:
+  - type: node_kill
+  - type: latency
+    # Higher latency (2-3 seconds) to potentially cause PD heartbeat failures
+    # TiKV sends heartbeats every 10s, PD expects them within ~30s
+    params: {min_ms: 2000, max_ms: 3000}
+  - type: network_partition
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 5
+include_baseline: false
