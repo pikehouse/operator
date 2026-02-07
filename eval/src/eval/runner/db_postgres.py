@@ -12,6 +12,16 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+
+def parse_iso_datetime(iso_str: str | None) -> datetime | None:
+    """Parse ISO8601 string to datetime, handling timezone-naive strings."""
+    if iso_str is None:
+        return None
+    dt = datetime.fromisoformat(iso_str)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
 try:
     import asyncpg
 except ImportError:
@@ -129,7 +139,7 @@ class PostgresDB:
                 campaign.trial_count,
                 campaign.baseline,
                 campaign.variant_name,
-                campaign.created_at,
+                parse_iso_datetime(campaign.created_at),
             )
             return row["id"]
 
@@ -147,11 +157,11 @@ class PostgresDB:
                 RETURNING id
                 """,
                 trial.campaign_id,
-                trial.started_at,
-                trial.chaos_injected_at,
-                trial.ticket_created_at,
-                trial.resolved_at,
-                trial.ended_at,
+                parse_iso_datetime(trial.started_at),
+                parse_iso_datetime(trial.chaos_injected_at),
+                parse_iso_datetime(trial.ticket_created_at),
+                parse_iso_datetime(trial.resolved_at),
+                parse_iso_datetime(trial.ended_at),
                 json.loads(trial.initial_state) if trial.initial_state else None,
                 json.loads(trial.final_state) if trial.final_state else None,
                 json.loads(trial.chaos_metadata) if trial.chaos_metadata else None,
