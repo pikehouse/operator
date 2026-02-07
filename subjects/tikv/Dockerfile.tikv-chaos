@@ -1,0 +1,15 @@
+# TiKV image with chaos engineering tools
+# Adds iproute-tc (tc command), iptables for network chaos injection
+# Base: Rocky Linux 9
+
+FROM pingcap/tikv:v8.5.5
+
+# Install chaos tools (runs as root, same as base image)
+RUN dnf install -y \
+    iproute-tc \
+    iptables \
+    util-linux \
+    && dnf clean all
+
+# Verify tools are available
+RUN tc -V && iptables --version && fallocate --help | head -1

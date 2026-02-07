@@ -75,8 +75,12 @@ services:
     restart: on-failure
 
   # TiKV Cluster (3 nodes)
+  # Uses custom image with chaos tools (tc, iptables)
   tikv0:
-    image: pingcap/tikv:v8.5.5
+    build:
+      context: .
+      dockerfile: Dockerfile.tikv-chaos
+    image: tikv-chaos:v8.5.5
     ports:
       - "${TIKV_HOST_PORT:-20160}:20160"
       - "${TIKV_STATUS_HOST_PORT:-20180}:20180"
@@ -107,7 +111,10 @@ services:
     restart: on-failure
 
   tikv1:
-    image: pingcap/tikv:v8.5.5
+    build:
+      context: .
+      dockerfile: Dockerfile.tikv-chaos
+    image: tikv-chaos:v8.5.5
     volumes:
       - tikv1-data:/data
     cap_add:
@@ -135,7 +142,10 @@ services:
     restart: on-failure
 
   tikv2:
-    image: pingcap/tikv:v8.5.5
+    build:
+      context: .
+      dockerfile: Dockerfile.tikv-chaos
+    image: tikv-chaos:v8.5.5
     volumes:
       - tikv2-data:/data
     cap_add:
