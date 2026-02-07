@@ -71,19 +71,22 @@ class WorkQueue:
 
         async with pool.acquire() as conn:
             for item in work_items:
+                # Note: chaos_params is stored as TEXT not JSONB due to asyncpg behavior
+                # We store as JSON string and parse on retrieval
+                chaos_params = item.get("chaos_params", {})
                 row = await conn.fetchrow(
                     """
                     INSERT INTO work_queue (
                         campaign_id, subject_type, chaos_type,
                         chaos_params, baseline, status
                     )
-                    VALUES ($1, $2, $3, $4, $5, 'pending')
+                    VALUES ($1, $2, $3, $4::jsonb, $5, 'pending')
                     RETURNING id
                     """,
                     campaign_id,
                     item.get("subject_type", "tikv"),
                     item.get("chaos_type", "node_kill"),
-                    json.dumps(item.get("chaos_params", {})),
+                    json.dumps(chaos_params),
                     item.get("baseline", False),
                 )
                 work_ids.append(row["id"])
@@ -124,12 +127,19 @@ class WorkQueue:
             )
 
             if row:
+                # Parse chaos_params if it's a string (asyncpg may not auto-decode JSONB)
+                chaos_params = row["chaos_params"]
+                if isinstance(chaos_params, str):
+                    chaos_params = json.loads(chaos_params) if chaos_params else {}
+                elif chaos_params is None:
+                    chaos_params = {}
+
                 return WorkItem(
                     id=row["id"],
                     campaign_id=row["campaign_id"],
                     subject_type=row["subject_type"],
                     chaos_type=row["chaos_type"],
-                    chaos_params=row["chaos_params"] or {},
+                    chaos_params=chaos_params,
                     baseline=row["baseline"],
                     status=row["status"],
                     worker_id=row["worker_id"],

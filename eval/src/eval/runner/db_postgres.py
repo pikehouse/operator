@@ -147,13 +147,15 @@ class PostgresDB:
         """Insert trial record, return trial_id."""
         pool = await self._get_pool()
         async with pool.acquire() as conn:
+            # JSONB columns need JSON strings, not dicts
+            # Trial dataclass stores JSON as strings, so pass directly
             row = await conn.fetchrow(
                 """
                 INSERT INTO trials (
                     campaign_id, started_at, chaos_injected_at,
                     ticket_created_at, resolved_at, ended_at,
                     initial_state, final_state, chaos_metadata, commands_json
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb)
                 RETURNING id
                 """,
                 trial.campaign_id,
@@ -162,10 +164,10 @@ class PostgresDB:
                 parse_iso_datetime(trial.ticket_created_at),
                 parse_iso_datetime(trial.resolved_at),
                 parse_iso_datetime(trial.ended_at),
-                json.loads(trial.initial_state) if trial.initial_state else None,
-                json.loads(trial.final_state) if trial.final_state else None,
-                json.loads(trial.chaos_metadata) if trial.chaos_metadata else None,
-                json.loads(trial.commands_json) if trial.commands_json else None,
+                trial.initial_state or "{}",
+                trial.final_state or "{}",
+                trial.chaos_metadata or "{}",
+                trial.commands_json or "[]",
             )
             return row["id"]
 
