@@ -53,3 +53,11 @@ secrets/
 # OS
 .DS_Store
 Thumbs.db
+
+# Eval databases (generated)
+*.db
+eval.db
+eval/eval.db
+
+# Data directories
+data/

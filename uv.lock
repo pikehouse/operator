@@ -774,7 +774,6 @@ version = "0.1.0"
 source = { editable = "subjects/ratelimiter/observer" }
 dependencies = [
     { name = "httpx" },
-    { name = "operator-core" },
     { name = "operator-protocols" },
     { name = "pydantic" },
     { name = "redis" },
@@ -783,7 +782,6 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "operator-core", editable = "packages/operator-core" },
     { name = "operator-protocols", editable = "packages/operator-protocols" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "redis", specifier = ">=7.0.0" },
@@ -937,15 +935,15 @@ version = "0.1.0"
 source = { editable = "subjects/tikv/observer" }
 dependencies = [
     { name = "httpx" },
-    { name = "operator-core" },
     { name = "operator-protocols" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "operator-core", editable = "packages/operator-core" },
     { name = "operator-protocols", editable = "packages/operator-protocols" },
+    { name = "pydantic", specifier = ">=2.0.0" },
 ]
 
 [[package]]
