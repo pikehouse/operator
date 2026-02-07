@@ -407,9 +407,18 @@ def run_campaign_cmd(
             work_ids = await queue.enqueue(campaign_id, work_items)
             console.print(f"[green]Enqueued {len(work_ids)} work items[/green]")
 
+            # Show operator status
+            if config.cloud and config.cloud.operator and config.cloud.operator.enabled:
+                console.print(
+                    f"[green]Operator enabled: {config.cloud.operator.image}[/green]"
+                )
+                operator_flag = f" --operator-image={config.cloud.operator.image}"
+            else:
+                operator_flag = ""
+
             # In cloud mode, we just enqueue - workers run separately
             console.print(f"\n[bold cyan]Work enqueued. Start workers with:[/bold cyan]")
-            console.print(f"  eval worker start --cloud={cloud_mode}")
+            console.print(f"  eval worker start --cloud={cloud_mode}{operator_flag}")
 
             await db.close()
             return campaign_id
@@ -1129,17 +1138,27 @@ def worker_start(
         "--poll-interval",
         help="Seconds between queue polls",
     ),
+    operator_image: Optional[str] = typer.Option(
+        None,
+        "--operator-image",
+        help="Docker image for operator (enables operator on VMs)",
+    ),
 ) -> None:
     """Start a distributed worker process.
 
     Workers poll the PostgreSQL queue for pending work items, execute
     trials on cloud VMs, and report results back to the database.
 
+    Use --operator-image to run the full operator (monitor + agent) on
+    each VM, enabling time-to-detect, time-to-resolve, and command
+    history metrics.
+
     Requires EVAL_DATABASE_URL environment variable.
 
     Examples:
         eval worker start --cloud=gcp
         eval worker start --cloud=gcp --id=worker-1
+        eval worker start --cloud=gcp --operator-image=us-central1-docker.pkg.dev/PROJECT/eval/operator:latest
     """
     import os
     from eval.runner.worker import run_worker
@@ -1154,12 +1173,15 @@ def worker_start(
     console.print(f"[bold cyan]Starting worker...[/bold cyan]")
     console.print(f"Cloud: {cloud}")
     console.print(f"Database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
+    if operator_image:
+        console.print(f"Operator: {operator_image}")
 
     asyncio.run(
         run_worker(
             db_url=db_url,
             worker_id=worker_id,
             mode=f"cloud-{cloud}",
+            operator_image=operator_image or "",
         )
     )
 

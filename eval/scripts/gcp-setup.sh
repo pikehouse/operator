@@ -173,15 +173,37 @@ fi
 echo ">>> Configuring Docker authentication..."
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
-# --- Build and Push Image ---
+# --- Build and Push Images ---
 echo ""
-echo ">>> Building Docker image..."
+echo ">>> Building worker Docker image..."
 cd "${EVAL_DIR}"
 docker build -t eval-worker .
 docker tag eval-worker "${IMAGE}"
 
-echo ">>> Pushing to Artifact Registry..."
+echo ">>> Pushing worker image to Artifact Registry..."
 docker push "${IMAGE}"
+
+# Build and push operator image
+OPERATOR_IMAGE="${REGISTRY}/operator:latest"
+echo ""
+echo ">>> Building operator Docker image (amd64)..."
+cd "${PROJECT_ROOT}"
+docker build --platform linux/amd64 -t operator-eval -f subjects/tikv/Dockerfile.operator .
+docker tag operator-eval "${OPERATOR_IMAGE}"
+
+echo ">>> Pushing operator image to Artifact Registry..."
+docker push "${OPERATOR_IMAGE}"
+
+# Build and push tikv-chaos image (TiKV with chaos tools for cloud eval)
+TIKV_CHAOS_IMAGE="${REGISTRY}/tikv-chaos:v8.5.5"
+echo ""
+echo ">>> Building tikv-chaos Docker image (amd64)..."
+cd "${PROJECT_ROOT}/subjects/tikv"
+docker build --platform linux/amd64 -t tikv-chaos:v8.5.5 -f Dockerfile.tikv-chaos .
+docker tag tikv-chaos:v8.5.5 "${TIKV_CHAOS_IMAGE}"
+
+echo ">>> Pushing tikv-chaos image to Artifact Registry..."
+docker push "${TIKV_CHAOS_IMAGE}"
 
 # --- Instance Template ---
 echo ""
@@ -235,7 +257,8 @@ echo "  Database: ${DB_NAME}"
 echo "  IP: ${DB_IP}"
 echo "  Connection: ${CONNECTION_NAME}"
 echo ""
-echo "Docker Image: ${IMAGE}"
+echo "Worker Image: ${IMAGE}"
+echo "Operator Image: ${OPERATOR_IMAGE}"
 echo "Instance Template: eval-worker-template"
 echo ""
 echo "Configuration saved to: ${ENV_FILE}"

@@ -26,6 +26,12 @@ class ChaosSpec(BaseModel):
         return v
 
 
+class OperatorConfig(BaseModel):
+    """Operator configuration for cloud eval trials."""
+    enabled: bool = Field(default=False, description="Enable operator on cloud VMs")
+    image: str = Field(default="", description="Artifact Registry image URL for operator")
+
+
 class CloudConfig(BaseModel):
     """Cloud execution configuration."""
     provider: str = Field(default="gcp", description="Cloud provider (gcp)")
@@ -35,6 +41,10 @@ class CloudConfig(BaseModel):
     database_url: str | None = Field(
         default=None,
         description="PostgreSQL connection URL for distributed execution"
+    )
+    operator: OperatorConfig | None = Field(
+        default=None,
+        description="Operator configuration for running monitor+agent on VMs"
     )
 
     @field_validator("provider")

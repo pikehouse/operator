@@ -252,7 +252,7 @@ class WorkQueue:
                     worker_id = NULL,
                     claimed_at = NULL
                 WHERE status = 'running'
-                  AND claimed_at < NOW() - INTERVAL '%s seconds'
+                  AND claimed_at < NOW() - make_interval(secs => $1)
                 """,
                 timeout_seconds,
             )

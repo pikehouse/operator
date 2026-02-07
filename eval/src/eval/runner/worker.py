@@ -2,6 +2,10 @@
 
 Workers poll the work queue for pending items, execute trials,
 and report results back to the shared database.
+
+When operator is enabled (via campaign config), the worker runs the full
+operator stack (monitor + agent) on the GCP VM alongside TiKV, producing
+real time-to-detect, time-to-resolve, and command history metrics.
 """
 
 import asyncio
@@ -37,6 +41,7 @@ class Worker:
         worker_id: str | None = None,
         mode: str = "cloud-gcp",
         poll_interval: float = 5.0,
+        operator_image: str = "",
     ):
         """Initialize worker.
 
@@ -45,6 +50,7 @@ class Worker:
             worker_id: Unique worker identifier (auto-generated if not provided)
             mode: Subject execution mode (e.g., "cloud-gcp")
             poll_interval: Seconds between queue polls
+            operator_image: Docker image URL for operator (empty = disabled)
         """
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
         self.mode = mode
@@ -53,6 +59,7 @@ class Worker:
         self.queue = WorkQueue(self.db)
         self._running = False
         self._current_subject = None
+        self._operator_image = operator_image
 
     async def start(self) -> None:
         """Start the worker loop.
@@ -133,6 +140,15 @@ class Worker:
                 except ValueError:
                     logger.warning(f"Variant not found: {campaign.variant_name}")
 
+            # Determine operator config
+            enable_operator = False
+            operator_image = ""
+            anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
+            if self._operator_image:
+                enable_operator = True
+                operator_image = self._operator_image
+
             # Run the trial
             trial = await self._run_trial(
                 subject=subject,
@@ -141,6 +157,9 @@ class Worker:
                 baseline=work_item.baseline,
                 chaos_params=work_item.chaos_params,
                 variant_config=variant_config,
+                enable_operator=enable_operator,
+                operator_image=operator_image,
+                anthropic_api_key=anthropic_api_key,
             )
 
             # Store trial result
@@ -150,7 +169,7 @@ class Worker:
         except Exception as e:
             error = str(e)
             logger.exception(f"Work item {work_item.id} failed: {e}")
-            console.print(f"[red]Work item {work_item.id} failed: {e}[/red]")
+            console.print(f"[red]Work item {work_item.id} failed:[/red] {e!s}")
 
         finally:
             self._current_subject = None
@@ -170,11 +189,15 @@ class Worker:
         baseline: bool,
         chaos_params: dict[str, Any],
         variant_config: VariantConfig | None,
+        enable_operator: bool = False,
+        operator_image: str = "",
+        anthropic_api_key: str = "",
     ) -> Trial:
         """Run a single trial.
 
-        This is a simplified version of run_trial from harness.py,
-        adapted for cloud execution without operator.db dependency.
+        When enable_operator=True, runs the full operator stack on the VM
+        and captures time-to-detect, time-to-resolve, and command history.
+        Otherwise, runs in simplified mode without operator metrics.
 
         Args:
             subject: EvalSubject instance
@@ -183,9 +206,12 @@ class Worker:
             baseline: Whether this is a baseline trial
             chaos_params: Parameters for chaos injection
             variant_config: Optional variant configuration
+            enable_operator: Whether to run operator on the VM
+            operator_image: Docker image URL for operator
+            anthropic_api_key: API key for operator agent
 
         Returns:
-            Trial record
+            Trial record with populated metrics
         """
         from datetime import datetime, timezone
         import json
@@ -208,22 +234,81 @@ class Worker:
         # Capture initial state
         initial_state = await subject.capture_state()
 
-        # Inject chaos (unless baseline)
-        chaos_metadata = {}
-        if not baseline and chaos_type != "none":
-            console.print(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
-            chaos_injected_at = now()
-            chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)
-        else:
-            chaos_injected_at = now()
+        # Set up operator if enabled
+        remote_op = None
+        if enable_operator and not baseline and hasattr(subject, "vm"):
+            from eval.runner.remote_operator import RemoteOperatorProcesses
+
+            remote_op = RemoteOperatorProcesses(
+                vm=subject.vm,
+                operator_image=operator_image,
+                anthropic_api_key=anthropic_api_key,
+            )
 
         try:
+            # Start operator on VM (if enabled)
+            if remote_op:
+                await remote_op.start()
+                # Wait for monitor to initialize and do first check
+                await asyncio.sleep(5.0)
+                # Clear any startup tickets
+                await remote_op.force_resolve_all_tickets()
+                # Record baseline ticket ID
+                pre_chaos_max_ticket_id = await remote_op.get_max_ticket_id()
+                if pre_chaos_max_ticket_id > 0:
+                    console.print(
+                        f"[dim]Pre-chaos max ticket ID: {pre_chaos_max_ticket_id}[/dim]"
+                    )
+
+            # Inject chaos (unless baseline)
+            chaos_metadata = {}
+            if not baseline and chaos_type != "none":
+                console.print(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
+                chaos_injected_at = now()
+                chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)
+            else:
+                chaos_injected_at = now()
+
             # Wait for resolution
-            # In cloud mode without operator.db, we just wait for subject to recover
-            # Full agent integration would require operator subprocess management
-            console.print("[cyan]Waiting for recovery...[/cyan]")
-            resolved = await subject.wait_healthy(timeout_sec=300.0)
-            resolved_at = now() if resolved else None
+            ticket_created_at = None
+            resolved_at = None
+            commands: list[dict[str, Any]] = []
+
+            if remote_op:
+                # Operator mode: write variant config, wait for ticket resolution
+                if variant_config:
+                    updated = await remote_op.update_ticket_variant(variant_config)
+                    if updated:
+                        console.print(
+                            f"[dim]Variant config written: {variant_config.model}[/dim]"
+                        )
+
+                console.print("[cyan]Waiting for agent resolution...[/cyan]")
+                ticket_created_at, resolved_at = (
+                    await remote_op.wait_for_ticket_resolution(
+                        timeout_sec=300.0,
+                        min_ticket_id=pre_chaos_max_ticket_id,
+                    )
+                )
+
+                # Download operator.db and extract commands
+                if ticket_created_at:
+                    try:
+                        from eval.runner.harness import extract_commands_from_operator_db
+
+                        local_db = Path(f"/tmp/operator-{uuid.uuid4().hex[:8]}.db")
+                        await remote_op.download_operator_db(local_db)
+                        commands = await extract_commands_from_operator_db(local_db)
+                        console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
+                        # Clean up temp file
+                        local_db.unlink(missing_ok=True)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract commands: {e}")
+            else:
+                # No operator: just wait for subject self-recovery
+                console.print("[cyan]Waiting for recovery...[/cyan]")
+                recovered = await subject.wait_healthy(timeout_sec=300.0)
+                resolved_at = now() if recovered else None
 
             # Capture final state
             final_state = await subject.capture_state()
@@ -237,17 +322,24 @@ class Worker:
                 except Exception as e:
                     logger.debug(f"Cleanup note: {e}")
 
+            # Stop operator
+            if remote_op:
+                try:
+                    await remote_op.stop()
+                except Exception as e:
+                    logger.debug(f"Operator stop note: {e}")
+
         return Trial(
             campaign_id=campaign_id,
             started_at=started_at,
             chaos_injected_at=chaos_injected_at,
-            ticket_created_at=None,  # No ticket tracking in cloud worker mode
+            ticket_created_at=ticket_created_at,
             resolved_at=resolved_at,
             ended_at=ended_at,
             initial_state=json.dumps(initial_state),
             final_state=json.dumps(final_state),
             chaos_metadata=json.dumps(chaos_metadata),
-            commands_json="[]",  # No command extraction in cloud worker mode
+            commands_json=json.dumps(commands),
         )
 
     async def _cleanup_subject(self, subject) -> None:
@@ -260,6 +352,7 @@ async def run_worker(
     db_url: str,
     worker_id: str | None = None,
     mode: str = "cloud-gcp",
+    operator_image: str = "",
 ) -> None:
     """Run a worker process.
 
@@ -269,6 +362,12 @@ async def run_worker(
         db_url: PostgreSQL connection URL
         worker_id: Optional worker ID
         mode: Subject execution mode
+        operator_image: Docker image URL for operator (empty = disabled)
     """
-    worker = Worker(db_url=db_url, worker_id=worker_id, mode=mode)
+    worker = Worker(
+        db_url=db_url,
+        worker_id=worker_id,
+        mode=mode,
+        operator_image=operator_image,
+    )
     await worker.start()

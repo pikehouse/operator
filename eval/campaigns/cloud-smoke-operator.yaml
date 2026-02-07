@@ -1,0 +1,17 @@
+name: cloud-smoke-operator
+subjects: [tikv]
+
+# Single node_kill trial to verify operator integration works end-to-end
+chaos_types:
+  - type: node_kill
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 0
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest

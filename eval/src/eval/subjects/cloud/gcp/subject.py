@@ -8,7 +8,7 @@ import random
 from pathlib import Path
 from typing import Any
 
-from eval.subjects.cloud.base import CloudSubjectBase
+from eval.subjects.cloud.base import CloudSubjectBase, _parse_compose_json
 from eval.subjects.cloud.gcp.vm import GCPVM
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class GCPTiKVSubject(CloudSubjectBase):
         project: str | None = None,
         zone: str = "us-central1-a",
         machine_type: str = "e2-standard-4",
-        compose_dir: str = "/home/eval/tikv",
+        compose_dir: str = "/tmp/tikv",
     ):
         """Initialize GCP TiKV subject.
 
@@ -56,17 +56,20 @@ class GCPTiKVSubject(CloudSubjectBase):
             machine_type=machine_type,
             name_prefix=f"tikv-eval-{instance_id}",
         )
+        # COS has noexec on /home and /tmp; compose plugin installed to /var/lib/toolbox
+        cos_compose_cmd = "docker --config /var/lib/toolbox/docker-config compose"
         super().__init__(
             vm=vm,
             compose_file=compose_dir,
             project_name=f"tikv-eval-{instance_id}",
+            docker_compose_cmd=cos_compose_cmd,
         )
         self.instance_id = instance_id
         self.compose_dir = compose_dir
 
-        # Store local compose file path for upload
+        # Use cloud-specific compose file (pre-built images, no build step)
         self._local_compose = (
-            Path(__file__).parents[6] / "subjects" / "tikv" / "docker-compose.yaml"
+            Path(__file__).parents[6] / "subjects" / "tikv" / "docker-compose.cloud.yaml"
         )
 
         # PD endpoint (via SSH port forward or external IP)
@@ -78,20 +81,52 @@ class GCPTiKVSubject(CloudSubjectBase):
         return f"http://{self.vm.external_ip}:{self._pd_port}"
 
     async def _upload_compose_files(self) -> None:
-        """Upload TiKV docker-compose files to the VM."""
+        """Upload TiKV docker-compose files to the VM.
+
+        Installs Docker Compose plugin on COS (which doesn't ship it),
+        then uploads the cloud-specific compose file that uses pre-built
+        images from Artifact Registry (no docker build needed on VM).
+        """
+        # Install Docker Compose plugin on COS.
+        # COS has noexec on /home and /tmp, so we download to /tmp then
+        # sudo-copy to /var/lib/toolbox (exec-enabled) and configure as
+        # a Docker CLI plugin via --config flag.
+        await self.vm.run_command(
+            "curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 "
+            "-o /tmp/docker-compose-download && "
+            "sudo mkdir -p /var/lib/toolbox/docker-config/cli-plugins && "
+            "sudo cp /tmp/docker-compose-download /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
+            "sudo chmod +x /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
+            "rm -f /tmp/docker-compose-download",
+            timeout_sec=60.0,
+        )
+
         # Create directory on VM
         await self.vm.run_command(f"mkdir -p {self.compose_dir}")
 
-        # Upload compose file
+        # Upload cloud compose file (uses pre-built images from Artifact Registry)
         await self.vm.upload_file(
             str(self._local_compose),
             f"{self.compose_dir}/docker-compose.yaml",
         )
 
-        # Pull images on VM
+        # Configure Artifact Registry auth for both default and toolbox docker configs.
+        # COS has docker-credential-gcr pre-installed; gcloud CLI is NOT available.
         await self.vm.run_command(
-            f"cd {self.compose_dir} && docker compose pull",
-            timeout_sec=300.0,  # Image pulls can be slow
+            "docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev",
+            timeout_sec=30.0,
+        )
+        # Copy credential config to toolbox docker config (used by compose plugin)
+        await self.vm.run_command(
+            "sudo cp ~/.docker/config.json /var/lib/toolbox/docker-config/config.json && "
+            "sudo chmod 644 /var/lib/toolbox/docker-config/config.json",
+            timeout_sec=10.0,
+        )
+
+        # Pull images
+        await self.vm.run_command(
+            f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} pull",
+            timeout_sec=300.0,
         )
 
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
@@ -170,12 +205,15 @@ class GCPTiKVSubject(CloudSubjectBase):
 
         # Get random TiKV container
         exit_code, stdout, _ = await self.vm.run_command(
-            f"docker compose -p {self.project_name} ps --format json"
+            f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
         )
-        containers = json.loads(stdout) if exit_code == 0 else []
+        containers = _parse_compose_json(stdout) if exit_code == 0 else []
+        # Filter by Service field (not Name) because the project name
+        # "tikv-eval-0" is prefixed on all container names, making Name
+        # unreliable for filtering (e.g., "tikv-eval-0-pd1-1" contains "tikv")
         tikv_containers = [
             c for c in containers
-            if "tikv" in c.get("Name", "").lower() and c.get("State") == "running"
+            if c.get("Service", "").startswith("tikv") and c.get("State") == "running"
         ]
 
         if not tikv_containers and chaos_type != "node_kill":
@@ -219,7 +257,8 @@ class GCPTiKVSubject(CloudSubjectBase):
 
         try:
             if chaos_type == "node_kill":
-                # Restart container
+                # Restore restart policy and start container
+                await self.vm.run_command(f"docker update --restart=on-failure {target}")
                 await self.vm.run_command(f"docker start {target}")
             elif chaos_type == "latency":
                 await self.vm.run_command(
@@ -249,14 +288,20 @@ class GCPTiKVSubject(CloudSubjectBase):
     # --- Chaos injection implementations ---
 
     async def _inject_node_kill(self, target: str) -> dict[str, Any]:
-        """Kill a TiKV container."""
+        """Kill a TiKV container.
+
+        Disables restart policy first so the container stays dead
+        for the monitor to detect.
+        """
         if not target:
             # Get first TiKV container
             exit_code, stdout, _ = await self.vm.run_command(
-                f"docker compose -p {self.project_name} ps -q tikv0"
+                f"{self.docker_compose_cmd} -p {self.project_name} ps -q tikv0"
             )
             target = stdout.strip()
 
+        # Disable restart policy so container stays dead after kill
+        await self.vm.run_command(f"docker update --restart=no {target}")
         await self.vm.run_command(f"docker kill {target}")
         return {"chaos_type": "node_kill", "target_container": target}
 

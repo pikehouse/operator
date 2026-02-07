@@ -1,11 +1,38 @@
 """Base classes and protocols for cloud subjects."""
 
 import asyncio
+import json
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_compose_json(stdout: str) -> list[dict[str, Any]]:
+    """Parse docker compose ps --format json output.
+
+    Docker Compose v5+ outputs one JSON object per line (NDJSON),
+    while older versions output a JSON array. Handle both.
+    """
+    stdout = stdout.strip()
+    if not stdout:
+        return []
+    # Try JSON array first
+    try:
+        result = json.loads(stdout)
+        if isinstance(result, list):
+            return result
+        return [result]
+    except json.JSONDecodeError:
+        pass
+    # NDJSON: one object per line
+    containers = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line:
+            containers.append(json.loads(line))
+    return containers
 
 
 @runtime_checkable
@@ -99,6 +126,7 @@ class CloudSubjectBase(ABC):
         vm: CloudVM,
         compose_file: str,
         project_name: str = "eval",
+        docker_compose_cmd: str = "docker compose",
     ):
         """Initialize cloud subject.
 
@@ -106,10 +134,12 @@ class CloudSubjectBase(ABC):
             vm: CloudVM instance for VM operations
             compose_file: Path to docker-compose.yaml on the VM
             project_name: Docker Compose project name
+            docker_compose_cmd: Docker compose command (override for COS)
         """
         self.vm = vm
         self.compose_file = compose_file
         self.project_name = project_name
+        self.docker_compose_cmd = docker_compose_cmd
         self._created = False
 
     async def setup(self) -> None:
@@ -147,12 +177,12 @@ class CloudSubjectBase(ABC):
 
         # Down with volume cleanup
         await self.vm.run_command(
-            f"cd {self.compose_file} && docker compose -p {self.project_name} down -v --remove-orphans"
+            f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} down -v --remove-orphans"
         )
 
         # Up and wait
         await self.vm.run_command(
-            f"cd {self.compose_file} && docker compose -p {self.project_name} up -d --wait"
+            f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} up -d --wait"
         )
 
     async def wait_healthy(self, timeout_sec: float = 60.0) -> bool:
@@ -167,13 +197,14 @@ class CloudSubjectBase(ABC):
         while (asyncio.get_running_loop().time() - start) < timeout_sec:
             try:
                 exit_code, stdout, _ = await self.vm.run_command(
-                    f"docker compose -p {self.project_name} ps --format json"
+                    f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
                 )
                 if exit_code == 0:
                     # Check all containers are running
-                    import json
-                    containers = json.loads(stdout) if stdout.strip() else []
-                    if all(c.get("State") == "running" for c in containers):
+                    containers = _parse_compose_json(stdout)
+                    if containers and all(
+                        c.get("State") == "running" for c in containers
+                    ):
                         return True
             except Exception as e:
                 logger.debug(f"Health check error: {e}")
@@ -187,11 +218,10 @@ class CloudSubjectBase(ABC):
         # Default: return container states
         try:
             exit_code, stdout, _ = await self.vm.run_command(
-                f"docker compose -p {self.project_name} ps --format json"
+                f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
             )
             if exit_code == 0:
-                import json
-                containers = json.loads(stdout) if stdout.strip() else []
+                containers = _parse_compose_json(stdout)
                 return {"containers": containers}
         except Exception as e:
             return {"error": str(e)}
