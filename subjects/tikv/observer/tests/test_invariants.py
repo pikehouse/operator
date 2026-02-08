@@ -17,8 +17,11 @@ from operator_protocols.types import Store, StoreMetrics
 from operator_protocols import InvariantViolation
 from tikv_observer.invariants import (
     HIGH_LATENCY_CONFIG,
+    HIGH_RAFT_LAG_CONFIG,
     InvariantConfig,
+    LEADER_IMBALANCE_CONFIG,
     LOW_DISK_SPACE_CONFIG,
+    METRICS_UNAVAILABLE_CONFIG,
     STORE_DOWN_CONFIG,
     TiKVInvariantChecker,
 )
@@ -459,3 +462,269 @@ class TestInvariantViolation:
 
         assert violation.store_id == "42"
         assert violation.severity == "critical"
+
+
+# =============================================================================
+# Leader Balance Tests
+# =============================================================================
+
+
+class TestCheckLeaderBalance:
+    """Tests for InvariantChecker.check_leader_balance()."""
+
+    def test_balanced_leaders_returns_empty(self, checker):
+        """No violations when leaders are balanced."""
+        leader_counts = {"1": 10, "2": 12, "3": 11}
+        violations = checker.check_leader_balance(leader_counts)
+        assert violations == []
+
+    def test_imbalanced_leaders_returns_violation(self, checker):
+        """Returns violation when leader difference exceeds threshold."""
+        config = InvariantConfig(
+            name="leader_imbalance",
+            grace_period=timedelta(seconds=0),
+            threshold=5.0,
+            severity="warning",
+        )
+        leader_counts = {"1": 30, "2": 5, "3": 10}
+        violations = checker.check_leader_balance(leader_counts, config=config)
+
+        assert len(violations) == 1
+        assert violations[0].invariant_name == "leader_imbalance"
+        assert "25" in violations[0].message  # max(30) - min(5) = 25
+
+    def test_empty_leader_counts_returns_empty(self, checker):
+        """No violations when leader_counts is empty."""
+        violations = checker.check_leader_balance({})
+        assert violations == []
+
+    def test_single_store_returns_empty(self, checker):
+        """No violations with only one store (need >= 2 to compare)."""
+        violations = checker.check_leader_balance({"1": 100})
+        assert violations == []
+
+    def test_exactly_at_threshold_is_not_violation(self, checker):
+        """Difference exactly at threshold is not a violation (> not >=)."""
+        config = InvariantConfig(
+            name="leader_imbalance",
+            grace_period=timedelta(seconds=0),
+            threshold=5.0,
+        )
+        leader_counts = {"1": 10, "2": 5}  # diff = 5, threshold = 5
+        violations = checker.check_leader_balance(leader_counts, config=config)
+        assert violations == []
+
+    def test_default_config_values(self):
+        """Verify default leader imbalance config."""
+        assert LEADER_IMBALANCE_CONFIG.threshold == 5.0
+        assert LEADER_IMBALANCE_CONFIG.grace_period == timedelta(seconds=30)
+        assert LEADER_IMBALANCE_CONFIG.severity == "warning"
+
+
+# =============================================================================
+# Raft Lag Tests
+# =============================================================================
+
+
+class TestCheckRaftLag:
+    """Tests for InvariantChecker.check_raft_lag()."""
+
+    def test_no_lag_returns_none(self, checker, healthy_metrics):
+        """No violation when raft lag is zero."""
+        violation = checker.check_raft_lag(healthy_metrics)
+        assert violation is None
+
+    def test_high_lag_returns_violation(self, checker):
+        """Returns violation when raft lag exceeds threshold."""
+        config = InvariantConfig(
+            name="high_raft_lag",
+            grace_period=timedelta(seconds=0),
+            threshold=1000.0,
+            severity="warning",
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=5000,
+        )
+
+        violation = checker.check_raft_lag(metrics, config=config)
+
+        assert violation is not None
+        assert violation.invariant_name == "high_raft_lag"
+        assert violation.store_id == "1"
+        assert "5000" in violation.message
+
+    def test_lag_at_threshold_is_not_violation(self, checker):
+        """Lag exactly at threshold is not a violation (> not >=)."""
+        config = InvariantConfig(
+            name="high_raft_lag",
+            grace_period=timedelta(seconds=0),
+            threshold=1000.0,
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=1000,
+        )
+
+        violation = checker.check_raft_lag(metrics, config=config)
+        assert violation is None
+
+    def test_default_config_values(self):
+        """Verify default raft lag config."""
+        assert HIGH_RAFT_LAG_CONFIG.threshold == 1000.0
+        assert HIGH_RAFT_LAG_CONFIG.grace_period == timedelta(seconds=15)
+        assert HIGH_RAFT_LAG_CONFIG.severity == "warning"
+
+
+# =============================================================================
+# Metrics Availability Tests
+# =============================================================================
+
+
+class TestCheckMetricsAvailability:
+    """Tests for InvariantChecker.check_metrics_availability()."""
+
+    def test_all_available_returns_empty(self, checker):
+        """No violations when all Up stores have metrics."""
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+            {"id": "2", "address": "tikv-1:20160", "state": "Up"},
+        ]
+        store_metrics_data = {
+            "1": {"qps": 100},
+            "2": {"qps": 200},
+        }
+
+        violations = checker.check_metrics_availability(stores_data, store_metrics_data)
+        assert violations == []
+
+    def test_up_without_metrics_returns_violation(self, checker):
+        """Returns violation for Up store with missing metrics."""
+        config = InvariantConfig(
+            name="metrics_unavailable",
+            grace_period=timedelta(seconds=0),
+            severity="warning",
+        )
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+            {"id": "2", "address": "tikv-1:20160", "state": "Up"},
+        ]
+        store_metrics_data = {
+            "1": {"qps": 100},
+            # store "2" missing
+        }
+
+        violations = checker.check_metrics_availability(
+            stores_data, store_metrics_data, config=config
+        )
+
+        assert len(violations) == 1
+        assert violations[0].invariant_name == "metrics_unavailable"
+        assert violations[0].store_id == "2"
+        assert "tikv-1:20160" in violations[0].message
+
+    def test_down_without_metrics_is_ok(self, checker):
+        """No violation for Down store without metrics (expected)."""
+        config = InvariantConfig(
+            name="metrics_unavailable",
+            grace_period=timedelta(seconds=0),
+            severity="warning",
+        )
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Down"},
+        ]
+        store_metrics_data = {}
+
+        violations = checker.check_metrics_availability(
+            stores_data, store_metrics_data, config=config
+        )
+        assert violations == []
+
+    def test_default_config_values(self):
+        """Verify default metrics unavailable config."""
+        assert METRICS_UNAVAILABLE_CONFIG.grace_period == timedelta(seconds=30)
+        assert METRICS_UNAVAILABLE_CONFIG.severity == "warning"
+
+
+# =============================================================================
+# Integration: check() with new invariants
+# =============================================================================
+
+
+class TestCheckWithNewInvariants:
+    """Integration tests for check() returning new invariant violations."""
+
+    def test_check_returns_leader_imbalance_from_observation(self, checker):
+        """check() finds leader_imbalance from observation dict."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-1:20160", "state": "Up"},
+                {"id": "3", "address": "tikv-2:20160", "state": "Up"},
+            ],
+            "store_metrics": {
+                "1": {"qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10, "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0},
+                "2": {"qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10, "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0},
+                "3": {"qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10, "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0},
+            },
+            "cluster_metrics": {
+                "leader_count": {"1": 50, "2": 5, "3": 5},
+            },
+        }
+
+        # Manually expire the grace period for leader_imbalance
+        checker._first_seen["leader_imbalance"] = datetime.now() - timedelta(seconds=60)
+
+        violations = checker.check(observation)
+        invariant_names = [v.invariant_name for v in violations]
+        assert "leader_imbalance" in invariant_names
+
+    def test_check_returns_high_raft_lag_from_observation(self, checker):
+        """check() finds high_raft_lag from observation dict."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+            ],
+            "store_metrics": {
+                "1": {"qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10, "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 5000},
+            },
+            "cluster_metrics": {},
+        }
+
+        # Manually expire the grace period
+        checker._first_seen["high_raft_lag:1"] = datetime.now() - timedelta(seconds=60)
+
+        violations = checker.check(observation)
+        invariant_names = [v.invariant_name for v in violations]
+        assert "high_raft_lag" in invariant_names
+
+    def test_check_returns_metrics_unavailable_from_observation(self, checker):
+        """check() finds metrics_unavailable from observation dict."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+                {"id": "2", "address": "tikv-1:20160", "state": "Up"},
+            ],
+            "store_metrics": {
+                "1": {"qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10, "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0},
+                # store "2" missing metrics
+            },
+            "cluster_metrics": {},
+        }
+
+        # Manually expire the grace period
+        checker._first_seen["metrics_unavailable:2"] = datetime.now() - timedelta(seconds=60)
+
+        violations = checker.check(observation)
+        invariant_names = [v.invariant_name for v in violations]
+        assert "metrics_unavailable" in invariant_names

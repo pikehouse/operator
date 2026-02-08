@@ -65,6 +65,26 @@ LOW_DISK_SPACE_CONFIG = InvariantConfig(
     severity="warning",
 )
 
+LEADER_IMBALANCE_CONFIG = InvariantConfig(
+    name="leader_imbalance",
+    grace_period=timedelta(seconds=30),
+    threshold=5.0,  # max - min leader count difference
+    severity="warning",
+)
+
+HIGH_RAFT_LAG_CONFIG = InvariantConfig(
+    name="high_raft_lag",
+    grace_period=timedelta(seconds=15),
+    threshold=1000.0,  # raft log entries behind
+    severity="warning",
+)
+
+METRICS_UNAVAILABLE_CONFIG = InvariantConfig(
+    name="metrics_unavailable",
+    grace_period=timedelta(seconds=30),
+    severity="warning",
+)
+
 
 class TiKVInvariantChecker:
     """
@@ -153,6 +173,21 @@ class TiKVInvariantChecker:
             # Check disk space invariant
             if violation := self.check_disk_space(metrics):
                 violations.append(violation)
+
+            # Check raft lag invariant
+            if violation := self.check_raft_lag(metrics):
+                violations.append(violation)
+
+        # Check leader balance across cluster
+        cluster_metrics = observation.get("cluster_metrics", {})
+        leader_counts = cluster_metrics.get("leader_count", {})
+        if leader_counts:
+            violations.extend(self.check_leader_balance(leader_counts))
+
+        # Check metrics availability (Up stores missing metrics)
+        violations.extend(
+            self.check_metrics_availability(stores_data, store_metrics_data)
+        )
 
         return violations
 
@@ -314,6 +349,119 @@ class TiKVInvariantChecker:
             message=f"Store {metrics.store_id} disk usage {usage_percent:.1f}% exceeds threshold {config.threshold:.1f}%",
             store_id=metrics.store_id,
         )
+
+    def check_leader_balance(
+        self,
+        leader_counts: dict[str, int],
+        config: InvariantConfig | None = None,
+    ) -> list[InvariantViolation]:
+        """Check that region leaders are balanced across stores.
+
+        Args:
+            leader_counts: Mapping of store_id to leader count
+            config: Optional custom configuration (defaults to LEADER_IMBALANCE_CONFIG)
+
+        Returns:
+            List with a single violation if leader distribution is skewed
+        """
+        config = config or LEADER_IMBALANCE_CONFIG
+
+        if len(leader_counts) < 2:
+            return []
+
+        counts = list(leader_counts.values())
+        diff = max(counts) - min(counts)
+        is_imbalanced = diff > config.threshold
+
+        violation = self._check_with_grace_period(
+            config=config,
+            is_violated=is_imbalanced,
+            message=(
+                f"Leader imbalance: max-min difference is {diff} "
+                f"(threshold {int(config.threshold)}), "
+                f"distribution: {leader_counts}"
+            ),
+        )
+
+        return [violation] if violation else []
+
+    def check_raft_lag(
+        self,
+        metrics: StoreMetrics,
+        config: InvariantConfig | None = None,
+    ) -> InvariantViolation | None:
+        """Check that Raft log lag is below threshold.
+
+        Args:
+            metrics: StoreMetrics with raft_lag field
+            config: Optional custom configuration (defaults to HIGH_RAFT_LAG_CONFIG)
+
+        Returns:
+            InvariantViolation if raft lag exceeds threshold past grace period
+        """
+        config = config or HIGH_RAFT_LAG_CONFIG
+
+        is_high = metrics.raft_lag > config.threshold
+
+        return self._check_with_grace_period(
+            config=config,
+            is_violated=is_high,
+            message=(
+                f"Store {metrics.store_id} raft lag {metrics.raft_lag} entries "
+                f"exceeds threshold {int(config.threshold)}"
+            ),
+            store_id=metrics.store_id,
+        )
+
+    def check_metrics_availability(
+        self,
+        stores_data: list[dict],
+        store_metrics_data: dict,
+        config: InvariantConfig | None = None,
+    ) -> list[InvariantViolation]:
+        """Check that all Up stores have metrics available.
+
+        Detects stores that PD reports as Up but Prometheus has no data for.
+        This can indicate a frozen process (SIGSTOP) or broken network where
+        the store is technically running but not responsive.
+
+        Args:
+            stores_data: List of store dicts with id, address, state
+            store_metrics_data: Dict mapping store_id to metrics dict
+            config: Optional custom configuration (defaults to METRICS_UNAVAILABLE_CONFIG)
+
+        Returns:
+            List of violations for Up stores missing metrics
+        """
+        config = config or METRICS_UNAVAILABLE_CONFIG
+        violations: list[InvariantViolation] = []
+
+        for store in stores_data:
+            store_id = str(store.get("id", ""))
+            state = store.get("state", "")
+            address = store.get("address", "")
+
+            if state != "Up":
+                # Only flag Up stores with missing metrics
+                # Clear any existing tracking for non-Up stores
+                key = self._get_violation_key(config.name, store_id)
+                self._first_seen.pop(key, None)
+                continue
+
+            has_metrics = store_id in store_metrics_data
+
+            violation = self._check_with_grace_period(
+                config=config,
+                is_violated=not has_metrics,
+                message=(
+                    f"Store {store_id} at {address} is Up but has no metrics data"
+                ),
+                store_id=store_id,
+            )
+            if violation:
+                violations.append(violation)
+
+        return violations
 
     def clear_state(self) -> None:
         """Clear all tracked violation state."""

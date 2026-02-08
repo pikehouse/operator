@@ -25,7 +25,7 @@ case "$cmd" in
             gcloud compute instances create "$name" \
                 --source-instance-template="$TEMPLATE" \
                 --zone="$ZONE" \
-                --async
+                --quiet
         done
         echo "Workers starting. Use '$0 status' to check."
         ;;
@@ -44,7 +44,7 @@ case "$cmd" in
 
         echo "$workers" | while read -r name; do
             echo "  Deleting ${name}..."
-            gcloud compute instances delete "$name" --zone="$ZONE" --quiet --async
+            gcloud compute instances delete "$name" --zone="$ZONE" --quiet --quiet
         done
         echo "Workers stopping."
         ;;

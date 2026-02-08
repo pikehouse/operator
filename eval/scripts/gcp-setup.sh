@@ -39,7 +39,7 @@ ZONE="${REGION}-a"
 DB_INSTANCE="eval-db"
 DB_NAME="eval-db"
 DB_USER="postgres"
-DB_TIER="db-f1-micro"
+DB_TIER="db-g1-small"  # db-f1-micro too few connections for multiple workers
 
 echo "=== GCP Cloud Eval Setup (Idempotent) ==="
 echo "Project: ${PROJECT}"
@@ -83,6 +83,20 @@ gcloud services enable \
     sqladmin.googleapis.com \
     artifactregistry.googleapis.com \
     --quiet
+
+# --- IAM for Default Compute Service Account ---
+echo ""
+echo ">>> Granting IAM roles to default compute service account..."
+PROJECT_NUM=$(gcloud projects describe "${PROJECT}" --format="value(projectNumber)")
+COMPUTE_SA="${PROJECT_NUM}-compute@developer.gserviceaccount.com"
+
+for role in roles/artifactregistry.reader roles/cloudsql.client roles/compute.admin roles/iam.serviceAccountUser; do
+    echo "    Granting ${role}..."
+    gcloud projects add-iam-policy-binding "${PROJECT}" \
+        --member="serviceAccount:${COMPUTE_SA}" \
+        --role="${role}" \
+        --quiet &>/dev/null
+done
 
 # --- Cloud SQL Instance ---
 echo ""
@@ -175,9 +189,9 @@ gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 # --- Build and Push Images ---
 echo ""
-echo ">>> Building worker Docker image..."
-cd "${EVAL_DIR}"
-docker build -t eval-worker .
+echo ">>> Building worker Docker image (amd64)..."
+cd "${PROJECT_ROOT}"
+docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
 docker tag eval-worker "${IMAGE}"
 
 echo ">>> Pushing worker image to Artifact Registry..."
@@ -213,12 +227,20 @@ echo ">>> Instance template..."
 gcloud compute instance-templates delete eval-worker-template --quiet 2>/dev/null || true
 
 # Create startup script
+# Note: COS has a read-only /root, so docker-credential-gcr must write
+# to a writable HOME directory. The Docker socket and credentials are
+# mounted into the worker container so it can manage TiKV trial containers.
 STARTUP_SCRIPT=$(cat <<STARTUP_EOF
 #!/bin/bash
 set -e
 
 # Wait for Docker to be ready (Container-Optimized OS)
 while ! docker info &>/dev/null; do sleep 1; done
+
+# Configure Docker auth for Artifact Registry (COS has read-only /root)
+export HOME=/tmp/docker-home
+mkdir -p "\$HOME/.docker"
+docker-credential-gcr configure-docker --registries=${REGION}-docker.pkg.dev
 
 # Start Cloud SQL Proxy
 docker run -d --name cloud-sql-proxy --restart=always --network=host \
@@ -230,20 +252,25 @@ docker run -d --name cloud-sql-proxy --restart=always --network=host \
 sleep 5
 
 # Pull and run worker
+# Note: SSH keys for trial VMs are generated inside the worker container
+# and passed to each trial VM at creation time via --metadata=ssh-keys
 docker pull ${IMAGE}
 docker run -d --name eval-worker --restart=always --network=host \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v "\$HOME/.docker:/root/.docker:ro" \
     -e EVAL_DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}" \
     -e GOOGLE_CLOUD_PROJECT="${PROJECT}" \
+    -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
     ${IMAGE}
 STARTUP_EOF
 )
 
 echo "    Creating template..."
 gcloud compute instance-templates create eval-worker-template \
-    --machine-type=e2-standard-2 \
+    --machine-type=e2-standard-4 \
     --image-family=cos-stable \
     --image-project=cos-cloud \
-    --boot-disk-size=20GB \
+    --boot-disk-size=50GB \
     --scopes=cloud-platform \
     --metadata=startup-script="${STARTUP_SCRIPT}" \
     --quiet

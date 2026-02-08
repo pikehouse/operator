@@ -7,6 +7,7 @@ import re
 import time
 from typing import Any
 
+import httpx
 from python_on_whales import DockerClient
 
 logger = logging.getLogger(__name__)
@@ -361,3 +362,254 @@ async def get_pd_ips(docker: DockerClient) -> list[str]:
                 pd_ips.append(ip)
 
     return pd_ips
+
+
+async def inject_process_pause(
+    docker: DockerClient, target_container: str
+) -> dict[str, Any]:
+    """Pause a TiKV process with SIGSTOP.
+
+    Container stays alive but process is frozen -- looks running to Docker
+    but cannot respond to RPCs or Raft heartbeats. Diagnostically tricky
+    because ``docker ps`` still shows the container as running.
+
+    Uses ``docker kill --signal STOP`` from the host side (not ``docker exec``,
+    which may hang on a SIGSTOP'd container).
+
+    Args:
+        docker: DockerClient configured with compose file
+        target_container: Container name to pause
+
+    Returns:
+        Chaos metadata dict with target_container and signal
+    """
+    await asyncio.to_thread(docker.kill, target_container, signal="STOP")
+
+    return {
+        "chaos_type": "process_pause",
+        "target_container": target_container,
+        "signal": "SIGSTOP",
+    }
+
+
+async def cleanup_process_pause(
+    docker: DockerClient, target_container: str
+) -> None:
+    """Resume a SIGSTOP'd TiKV process with SIGCONT.
+
+    Args:
+        docker: DockerClient configured with compose file
+        target_container: Container name to resume
+    """
+    try:
+        await asyncio.to_thread(docker.kill, target_container, signal="CONT")
+    except Exception as e:
+        logger.debug(f"Failed to SIGCONT {target_container}: {e}")
+
+
+async def inject_packet_loss(
+    docker: DockerClient, target_container: str, percent: int = 30
+) -> dict[str, Any]:
+    """Inject packet loss using tc netem.
+
+    Causes intermittent, noisy failures -- some RPCs succeed, some fail.
+    Diagnostically difficult because symptoms are non-deterministic.
+
+    Args:
+        docker: DockerClient configured with compose file
+        target_container: Container name to inject packet loss on
+        percent: Packet loss percentage (default 30)
+
+    Returns:
+        Chaos metadata dict with target_container, interface, percent
+    """
+    cmd = f"tc qdisc add dev eth0 root netem loss {percent}%"
+    await asyncio.to_thread(docker.execute, target_container, ["sh", "-c", cmd])
+
+    return {
+        "chaos_type": "packet_loss",
+        "target_container": target_container,
+        "percent": percent,
+        "interface": "eth0",
+    }
+
+
+async def inject_asymmetric_partition(
+    docker: DockerClient, isolated_container: str, target_ip: str
+) -> dict[str, Any]:
+    """Block traffic to ONE specific peer IP only.
+
+    Unlike full network_partition which blocks all peers + PD, this blocks
+    traffic to a single peer. The isolated node can still talk to PD and
+    other peers, creating partial connectivity that is hard to diagnose.
+
+    Args:
+        docker: DockerClient configured with compose file
+        isolated_container: Container to apply partition on
+        target_ip: Single peer IP to block
+
+    Returns:
+        Chaos metadata dict with isolated_container and target_ip
+    """
+    output_cmd = f"iptables -I OUTPUT -d {target_ip} -j DROP"
+    input_cmd = f"iptables -I INPUT -s {target_ip} -j DROP"
+    await asyncio.to_thread(
+        docker.execute, isolated_container, ["sh", "-c", output_cmd]
+    )
+    await asyncio.to_thread(
+        docker.execute, isolated_container, ["sh", "-c", input_cmd]
+    )
+
+    return {
+        "chaos_type": "asymmetric_partition",
+        "isolated_container": isolated_container,
+        "target_ip": target_ip,
+    }
+
+
+async def cleanup_asymmetric_partition(
+    docker: DockerClient, isolated_container: str, target_ip: str
+) -> None:
+    """Remove iptables rules for a single-peer asymmetric partition.
+
+    Args:
+        docker: DockerClient configured with compose file
+        isolated_container: Container to restore connectivity on
+        target_ip: Peer IP to unblock
+    """
+    try:
+        output_cmd = f"iptables -D OUTPUT -d {target_ip} -j DROP || true"
+        input_cmd = f"iptables -D INPUT -s {target_ip} -j DROP || true"
+        await asyncio.to_thread(
+            docker.execute, isolated_container, ["sh", "-c", output_cmd]
+        )
+        await asyncio.to_thread(
+            docker.execute, isolated_container, ["sh", "-c", input_cmd]
+        )
+    except Exception as e:
+        logger.debug(
+            f"Failed to cleanup asymmetric partition on {isolated_container} "
+            f"for {target_ip}: {e}"
+        )
+
+
+async def kill_random_pd(docker: DockerClient) -> dict[str, Any]:
+    """Kill a random PD container with SIGKILL and prevent restart.
+
+    Simulates control plane disruption -- PD is down but TiKV data plane
+    stays up. Existing Raft leaders continue to serve reads/writes, but
+    new scheduling (region splits, leader transfers) stops.
+
+    Args:
+        docker: DockerClient configured with compose file
+
+    Returns:
+        Chaos metadata dict with target_container, signal, original_restart_policy
+
+    Raises:
+        RuntimeError: If no running PD containers found
+    """
+    containers = await asyncio.to_thread(docker.compose.ps)
+
+    pd_containers = [
+        c
+        for c in containers
+        if PD_CONTAINER_PATTERN.search(c.name.lower()) and c.state.running
+    ]
+
+    if not pd_containers:
+        raise RuntimeError("No running PD containers to kill")
+
+    target = random.choice(pd_containers)
+
+    inspect_data = await asyncio.to_thread(docker.container.inspect, target.name)
+    original_restart = inspect_data.host_config.restart_policy.name
+
+    await asyncio.to_thread(
+        docker.container.update, target.name, restart="no"
+    )
+
+    await asyncio.to_thread(docker.kill, target.name)
+
+    return {
+        "chaos_type": "pd_leader_kill",
+        "target_container": target.name,
+        "signal": "SIGKILL",
+        "original_restart_policy": original_restart,
+    }
+
+
+async def inject_leader_concentration(
+    docker: DockerClient, pd_endpoint: str, target_store_id: int | None = None
+) -> dict[str, Any]:
+    """Transfer all region leaders to a single store via PD API.
+
+    Creates a hot spot by concentrating all region leaders on one store.
+    The overloaded store may see increased latency and CPU usage while
+    other stores sit idle.
+
+    Args:
+        docker: DockerClient configured with compose file (unused, kept for interface consistency)
+        pd_endpoint: PD API endpoint (e.g., http://localhost:2379)
+        target_store_id: Store to concentrate leaders on (random if None)
+
+    Returns:
+        Chaos metadata dict with target_store_id and transfer_count
+    """
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        # Get all stores to pick a target
+        stores_resp = await client.get(f"{pd_endpoint}/pd/api/v1/stores")
+        stores_resp.raise_for_status()
+        stores_data = stores_resp.json()
+        up_stores = [
+            s["store"]["id"]
+            for s in stores_data.get("stores", [])
+            if s.get("store", {}).get("state_name") == "Up"
+        ]
+
+        if not up_stores:
+            raise RuntimeError("No Up stores to concentrate leaders on")
+
+        if target_store_id is None:
+            target_store_id = random.choice(up_stores)
+
+        # Get all regions
+        regions_resp = await client.get(f"{pd_endpoint}/pd/api/v1/regions")
+        regions_resp.raise_for_status()
+        regions_data = regions_resp.json()
+
+        transfer_count = 0
+        for region in regions_data.get("regions", []):
+            region_id = region.get("id")
+            leader = region.get("leader", {})
+            current_store = leader.get("store_id")
+
+            if current_store == target_store_id:
+                continue  # Already on target
+
+            # Check that target store is a peer for this region
+            peers = region.get("peers", [])
+            peer_store_ids = [p.get("store_id") for p in peers]
+            if target_store_id not in peer_store_ids:
+                continue  # Target not a replica for this region
+
+            # Transfer leader
+            try:
+                transfer_resp = await client.post(
+                    f"{pd_endpoint}/pd/api/v1/operators",
+                    json={
+                        "name": "transfer-leader",
+                        "region_id": region_id,
+                        "to_store_id": target_store_id,
+                    },
+                )
+                if transfer_resp.status_code == 200:
+                    transfer_count += 1
+            except Exception as e:
+                logger.debug(f"Failed to transfer region {region_id}: {e}")
+
+    return {
+        "chaos_type": "leader_concentration",
+        "target_store_id": target_store_id,
+        "transfer_count": transfer_count,
+    }

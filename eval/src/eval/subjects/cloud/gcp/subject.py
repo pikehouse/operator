@@ -31,6 +31,11 @@ class GCPTiKVSubject(CloudSubjectBase):
         "disk_pressure",
         "memory_exhaustion",
         "cpu_starvation",
+        "process_pause",
+        "packet_loss",
+        "asymmetric_partition",
+        "pd_leader_kill",
+        "leader_concentration",
     ]
 
     def __init__(
@@ -68,9 +73,10 @@ class GCPTiKVSubject(CloudSubjectBase):
         self.compose_dir = compose_dir
 
         # Use cloud-specific compose file (pre-built images, no build step)
-        self._local_compose = (
-            Path(__file__).parents[6] / "subjects" / "tikv" / "docker-compose.cloud.yaml"
-        )
+        # Try Docker image path first, fall back to repo-relative path for dev
+        docker_path = Path("/usr/local/lib/subjects/tikv/docker-compose.cloud.yaml")
+        repo_path = Path(__file__).parents[6] / "subjects" / "tikv" / "docker-compose.cloud.yaml"
+        self._local_compose = docker_path if docker_path.exists() else repo_path
 
         # PD endpoint (via SSH port forward or external IP)
         self._pd_port = 2379
@@ -247,6 +253,19 @@ class GCPTiKVSubject(CloudSubjectBase):
                 target_name,
                 params.get("cores", 4),
             )
+        elif chaos_type == "process_pause":
+            return await self._inject_process_pause(target_name)
+        elif chaos_type == "packet_loss":
+            return await self._inject_packet_loss(
+                target_name,
+                params.get("percent", 30),
+            )
+        elif chaos_type == "asymmetric_partition":
+            return await self._inject_asymmetric_partition(target_name)
+        elif chaos_type == "pd_leader_kill":
+            return await self._inject_pd_leader_kill()
+        elif chaos_type == "leader_concentration":
+            return await self._inject_leader_concentration()
 
         raise ValueError(f"Unknown chaos type: {chaos_type}")
 
@@ -282,6 +301,27 @@ class GCPTiKVSubject(CloudSubjectBase):
                 await self.vm.run_command(
                     f"docker exec {target} pkill -9 stress || true"
                 )
+            elif chaos_type == "process_pause":
+                await self.vm.run_command(f"docker kill --signal CONT {target}")
+            elif chaos_type == "packet_loss":
+                await self.vm.run_command(
+                    f"docker exec {target} tc qdisc del dev eth0 root 2>/dev/null || true"
+                )
+            elif chaos_type == "asymmetric_partition":
+                target_ip = chaos_metadata.get("target_ip")
+                if target_ip:
+                    await self.vm.run_command(
+                        f"docker exec {target} iptables -D OUTPUT -d {target_ip} -j DROP 2>/dev/null || true"
+                    )
+                    await self.vm.run_command(
+                        f"docker exec {target} iptables -D INPUT -s {target_ip} -j DROP 2>/dev/null || true"
+                    )
+            elif chaos_type == "pd_leader_kill":
+                original_policy = chaos_metadata.get("original_restart_policy", "on-failure")
+                await self.vm.run_command(f"docker update --restart={original_policy} {target}")
+                await self.vm.run_command(f"docker start {target}")
+            elif chaos_type == "leader_concentration":
+                pass  # PD auto-rebalances
         except Exception as e:
             logger.debug(f"Cleanup note: {e}")
 
@@ -406,6 +446,133 @@ class GCPTiKVSubject(CloudSubjectBase):
             "chaos_type": "cpu_starvation",
             "target_container": target,
             "cores": cores,
+        }
+
+    async def _inject_process_pause(self, target: str) -> dict[str, Any]:
+        """SIGSTOP a TiKV container. Container looks alive but process is frozen."""
+        await self.vm.run_command(f"docker kill --signal STOP {target}")
+        return {"chaos_type": "process_pause", "target_container": target}
+
+    async def _inject_packet_loss(self, target: str, percent: int) -> dict[str, Any]:
+        """Inject packet loss via tc netem."""
+        await self.vm.run_command(
+            f"docker exec {target} tc qdisc add dev eth0 root netem loss {percent}%"
+        )
+        return {
+            "chaos_type": "packet_loss",
+            "target_container": target,
+            "percent": percent,
+        }
+
+    async def _inject_asymmetric_partition(self, target: str) -> dict[str, Any]:
+        """Block traffic to ONE random peer only."""
+        # Get all TiKV container IPs
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
+        )
+        containers = _parse_compose_json(stdout) if exit_code == 0 else []
+        tikv_containers = [
+            c for c in containers
+            if c.get("Service", "").startswith("tikv") and c.get("State") == "running"
+        ]
+
+        # Pick a peer that isn't the target
+        peers = [c for c in tikv_containers if c["Name"] != target]
+        if not peers:
+            raise RuntimeError("No peers to partition from")
+        peer = random.choice(peers)
+
+        # Get peer's IP
+        exit_code, peer_ip, _ = await self.vm.run_command(
+            f"docker inspect -f '{{{{.NetworkSettings.Networks}}}}' {peer['Name']} | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+' | head -1"
+        )
+        peer_ip = peer_ip.strip()
+        if not peer_ip:
+            # Fallback: inspect with format
+            exit_code, peer_ip, _ = await self.vm.run_command(
+                f"docker inspect -f '{{{{range .NetworkSettings.Networks}}}}{{{{.IPAddress}}}}{{{{end}}}}' {peer['Name']}"
+            )
+            peer_ip = peer_ip.strip()
+
+        # Block traffic to/from this one peer
+        await self.vm.run_command(
+            f"docker exec {target} iptables -I OUTPUT -d {peer_ip} -j DROP"
+        )
+        await self.vm.run_command(
+            f"docker exec {target} iptables -I INPUT -s {peer_ip} -j DROP"
+        )
+        return {
+            "chaos_type": "asymmetric_partition",
+            "target_container": target,
+            "target_ip": peer_ip,
+        }
+
+    async def _inject_pd_leader_kill(self) -> dict[str, Any]:
+        """Kill a PD container (control plane disruption)."""
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
+        )
+        containers = _parse_compose_json(stdout) if exit_code == 0 else []
+        pd_containers = [
+            c for c in containers
+            if c.get("Service", "").startswith("pd") and c.get("State") == "running"
+        ]
+        if not pd_containers:
+            raise RuntimeError("No running PD containers")
+
+        target = random.choice(pd_containers)["Name"]
+
+        # Get current restart policy
+        exit_code, policy, _ = await self.vm.run_command(
+            f"docker inspect -f '{{{{.HostConfig.RestartPolicy.Name}}}}' {target}"
+        )
+        original_policy = policy.strip() or "on-failure"
+
+        await self.vm.run_command(f"docker update --restart=no {target}")
+        await self.vm.run_command(f"docker kill {target}")
+        return {
+            "chaos_type": "pd_leader_kill",
+            "target_container": target,
+            "original_restart_policy": original_policy,
+        }
+
+    async def _inject_leader_concentration(self) -> dict[str, Any]:
+        """Transfer all region leaders to one store via PD API."""
+        # Get stores
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
+        )
+        stores = json.loads(stdout).get("stores", []) if exit_code == 0 else []
+        up_stores = [
+            s for s in stores
+            if s.get("store", {}).get("state_name") == "Up"
+        ]
+        if not up_stores:
+            raise RuntimeError("No Up stores")
+
+        target_store_id = up_stores[0]["store"]["id"]
+
+        # Get all regions and transfer leaders
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"curl -s http://localhost:{self._pd_port}/pd/api/v1/regions"
+        )
+        regions = json.loads(stdout).get("regions", []) if exit_code == 0 else []
+
+        transferred = 0
+        for region in regions:
+            region_id = region.get("id")
+            leader = region.get("leader", {})
+            if leader.get("store_id") != target_store_id:
+                await self.vm.run_command(
+                    f"curl -s -X POST http://localhost:{self._pd_port}/pd/api/v1/operators "
+                    f'-d \'{{"name": "transfer-leader", "region_id": {region_id}, "to_store_id": {target_store_id}}}\''
+                )
+                transferred += 1
+
+        return {
+            "chaos_type": "leader_concentration",
+            "target_store_id": target_store_id,
+            "regions_transferred": transferred,
         }
 
 

@@ -1,0 +1,12 @@
+name: subtle-gradual
+subjects: [tikv]
+
+# Subtle failures that develop gradually or have non-obvious symptoms
+chaos_types:
+  - type: leader_concentration
+  - type: process_pause
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: false

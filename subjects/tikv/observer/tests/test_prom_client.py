@@ -275,6 +275,16 @@ async def test_get_store_metrics_aggregates_all_metrics():
                 },
             }
         ),
+        # Raft lag query
+        'max(tikv_raftstore_log_lag{instance=~"tikv-0.*20160"}) or vector(0)': MockResponse(
+            {
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [{"metric": {}, "value": [1234567890.0, "42"]}],
+                },
+            }
+        ),
     }
 
     mock_http = MockAsyncClient(mock_responses)
@@ -289,7 +299,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
     assert metrics.disk_used_bytes == 50000000000
     assert metrics.disk_total_bytes == 100000000000
     assert metrics.cpu_percent == pytest.approx(45.5)
-    assert metrics.raft_lag == 0  # Deferred per CONTEXT.md
+    assert metrics.raft_lag == 42
 
 
 @pytest.mark.asyncio
@@ -318,6 +328,7 @@ async def test_get_store_metrics_uses_correct_tikv_metric_names():
     assert "tikv_grpc_msg_duration_seconds_bucket" in query_text  # Latency
     assert "tikv_store_size_bytes" in query_text  # Disk
     assert "process_cpu_seconds_total" in query_text  # CPU
+    assert "tikv_raftstore_log_lag" in query_text  # Raft lag
 
 
 @pytest.mark.asyncio

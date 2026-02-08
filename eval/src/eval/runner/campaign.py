@@ -20,6 +20,8 @@ class ChaosSpec(BaseModel):
         valid_types = [
             "node_kill", "latency", "disk_pressure", "network_partition",
             "memory_exhaustion", "cpu_starvation",  # Cloud-only
+            "process_pause", "packet_loss", "asymmetric_partition",
+            "pd_leader_kill", "leader_concentration",
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")

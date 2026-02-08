@@ -139,6 +139,10 @@ class PrometheusClient:
             f'rate(process_cpu_seconds_total{{instance=~"{addr_pattern}"}}[1m]) * 100'
         ) or 0.0
 
+        raft_lag_val = await self.get_metric_value(
+            f'max(tikv_raftstore_log_lag{{instance=~"{addr_pattern}"}}) or vector(0)'
+        ) or 0
+
         return StoreMetrics(
             store_id=store_id,
             qps=qps,
@@ -146,5 +150,5 @@ class PrometheusClient:
             disk_used_bytes=int(disk_used),
             disk_total_bytes=int(disk_capacity),
             cpu_percent=cpu_percent,
-            raft_lag=0,  # Raft-specific metrics deferred per CONTEXT.md
+            raft_lag=int(raft_lag_val),
         )

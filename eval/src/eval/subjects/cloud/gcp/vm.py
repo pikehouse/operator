@@ -3,10 +3,28 @@
 import asyncio
 import logging
 import os
+import subprocess
 import uuid
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_ssh_keys() -> str:
+    """Ensure SSH keys exist for gcloud compute ssh. Returns public key content."""
+    ssh_dir = Path.home() / ".ssh"
+    key_path = ssh_dir / "google_compute_engine"
+
+    if not key_path.exists():
+        ssh_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["ssh-keygen", "-t", "rsa", "-b", "2048", "-f", str(key_path), "-N", "", "-q"],
+            check=True,
+        )
+        logger.info(f"Generated SSH key pair at {key_path}")
+
+    return key_path.with_suffix(".pub").read_text().strip()
 
 
 class GCPVM:
@@ -72,6 +90,15 @@ class GCPVM:
         """
         logger.info(f"Creating GCP VM: {self.name}")
 
+        # Ensure SSH keys exist and get the public key
+        pub_key = _ensure_ssh_keys()
+        # Format: "username:ssh-rsa AAAA... comment"
+        # COS disables root SSH, so use a regular username
+        self._ssh_user = os.environ.get("USER", "eval_worker")
+        if self._ssh_user == "root":
+            self._ssh_user = "eval_worker"
+        ssh_metadata = f"{self._ssh_user}:{pub_key}"
+
         # Build gcloud command
         cmd = [
             "gcloud", "compute", "instances", "create", self.name,
@@ -81,6 +108,7 @@ class GCPVM:
             "--image-project=cos-cloud",
             f"--boot-disk-size={self.disk_size_gb}GB",
             "--scopes=cloud-platform",
+            f"--metadata=ssh-keys={ssh_metadata}",
             "--format=json",
         ]
         if self.project:
@@ -159,10 +187,16 @@ class GCPVM:
         if not self._instance_id:
             raise RuntimeError("VM not created yet")
 
+        # Use user@instance format to ensure correct SSH username
+        ssh_target = self.name
+        if hasattr(self, "_ssh_user") and self._ssh_user:
+            ssh_target = f"{self._ssh_user}@{self.name}"
+
         ssh_cmd = [
-            "gcloud", "compute", "ssh", self.name,
+            "gcloud", "compute", "ssh", ssh_target,
             f"--zone={self.zone}",
             "--command", cmd,
+            "--strict-host-key-checking=no",
         ]
         if self.project:
             ssh_cmd.append(f"--project={self.project}")
@@ -188,11 +222,16 @@ class GCPVM:
         if not self._instance_id:
             raise RuntimeError("VM not created yet")
 
+        scp_target = self.name
+        if hasattr(self, "_ssh_user") and self._ssh_user:
+            scp_target = f"{self._ssh_user}@{self.name}"
+
         cmd = [
             "gcloud", "compute", "scp",
             local_path,
-            f"{self.name}:{remote_path}",
+            f"{scp_target}:{remote_path}",
             f"--zone={self.zone}",
+            "--strict-host-key-checking=no",
         ]
         if self.project:
             cmd.append(f"--project={self.project}")
@@ -212,11 +251,16 @@ class GCPVM:
         if not self._instance_id:
             raise RuntimeError("VM not created yet")
 
+        scp_target = self.name
+        if hasattr(self, "_ssh_user") and self._ssh_user:
+            scp_target = f"{self._ssh_user}@{self.name}"
+
         cmd = [
             "gcloud", "compute", "scp",
-            f"{self.name}:{remote_path}",
+            f"{scp_target}:{remote_path}",
             local_path,
             f"--zone={self.zone}",
+            "--strict-host-key-checking=no",
         ]
         if self.project:
             cmd.append(f"--project={self.project}")

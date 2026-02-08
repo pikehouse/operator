@@ -14,14 +14,21 @@ logger = logging.getLogger(__name__)
 
 from eval.subjects.tikv.chaos import (
     TIKV_CONTAINER_PATTERN,
+    cleanup_asymmetric_partition,
     cleanup_disk_pressure,
     cleanup_latency_chaos,
     cleanup_network_partition,
+    cleanup_process_pause,
     get_pd_ips,
     get_tikv_peer_ips,
+    inject_asymmetric_partition,
     inject_disk_pressure,
     inject_latency_chaos,
+    inject_leader_concentration,
     inject_network_partition,
+    inject_packet_loss,
+    inject_process_pause,
+    kill_random_pd,
     kill_random_tikv,
     restore_node_restart_policy,
 )
@@ -201,7 +208,11 @@ class TiKVEvalSubject:
             return {"error": str(e)}
 
     # Chaos types safe for local execution
-    LOCAL_SAFE_CHAOS_TYPES = ["node_kill", "latency", "network_partition"]
+    LOCAL_SAFE_CHAOS_TYPES = [
+        "node_kill", "latency", "network_partition",
+        "process_pause", "packet_loss", "asymmetric_partition",
+        "pd_leader_kill", "leader_concentration",
+    ]
 
     # Chaos types that require cloud VMs (dangerous on laptops)
     CLOUD_ONLY_CHAOS_TYPES = ["disk_pressure", "memory_exhaustion", "cpu_starvation"]
@@ -267,6 +278,29 @@ class TiKVEvalSubject:
             pd_ips = await get_pd_ips(self.docker)
             return await inject_network_partition(self.docker, target.name, peer_ips, pd_ips)
 
+        elif chaos_type == "process_pause":
+            return await inject_process_pause(self.docker, target.name)
+
+        elif chaos_type == "packet_loss":
+            percent = params.get("percent", 30)
+            return await inject_packet_loss(self.docker, target.name, percent)
+
+        elif chaos_type == "asymmetric_partition":
+            peer_ips = await get_tikv_peer_ips(self.docker, target.name)
+            if not peer_ips:
+                raise RuntimeError("No TiKV peers found for asymmetric partition")
+            target_ip = random.choice(peer_ips)
+            return await inject_asymmetric_partition(self.docker, target.name, target_ip)
+
+        elif chaos_type == "pd_leader_kill":
+            return await kill_random_pd(self.docker)
+
+        elif chaos_type == "leader_concentration":
+            target_store_id = params.get("target_store_id")
+            return await inject_leader_concentration(
+                self.docker, self.pd_endpoint, target_store_id
+            )
+
         raise ValueError(
             f"Unknown chaos type: {chaos_type}. Supported: {self.get_chaos_types()}"
         )
@@ -310,6 +344,36 @@ class TiKVEvalSubject:
                     await asyncio.to_thread(self.docker.start, target_container)
                 except Exception as e:
                     logger.debug(f"Failed to start {target_container}: {e}")
+
+            elif chaos_type == "process_pause":
+                target_container = chaos_metadata["target_container"]
+                await cleanup_process_pause(self.docker, target_container)
+
+            elif chaos_type == "packet_loss":
+                target_container = chaos_metadata["target_container"]
+                await cleanup_latency_chaos(self.docker, target_container)
+
+            elif chaos_type == "asymmetric_partition":
+                isolated_container = chaos_metadata["isolated_container"]
+                target_ip = chaos_metadata["target_ip"]
+                await cleanup_asymmetric_partition(
+                    self.docker, isolated_container, target_ip
+                )
+
+            elif chaos_type == "pd_leader_kill":
+                target_container = chaos_metadata["target_container"]
+                restart_policy = chaos_metadata.get("original_restart_policy", "on-failure")
+                await restore_node_restart_policy(
+                    self.docker, target_container, restart_policy
+                )
+                try:
+                    await asyncio.to_thread(self.docker.start, target_container)
+                except Exception as e:
+                    logger.debug(f"Failed to start {target_container}: {e}")
+
+            elif chaos_type == "leader_concentration":
+                # PD's balance-leader-scheduler will rebalance naturally
+                pass
 
             else:
                 logger.warning(f"Unknown chaos type for cleanup: {chaos_type}")
