@@ -25,6 +25,13 @@
     </dl>
 </div>
 
+{% if topology_svg %}
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-2">Deployment Architecture</h2>
+    <div class="overflow-x-auto">{{ topology_svg | safe }}</div>
+</div>
+{% endif %}
+
 <h2 class="text-xl font-bold mb-4">Trials</h2>
 
 {% if trials %}

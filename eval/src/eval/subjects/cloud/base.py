@@ -227,6 +227,85 @@ class CloudSubjectBase(ABC):
             return {"error": str(e)}
         return {}
 
+    async def get_topology(self) -> dict[str, Any]:
+        """Return deployment topology from VM introspection.
+
+        Queries docker compose ps and standalone operator containers via SSH.
+        """
+        compose_containers = []
+        operator_containers = []
+
+        try:
+            # Get compose service containers
+            exit_code, stdout, _ = await self.vm.run_command(
+                f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
+            )
+            if exit_code == 0:
+                for c in _parse_compose_json(stdout):
+                    service = c.get("Service", "")
+                    name = c.get("Name", "")
+                    image = c.get("Image", "")
+                    if service.startswith("pd"):
+                        role = "pd"
+                    elif service.startswith("tikv"):
+                        role = "tikv"
+                    elif "prometheus" in service or "grafana" in service:
+                        role = "observability"
+                    else:
+                        role = "other"
+                    compose_containers.append({
+                        "id": name,
+                        "image": image,
+                        "role": role,
+                    })
+
+            # Get standalone operator containers
+            exit_code, stdout, _ = await self.vm.run_command(
+                'docker ps --format json --filter name=operator'
+            )
+            if exit_code == 0:
+                for c in _parse_compose_json(stdout):
+                    name = c.get("Names", c.get("Name", ""))
+                    image = c.get("Image", "")
+                    operator_containers.append({
+                        "id": name,
+                        "image": image,
+                        "role": "operator",
+                    })
+        except Exception as e:
+            logger.debug(f"Failed to introspect VM containers for topology: {e}")
+
+        # Build VM host entry
+        vm_label = "Cloud VM"
+        vm_meta: dict[str, Any] = {}
+        if hasattr(self.vm, "zone"):
+            vm_meta["zone"] = self.vm.zone
+        if hasattr(self.vm, "machine_type"):
+            vm_meta["machine_type"] = self.vm.machine_type
+        if hasattr(self.vm, "name"):
+            vm_meta["vm_name"] = self.vm.name
+        try:
+            vm_meta["vm_ip"] = self.vm.external_ip
+        except RuntimeError:
+            pass
+
+        if vm_meta.get("machine_type") and vm_meta.get("zone"):
+            vm_label = f"GCP VM ({vm_meta['machine_type']}, {vm_meta['zone']})"
+
+        return {
+            "mode": "cloud-gcp",
+            "hosts": [
+                {
+                    "id": "gcp-vm",
+                    "label": vm_label,
+                    "type": "vm",
+                    **vm_meta,
+                    "compose_containers": compose_containers,
+                    "operator_containers": operator_containers,
+                }
+            ],
+        }
+
     @abstractmethod
     def get_chaos_types(self) -> list[str]:
         """Return list of supported chaos types.

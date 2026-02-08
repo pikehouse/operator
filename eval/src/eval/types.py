@@ -100,6 +100,7 @@ class Campaign:
     trial_count: int = 0
     baseline: bool = False
     variant_name: str = "default"
+    topology_json: str = ""
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

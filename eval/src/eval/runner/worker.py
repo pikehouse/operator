@@ -271,6 +271,20 @@ class Worker:
             )
 
         try:
+            # Capture topology before chaos (subject is healthy at this point)
+            try:
+                from eval.runner.harness import capture_deployment_topology_async
+                topology_json = await capture_deployment_topology_async(subject, mode=self.mode)
+                if topology_json:
+                    pool = await self.db._get_pool()
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE campaigns SET topology_json = $1::jsonb WHERE id = $2 AND (topology_json IS NULL)",
+                            topology_json, campaign_id,
+                        )
+            except Exception as e:
+                logger.debug(f"Topology capture skipped: {e}")
+
             # Start operator on VM (if enabled)
             if remote_op:
                 await remote_op.start()

@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     trial_count INTEGER NOT NULL,
     baseline INTEGER NOT NULL DEFAULT 0,
     variant_name TEXT DEFAULT 'default',
+    topology_json TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
 
@@ -143,6 +144,12 @@ class EvalDB:
                 )
                 await db.commit()
 
+            if "topology_json" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN topology_json TEXT DEFAULT ''"
+                )
+                await db.commit()
+
             # Check if operator_data_json column exists on trials
             cursor = await db.execute("PRAGMA table_info(trials)")
             trial_columns = await cursor.fetchall()
@@ -159,8 +166,8 @@ class EvalDB:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign.subject_name,
@@ -169,6 +176,7 @@ class EvalDB:
                     campaign.trial_count,
                     1 if campaign.baseline else 0,
                     campaign.variant_name,
+                    campaign.topology_json,
                     campaign.created_at,
                 ),
             )
@@ -225,6 +233,7 @@ class EvalDB:
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
                     variant_name=row["variant_name"] if "variant_name" in keys else "default",
+                    topology_json=row["topology_json"] if "topology_json" in keys else "",
                     created_at=row["created_at"],
                 )
             return None
@@ -286,6 +295,7 @@ class EvalDB:
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
                     variant_name=row["variant_name"] if "variant_name" in keys else "default",
+                    topology_json=row["topology_json"] if "topology_json" in keys else "",
                     created_at=row["created_at"],
                 ))
             return results

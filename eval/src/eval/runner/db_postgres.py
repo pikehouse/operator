@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     trial_count INTEGER NOT NULL,
     baseline BOOLEAN DEFAULT FALSE,
     variant_name TEXT DEFAULT 'default',
+    topology_json JSONB,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -170,8 +171,8 @@ class PostgresDB:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
                 RETURNING id
                 """,
                 campaign.subject_name,
@@ -180,6 +181,7 @@ class PostgresDB:
                 campaign.trial_count,
                 campaign.baseline,
                 campaign.variant_name,
+                campaign.topology_json or None,
                 parse_iso_datetime(campaign.created_at),
             )
             return row["id"]
@@ -224,6 +226,7 @@ class PostgresDB:
             if row:
                 # Read name column; fall back to subject_name/chaos_type for old DBs
                 name = row.get("name") or f"{row['subject_name']}/{row['chaos_type']}"
+                topo = row["topology_json"] if "topology_json" in row.keys() else None
                 return Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
@@ -231,6 +234,7 @@ class PostgresDB:
                     trial_count=row["trial_count"],
                     baseline=row["baseline"],
                     variant_name=row["variant_name"] or "default",
+                    topology_json=json.dumps(topo) if topo else "",
                     created_at=row["created_at"].isoformat() if row["created_at"] else "",
                 )
             return None
@@ -294,18 +298,20 @@ class PostgresDB:
                 limit,
                 offset,
             )
-            return [
-                Campaign(
+            campaigns = []
+            for row in rows:
+                topo = row["topology_json"] if "topology_json" in row.keys() else None
+                campaigns.append(Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
                     name=row.get("name") or f"{row['subject_name']}/{row['chaos_type']}",
                     trial_count=row["trial_count"],
                     baseline=row["baseline"],
                     variant_name=row["variant_name"] or "default",
+                    topology_json=json.dumps(topo) if topo else "",
                     created_at=row["created_at"].isoformat() if row["created_at"] else "",
-                )
-                for row in rows
-            ]
+                ))
+            return campaigns
 
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""

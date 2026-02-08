@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import aiosqlite
 from rich.console import Console
 
 from eval.types import Campaign, EvalSubject, Trial, VariantConfig
@@ -552,6 +553,112 @@ async def run_trial(
     )
 
 
+def capture_deployment_topology(
+    subject: EvalSubject,
+    mode: str = "local",
+) -> str:
+    """Capture deployment topology from a subject instance.
+
+    Calls subject.get_topology() (duck-typed) and composes the full
+    topology including operator/eval processes.
+
+    Args:
+        subject: EvalSubject with optional get_topology() method
+        mode: Execution mode ("local" or "cloud-gcp")
+
+    Returns:
+        JSON string of topology data, or empty string if unavailable
+    """
+    if not hasattr(subject, "get_topology"):
+        return ""
+
+    try:
+        result = subject.get_topology()
+        # Handle both sync and async get_topology
+        if asyncio.iscoroutine(result):
+            # Can't await in sync context — return empty and let caller handle
+            return ""
+
+        topology = result
+
+        if mode == "local":
+            # Add host processes (eval runner + operator)
+            host_entry = {
+                "id": "host",
+                "label": "Local Machine",
+                "type": "host",
+                "processes": [
+                    {"id": "eval-runner", "label": "Eval Runner", "role": "eval"},
+                    {"id": "monitor", "label": "Monitor Daemon", "role": "operator"},
+                    {"id": "agent", "label": "Agent Daemon", "role": "operator"},
+                ],
+            }
+            topology["hosts"].insert(0, host_entry)
+
+            # Add connections
+            topology["connections"] = [
+                {"from": "monitor", "to": "docker", "label": "observe"},
+                {"from": "agent", "to": "docker", "label": "shell"},
+                {"from": "eval-runner", "to": "docker", "label": "chaos inject"},
+            ]
+
+        return json.dumps(topology)
+    except Exception as e:
+        console.print(f"[dim]Topology capture failed: {e}[/dim]")
+        return ""
+
+
+async def capture_deployment_topology_async(
+    subject: EvalSubject,
+    mode: str = "cloud-gcp",
+) -> str:
+    """Capture deployment topology from a cloud subject instance.
+
+    Async version for cloud subjects whose get_topology() is async.
+
+    Args:
+        subject: EvalSubject with optional async get_topology() method
+        mode: Execution mode
+
+    Returns:
+        JSON string of topology data, or empty string if unavailable
+    """
+    if not hasattr(subject, "get_topology"):
+        return ""
+
+    try:
+        topology = await subject.get_topology()
+
+        if mode == "cloud-gcp":
+            # Add eval-worker host
+            eval_worker_entry = {
+                "id": "eval-worker",
+                "label": "Eval Worker",
+                "type": "host",
+                "processes": [
+                    {"id": "eval-runner", "label": "Eval Runner", "role": "eval"},
+                ],
+            }
+            topology["hosts"].insert(0, eval_worker_entry)
+
+            # Add connections
+            topology["connections"] = [
+                {"from": "eval-runner", "to": "gcp-vm", "label": "SSH"},
+            ]
+            # Add operator connections if operator containers found
+            vm_host = next((h for h in topology["hosts"] if h.get("type") == "vm"), None)
+            if vm_host and vm_host.get("operator_containers"):
+                topology["connections"].extend([
+                    {"from": "operator-monitor", "to": "gcp-vm", "label": "observe (localhost:2379)"},
+                    {"from": "operator-agent", "to": "gcp-vm", "label": "docker exec"},
+                ])
+
+        return json.dumps(topology)
+    except Exception as e:
+        console.print(f"[dim]Topology capture failed: {e}[/dim]")
+        return ""
+
+
 async def run_campaign(
     subject: EvalSubject,
     subject_name: str,
@@ -734,6 +841,22 @@ async def run_campaign_from_config(
 
     # Create pool of isolated subject instances
     pool = SubjectPool(pool_size=config.parallel, subject_type=subject_type)
+
+    # Capture deployment topology from instance 0
+    try:
+        _, inst0 = await pool.acquire()
+        topology_json = capture_deployment_topology(inst0, mode="local")
+        pool.release(0)
+        if topology_json:
+            # Update campaign with topology
+            async with aiosqlite.connect(db.db_path) as conn:
+                await conn.execute(
+                    "UPDATE campaigns SET topology_json = ? WHERE id = ?",
+                    (topology_json, campaign_id),
+                )
+                await conn.commit()
+    except Exception as e:
+        console.print(f"[dim]Topology capture skipped: {e}[/dim]")
 
     # Thread-safe trial statistics
     stats = TrialStats()

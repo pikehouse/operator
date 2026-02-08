@@ -73,6 +73,16 @@ async def get_campaign(request: Request, campaign_id: int):
         # Add chaos description and trial outcomes
         chaos_description = campaign.name
 
+        # Parse topology and generate SVG
+        topology_svg = ""
+        if campaign.topology_json:
+            try:
+                from eval.viewer.svg import render_topology_svg
+                topology = json.loads(campaign.topology_json)
+                topology_svg = render_topology_svg(topology)
+            except (json.JSONDecodeError, Exception):
+                pass
+
         # Enrich trials with outcome status
         trial_data = []
         for t in trials:
@@ -89,6 +99,7 @@ async def get_campaign(request: Request, campaign_id: int):
                 "campaign": campaign,
                 "trials": trial_data,
                 "chaos_description": chaos_description,
+                "topology_svg": topology_svg,
             },
         )
     finally:

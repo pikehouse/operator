@@ -382,6 +382,54 @@ class TiKVEvalSubject:
             # Handle gracefully - container may have been restarted/killed
             logger.warning(f"Failed to cleanup chaos {chaos_type}: {e}")
 
+    def get_topology(self) -> dict[str, Any]:
+        """Return deployment topology for this local TiKV subject.
+
+        Introspects running Docker containers to build topology data.
+        """
+        containers = []
+        try:
+            running = self.docker.compose.ps()
+            for c in running:
+                name = c.name.lower()
+                # Check observability first (container names like tikv-prometheus-1
+                # would otherwise match "tikv")
+                if "prometheus" in name or "grafana" in name:
+                    role = "observability"
+                elif "pd" in name:
+                    role = "pd"
+                elif "tikv" in name:
+                    role = "tikv"
+                else:
+                    role = "other"
+
+                entry: dict[str, Any] = {
+                    "id": c.name,
+                    "image": str(c.config.image) if c.config and c.config.image else "",
+                    "role": role,
+                }
+                # Add exposed ports for key services
+                if role == "pd" and "pd0" in name:
+                    entry["ports"] = [self.pd_port]
+                elif role == "tikv" and "tikv0" in name:
+                    entry["ports"] = [self.tikv_port]
+
+                containers.append(entry)
+        except Exception as e:
+            logger.debug(f"Failed to introspect containers for topology: {e}")
+
+        return {
+            "mode": "local",
+            "hosts": [
+                {
+                    "id": "docker",
+                    "label": f"Docker ({self.project_name})",
+                    "type": "docker",
+                    "containers": containers,
+                }
+            ],
+        }
+
     async def _verify_stores_up(self) -> bool:
         """Verify PD reports 3 TiKV stores in Up state."""
         try:
