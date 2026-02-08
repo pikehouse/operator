@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -9,12 +10,43 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from eval.runner.db import EvalDB
+from eval.runner.db import EvalDB, EvalDBProtocol
 from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config
 from eval.runner.campaign import load_campaign_config, CampaignConfig
 from eval.subjects.factory import SubjectRegistry
 from eval.types import EvalSubject
 from eval.variants import load_all_variants
+
+
+def _load_dotenv() -> None:
+    """Auto-discover and load .env files, walking up from cwd.
+
+    Searches current directory and ancestors for .env files.
+    Does not override variables already set in the environment.
+    """
+    directory = Path.cwd()
+    while True:
+        env_file = directory / ".env"
+        if env_file.is_file():
+            with open(env_file) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and key not in os.environ:
+                        os.environ[key] = value
+        parent = directory.parent
+        if parent == directory:
+            break
+        directory = parent
+
+
+_load_dotenv()
 
 app = typer.Typer(
     name="eval",
@@ -29,6 +61,28 @@ worker_app = typer.Typer(help="Distributed worker commands")
 app.add_typer(worker_app, name="worker")
 
 console = Console()
+
+
+async def get_db(remote: bool, db_path: Path) -> EvalDBProtocol:
+    """Get the appropriate database backend.
+
+    Args:
+        remote: If True, use PostgresDB via EVAL_DATABASE_URL
+        db_path: Local SQLite path (used when remote=False)
+    """
+    if remote:
+        db_url = os.environ.get("EVAL_DATABASE_URL")
+        if not db_url:
+            console.print("[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]")
+            raise typer.Exit(1)
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        return db
+    else:
+        db = EvalDB(db_path)
+        await db.ensure_schema()
+        return db
 
 
 def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
@@ -475,6 +529,11 @@ def analyze(
         "--commands",
         help="Include LLM-based command analysis (requires ANTHROPIC_API_KEY)",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Analyze a campaign and display scores.
 
@@ -486,13 +545,17 @@ def analyze(
         eval analyze 1
         eval analyze 1 --json
         eval analyze 1 --commands  # Include command analysis
+        eval analyze 1 --remote    # Query cloud database
     """
     from eval.analysis import analyze_campaign, CampaignSummary
 
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        return await analyze_campaign(db, campaign_id, include_command_analysis=include_commands)
+        db = await get_db(remote, db_path)
+        try:
+            return await analyze_campaign(db, campaign_id, include_command_analysis=include_commands)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     try:
         summary: CampaignSummary = asyncio.run(run())
@@ -544,6 +607,11 @@ def compare(
         "--json",
         help="Output as JSON",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Compare two campaigns by win rate.
 
@@ -552,13 +620,17 @@ def compare(
     Examples:
         eval compare 1 2
         eval compare 1 2 --json
+        eval compare 1 2 --remote
     """
     from eval.analysis import compare_campaigns, CampaignComparison
 
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        return await compare_campaigns(db, campaign_a, campaign_b)
+        db = await get_db(remote, db_path)
+        try:
+            return await compare_campaigns(db, campaign_a, campaign_b)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     try:
         result: CampaignComparison = asyncio.run(run())
@@ -606,6 +678,11 @@ def compare_baseline_cmd(
         "--json",
         help="Output as JSON",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Compare agent campaign to baseline (self-healing).
 
@@ -616,13 +693,17 @@ def compare_baseline_cmd(
         eval compare-baseline 1
         eval compare-baseline 1 --baseline 2
         eval compare-baseline 1 --json
+        eval compare-baseline 1 --remote
     """
     from eval.analysis import compare_baseline, BaselineComparison
 
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        return await compare_baseline(db, campaign_id, baseline_id)
+        db = await get_db(remote, db_path)
+        try:
+            return await compare_baseline(db, campaign_id, baseline_id)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     try:
         result: BaselineComparison = asyncio.run(run())
@@ -675,6 +756,11 @@ def compare_variants_cmd(
         "--json",
         help="Output as JSON",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Compare agent performance across variants.
 
@@ -688,6 +774,7 @@ def compare_variants_cmd(
         eval compare-variants tikv node_kill
         eval compare-variants tikv node_kill --variants haiku-v1,sonnet-v1
         eval compare-variants tikv latency --json
+        eval compare-variants tikv latency --remote
     """
     from eval.analysis import compare_variants, VariantComparison
 
@@ -697,9 +784,12 @@ def compare_variants_cmd(
         variant_list = [v.strip() for v in variants.split(",")]
 
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        return await compare_variants(db, subject, chaos, variant_list)
+        db = await get_db(remote, db_path)
+        try:
+            return await compare_variants(db, subject, chaos, variant_list)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     try:
         result: VariantComparison = asyncio.run(run())
@@ -747,6 +837,7 @@ def show_detail(
     trial: bool = typer.Option(False, "--trial", "-t", help="Treat ID as trial ID"),
     db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
 ) -> None:
     """Show details for a campaign or trial.
 
@@ -755,33 +846,36 @@ def show_detail(
     Examples:
         eval show 1              # Show campaign 1
         eval show --trial 5      # Show trial 5
+        eval show 1 --remote     # Show from cloud database
     """
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
+        db = await get_db(remote, db_path)
+        try:
+            if trial:
+                # Fetch trial by ID
+                t = await db.get_trial(id)
+                if t is None:
+                    console.print(f"[red]Error: Trial {id} not found[/red]")
+                    raise typer.Exit(1)
+                return ("trial", t, None, None)
+            else:
+                # Fetch campaign and its trials
+                campaign = await db.get_campaign(id)
+                if campaign is None:
+                    console.print(f"[red]Error: Campaign {id} not found[/red]")
+                    raise typer.Exit(1)
+                trials = await db.get_trials(id)
 
-        if trial:
-            # Fetch trial by ID
-            t = await db.get_trial(id)
-            if t is None:
-                console.print(f"[red]Error: Trial {id} not found[/red]")
-                raise typer.Exit(1)
-            return ("trial", t, None, None)
-        else:
-            # Fetch campaign and its trials
-            campaign = await db.get_campaign(id)
-            if campaign is None:
-                console.print(f"[red]Error: Campaign {id} not found[/red]")
-                raise typer.Exit(1)
-            trials = await db.get_trials(id)
-
-            # Get campaign analysis for aggregate scores
-            from eval.analysis import analyze_campaign
-            try:
-                summary = await analyze_campaign(db, id)
-            except ValueError:
-                summary = None
-            return ("campaign", campaign, trials, summary)
+                # Get campaign analysis for aggregate scores
+                from eval.analysis import analyze_campaign
+                try:
+                    summary = await analyze_campaign(db, id)
+                except ValueError:
+                    summary = None
+                return ("campaign", campaign, trials, summary)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     result_type, obj, trials, summary = asyncio.run(run())
 
@@ -984,14 +1078,18 @@ def list_campaigns(
     limit: int = typer.Option(20, "--limit", "-n", help="Number of campaigns to show"),
     offset: int = typer.Option(0, "--offset", help="Skip first N campaigns"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
 ) -> None:
     """List all campaigns in the database."""
     async def run():
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        campaigns = await db.get_all_campaigns(limit=limit, offset=offset)
-        total = await db.count_campaigns()
-        return campaigns, total
+        db = await get_db(remote, db_path)
+        try:
+            campaigns = await db.get_all_campaigns(limit=limit, offset=offset)
+            total = await db.count_campaigns()
+            return campaigns, total
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
 
     campaigns, total = asyncio.run(run())
 
@@ -1039,6 +1137,7 @@ def viewer(
     operator_db: Optional[Path] = typer.Option(None, "--operator-db", help="Path to operator.db for reasoning"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host to bind"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to bind"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
 ) -> None:
     """Start the web viewer for browsing campaigns and trials."""
     import uvicorn
@@ -1051,11 +1150,19 @@ def viewer(
             operator_db = default
             console.print(f"[dim]Using operator.db: {operator_db}[/dim]")
 
-    if not db_path.exists():
-        console.print(f"[yellow]Warning: Database {db_path} does not exist. Will be created on first access.[/yellow]")
+    if remote:
+        db_url = os.environ.get("EVAL_DATABASE_URL")
+        if not db_url:
+            console.print("[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]")
+            raise typer.Exit(1)
+        app_instance = create_app(db_url, operator_db, remote=True)
+        console.print(f"Starting viewer at http://{host}:{port} (remote database)")
+    else:
+        if not db_path.exists():
+            console.print(f"[yellow]Warning: Database {db_path} does not exist. Will be created on first access.[/yellow]")
+        app_instance = create_app(db_path, operator_db)
+        console.print(f"Starting viewer at http://{host}:{port}")
 
-    app_instance = create_app(db_path, operator_db)
-    console.print(f"Starting viewer at http://{host}:{port}")
     uvicorn.run(app_instance, host=host, port=port)
 
 
@@ -1194,29 +1301,36 @@ def worker_status(
         "-c",
         help="Campaign ID to check (default: all)",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Check work queue status.
 
     Shows pending, running, completed, and failed work items.
-
-    Requires EVAL_DATABASE_URL environment variable.
+    The work queue only exists in cloud PostgreSQL, so --remote is required.
 
     Examples:
-        eval worker status
-        eval worker status --campaign 1
+        eval worker status --remote
+        eval worker status --remote --campaign 1
     """
-    import os
-    from eval.runner.db_postgres import PostgresDB
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
     from eval.runner.queue import WorkQueue
 
     db_url = os.environ.get("EVAL_DATABASE_URL")
     if not db_url:
         console.print(
-            "[red]Error: EVAL_DATABASE_URL environment variable required[/red]"
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
         )
         raise typer.Exit(1)
 
     async def run():
+        from eval.runner.db_postgres import PostgresDB
         db = PostgresDB(db_url)
         await db.ensure_schema()
         queue = WorkQueue(db)
@@ -1252,30 +1366,37 @@ def worker_release_stale(
         "-t",
         help="Seconds before considering a claim stale",
     ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
 ) -> None:
     """Release stale work items back to pending.
 
     Used to recover from worker crashes. Items running longer than
     timeout are reset to pending for other workers to claim.
-
-    Requires EVAL_DATABASE_URL environment variable.
+    The work queue only exists in cloud PostgreSQL, so --remote is required.
 
     Examples:
-        eval worker release-stale
-        eval worker release-stale --timeout 1800
+        eval worker release-stale --remote
+        eval worker release-stale --remote --timeout 1800
     """
-    import os
-    from eval.runner.db_postgres import PostgresDB
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
     from eval.runner.queue import WorkQueue
 
     db_url = os.environ.get("EVAL_DATABASE_URL")
     if not db_url:
         console.print(
-            "[red]Error: EVAL_DATABASE_URL environment variable required[/red]"
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
         )
         raise typer.Exit(1)
 
     async def run():
+        from eval.runner.db_postgres import PostgresDB
         db = PostgresDB(db_url)
         await db.ensure_schema()
         queue = WorkQueue(db)

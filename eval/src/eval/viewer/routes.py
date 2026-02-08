@@ -4,9 +4,22 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from eval.runner.db import EvalDB
+from eval.runner.db import EvalDB, EvalDBProtocol
 
 router = APIRouter()
+
+
+async def _get_viewer_db(request: Request) -> EvalDBProtocol:
+    """Get the appropriate database backend from app state."""
+    if getattr(request.app.state, 'remote', False):
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(request.app.state.db_url)
+        await db.ensure_schema()
+        return db
+    else:
+        db = EvalDB(request.app.state.db_path)
+        await db.ensure_schema()
+        return db
 
 
 def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
@@ -33,49 +46,54 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
 @router.get("/", response_class=HTMLResponse)
 async def list_campaigns(request: Request):
     """List all campaigns."""
-    db = EvalDB(request.app.state.db_path)
-    await db.ensure_schema()
-    campaigns = await db.get_all_campaigns(limit=100, offset=0)
+    db = await _get_viewer_db(request)
+    try:
+        campaigns = await db.get_all_campaigns(limit=100, offset=0)
 
-    return request.app.state.templates.TemplateResponse(
-        "campaigns.html",
-        {"request": request, "campaigns": campaigns},
-    )
+        return request.app.state.templates.TemplateResponse(
+            "campaigns.html",
+            {"request": request, "campaigns": campaigns},
+        )
+    finally:
+        if hasattr(db, 'close'):
+            await db.close()
 
 
 @router.get("/campaign/{campaign_id}", response_class=HTMLResponse)
 async def get_campaign(request: Request, campaign_id: int):
     """Show campaign detail with trial list."""
-    db = EvalDB(request.app.state.db_path)
-    await db.ensure_schema()
+    db = await _get_viewer_db(request)
+    try:
+        campaign = await db.get_campaign(campaign_id)
+        if campaign is None:
+            return HTMLResponse(content="Campaign not found", status_code=404)
 
-    campaign = await db.get_campaign(campaign_id)
-    if campaign is None:
-        return HTMLResponse(content="Campaign not found", status_code=404)
+        trials = await db.get_trials(campaign_id)
 
-    trials = await db.get_trials(campaign_id)
+        # Add chaos description and trial outcomes
+        chaos_description = get_chaos_description(campaign.chaos_type)
 
-    # Add chaos description and trial outcomes
-    chaos_description = get_chaos_description(campaign.chaos_type)
+        # Enrich trials with outcome status
+        trial_data = []
+        for t in trials:
+            outcome = "success" if t.resolved_at else "timeout"
+            trial_data.append({
+                "trial": t,
+                "outcome": outcome,
+            })
 
-    # Enrich trials with outcome status
-    trial_data = []
-    for t in trials:
-        outcome = "success" if t.resolved_at else "timeout"
-        trial_data.append({
-            "trial": t,
-            "outcome": outcome,
-        })
-
-    return request.app.state.templates.TemplateResponse(
-        "campaign.html",
-        {
-            "request": request,
-            "campaign": campaign,
-            "trials": trial_data,
-            "chaos_description": chaos_description,
-        },
-    )
+        return request.app.state.templates.TemplateResponse(
+            "campaign.html",
+            {
+                "request": request,
+                "campaign": campaign,
+                "trials": trial_data,
+                "chaos_description": chaos_description,
+            },
+        )
+    finally:
+        if hasattr(db, 'close'):
+            await db.close()
 
 
 @router.get("/trial/{trial_id}", response_class=HTMLResponse)
@@ -83,8 +101,17 @@ async def get_trial(request: Request, trial_id: int):
     """Show trial detail with reasoning timeline."""
     import asyncio
 
-    db = EvalDB(request.app.state.db_path)
-    await db.ensure_schema()
+    db = await _get_viewer_db(request)
+    try:
+        return await _render_trial(request, db, trial_id)
+    finally:
+        if hasattr(db, 'close'):
+            await db.close()
+
+
+async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
+    """Render trial detail page (extracted for cleanup wrapper)."""
+    import asyncio
 
     trial = await db.get_trial(trial_id)
     if trial is None:
@@ -92,7 +119,14 @@ async def get_trial(request: Request, trial_id: int):
 
     # Parse commands and chaos metadata from JSON
     raw_commands = json.loads(trial.commands_json) if trial.commands_json else []
-    chaos_meta = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
+    chaos_meta_raw = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
+    # Handle double-encoded JSON or non-dict values
+    if isinstance(chaos_meta_raw, str):
+        try:
+            chaos_meta_raw = json.loads(chaos_meta_raw)
+        except (json.JSONDecodeError, TypeError):
+            chaos_meta_raw = {}
+    chaos_meta = chaos_meta_raw if isinstance(chaos_meta_raw, dict) else {}
 
     # Extract command strings from various formats
     commands = []

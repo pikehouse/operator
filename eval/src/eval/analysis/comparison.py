@@ -5,7 +5,7 @@ Implements ANAL-04 (baseline comparison) and ANAL-05 (campaign comparison).
 
 from pydantic import BaseModel
 
-from eval.runner.db import EvalDB
+from eval.runner.db import EvalDBProtocol
 from eval.analysis.types import CampaignSummary
 from eval.analysis.scoring import analyze_campaign
 
@@ -99,7 +99,7 @@ def _determine_winner(
 
 
 async def compare_baseline(
-    db: EvalDB,
+    db: EvalDBProtocol,
     agent_campaign_id: int,
     baseline_campaign_id: int | None = None,
 ) -> BaselineComparison:
@@ -190,7 +190,7 @@ async def compare_baseline(
 
 
 async def compare_campaigns(
-    db: EvalDB,
+    db: EvalDBProtocol,
     campaign_a_id: int,
     campaign_b_id: int,
 ) -> CampaignComparison:
@@ -264,26 +264,18 @@ async def compare_campaigns(
 
 
 async def _find_baseline_campaign(
-    db: EvalDB,
+    db: EvalDBProtocol,
     subject_name: str,
     chaos_type: str,
 ) -> int | None:
     """Find most recent baseline campaign matching subject and chaos type."""
-    import aiosqlite
-
-    async with aiosqlite.connect(db.db_path) as conn:
-        conn.row_factory = aiosqlite.Row
-        cursor = await conn.execute(
-            """
-            SELECT id FROM campaigns
-            WHERE subject_name = ? AND chaos_type = ? AND baseline = 1
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            (subject_name, chaos_type),
-        )
-        row = await cursor.fetchone()
-        return row["id"] if row else None
+    # Use protocol methods to stay backend-agnostic
+    campaigns = await db.get_all_campaigns(limit=1000)
+    for c in campaigns:
+        # get_all_campaigns returns ordered by created_at DESC
+        if c.subject_name == subject_name and c.chaos_type == chaos_type and c.baseline:
+            return c.id
+    return None
 
 
 class VariantMetrics(BaseModel):
@@ -309,7 +301,7 @@ class VariantComparison(BaseModel):
 
 
 async def compare_variants(
-    db: EvalDB,
+    db: EvalDBProtocol,
     subject_name: str,
     chaos_type: str,
     variant_names: list[str] | None = None,
@@ -319,7 +311,7 @@ async def compare_variants(
     CONF-03: Aggregate metrics per variant for A/B comparison.
 
     Args:
-        db: EvalDB instance
+        db: Database instance (EvalDB or PostgresDB)
         subject_name: Filter by subject (e.g., "tikv")
         chaos_type: Filter by chaos type (e.g., "node_kill")
         variant_names: Optional list of variant names to include (None = all)
@@ -330,34 +322,17 @@ async def compare_variants(
     Raises:
         ValueError: If no campaigns found for criteria
     """
-    import aiosqlite
+    # Use protocol methods to stay backend-agnostic
+    all_campaigns = await db.get_all_campaigns(limit=10000)
 
-    async with aiosqlite.connect(db.db_path) as conn:
-        conn.row_factory = aiosqlite.Row
-
-        # Check if variant_name column exists (for backward compatibility)
-        cursor = await conn.execute("PRAGMA table_info(campaigns)")
-        columns = await cursor.fetchall()
-        has_variant_column = any(col[1] == "variant_name" for col in columns)
-
-        if not has_variant_column:
-            raise ValueError("Database schema missing variant_name column. Run migration first.")
-
-        # Get all non-baseline campaigns matching criteria
-        query = """
-            SELECT id, variant_name
-            FROM campaigns
-            WHERE subject_name = ? AND chaos_type = ? AND baseline = 0
-        """
-        params: list = [subject_name, chaos_type]
-
-        if variant_names:
-            placeholders = ",".join("?" * len(variant_names))
-            query += f" AND variant_name IN ({placeholders})"
-            params.extend(variant_names)
-
-        cursor = await conn.execute(query, params)
-        campaigns = await cursor.fetchall()
+    # Filter to matching non-baseline campaigns
+    campaigns = [
+        c for c in all_campaigns
+        if c.subject_name == subject_name
+        and c.chaos_type == chaos_type
+        and not c.baseline
+        and (variant_names is None or getattr(c, 'variant_name', 'default') in variant_names)
+    ]
 
     if not campaigns:
         raise ValueError(
@@ -368,8 +343,8 @@ async def compare_variants(
     # Group campaigns by variant, analyze each
     variant_summaries: dict[str, list[CampaignSummary]] = {}
     for campaign in campaigns:
-        summary = await analyze_campaign(db, campaign["id"])
-        variant_name = campaign["variant_name"] or "default"
+        summary = await analyze_campaign(db, campaign.id)
+        variant_name = getattr(campaign, 'variant_name', 'default') or "default"
         if variant_name not in variant_summaries:
             variant_summaries[variant_name] = []
         variant_summaries[variant_name].append(summary)

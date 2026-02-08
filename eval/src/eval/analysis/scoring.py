@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from statistics import mean
 
 from eval.types import Trial
-from eval.runner.db import EvalDB
+from eval.runner.db import EvalDBProtocol
 from eval.analysis.types import TrialScore, CampaignSummary, TrialOutcome
 
 
@@ -149,7 +149,7 @@ def score_trial_with_commands(trial: Trial, subject_name: str) -> TrialScore:
 
 
 async def analyze_campaign(
-    db: EvalDB, campaign_id: int, include_command_analysis: bool = False
+    db: EvalDBProtocol, campaign_id: int, include_command_analysis: bool = False
 ) -> CampaignSummary:
     """Compute campaign summary (idempotent, no database mutations).
 
