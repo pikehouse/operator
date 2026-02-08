@@ -71,7 +71,7 @@ async def get_campaign(request: Request, campaign_id: int):
         trials = await db.get_trials(campaign_id)
 
         # Add chaos description and trial outcomes
-        chaos_description = get_chaos_description(campaign.chaos_type)
+        chaos_description = campaign.name
 
         # Enrich trials with outcome status
         trial_data = []

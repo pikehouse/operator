@@ -77,32 +77,29 @@ class TestCampaignEncoding:
         subject_name = subjects[0] if subjects else "unknown"
         assert subject_name == "unknown"
 
-    def test_campaign_chaos_type_single(self):
-        """Campaign should store single chaos type for baseline matching."""
-        chaos_types = [ChaosSpec(type="node_kill")]
+    def test_campaign_name_from_config(self):
+        """Campaign name should come from config name."""
+        config = CampaignConfig(
+            name="my-chaos-suite",
+            subjects=["tikv"],
+            chaos_types=[ChaosSpec(type="node_kill"), ChaosSpec(type="latency")],
+            trials_per_combination=1,
+        )
+        # Campaign name comes from config, not from chaos_types
+        assert config.name == "my-chaos-suite"
 
-        # Fixed: use first chaos type only
-        chaos_type = chaos_types[0].type if chaos_types else "unknown"
-        assert chaos_type == "node_kill"
-        assert "," not in chaos_type
+    def test_campaign_name_single_chaos(self):
+        """Single-chaos run_campaign uses subject/chaos as name."""
+        subject = "tikv"
+        chaos = "node_kill"
+        name = f"{subject}/{chaos}"
+        assert name == "tikv/node_kill"
 
-    def test_campaign_chaos_type_multiple(self):
-        """Multiple chaos types should store first only."""
-        chaos_types = [
-            ChaosSpec(type="node_kill"),
-            ChaosSpec(type="latency"),
-        ]
-
-        chaos_type = chaos_types[0].type if chaos_types else "unknown"
-        assert chaos_type == "node_kill"
-        assert "," not in chaos_type
-
-    def test_campaign_chaos_type_empty(self):
-        """Empty chaos types should fallback to 'unknown'."""
-        chaos_types: list[ChaosSpec] = []
-
-        chaos_type = chaos_types[0].type if chaos_types else "unknown"
-        assert chaos_type == "unknown"
+    def test_campaign_name_empty_subjects(self):
+        """Empty subjects list should fallback to 'unknown'."""
+        subjects: list[str] = []
+        subject_name = subjects[0] if subjects else "unknown"
+        assert subject_name == "unknown"
 
 
 class TestTrialStats:

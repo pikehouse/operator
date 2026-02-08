@@ -60,7 +60,8 @@ SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS campaigns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subject_name TEXT NOT NULL,
-    chaos_type TEXT NOT NULL,
+    chaos_type TEXT NOT NULL DEFAULT '',
+    name TEXT DEFAULT '',
     trial_count INTEGER NOT NULL,
     baseline INTEGER NOT NULL DEFAULT 0,
     variant_name TEXT DEFAULT 'default',
@@ -131,17 +132,28 @@ class EvalDB:
                 )
                 await db.commit()
 
+            if "name" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN name TEXT DEFAULT ''"
+                )
+                # Backfill: name = subject_name/chaos_type for old rows
+                await db.execute(
+                    "UPDATE campaigns SET name = subject_name || '/' || chaos_type WHERE name = '' OR name IS NULL"
+                )
+                await db.commit()
+
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, trial_count, baseline, variant_name, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign.subject_name,
-                    campaign.chaos_type,
+                    "",  # chaos_type kept for backward compat, no longer used
+                    campaign.name,
                     campaign.trial_count,
                     1 if campaign.baseline else 0,
                     campaign.variant_name,
@@ -187,13 +199,18 @@ class EvalDB:
             )
             row = await cursor.fetchone()
             if row:
+                keys = row.keys()
+                # Read name column; fall back to subject_name/chaos_type for old DBs
+                name = row["name"] if "name" in keys and row["name"] else (
+                    f"{row['subject_name']}/{row['chaos_type']}"
+                )
                 return Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
-                    chaos_type=row["chaos_type"],
+                    name=name,
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
-                    variant_name=row["variant_name"] if "variant_name" in row.keys() else "default",
+                    variant_name=row["variant_name"] if "variant_name" in keys else "default",
                     created_at=row["created_at"],
                 )
             return None
@@ -241,18 +258,22 @@ class EvalDB:
                 (limit, offset),
             )
             rows = await cursor.fetchall()
-            return [
-                Campaign(
+            results = []
+            for row in rows:
+                keys = row.keys()
+                name = row["name"] if "name" in keys and row["name"] else (
+                    f"{row['subject_name']}/{row['chaos_type']}"
+                )
+                results.append(Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
-                    chaos_type=row["chaos_type"],
+                    name=name,
                     trial_count=row["trial_count"],
                     baseline=bool(row["baseline"]),
-                    variant_name=row["variant_name"] if "variant_name" in row.keys() else "default",
+                    variant_name=row["variant_name"] if "variant_name" in keys else "default",
                     created_at=row["created_at"],
-                )
-                for row in rows
-            ]
+                ))
+            return results
 
     async def get_trial(self, trial_id: int) -> Trial | None:
         """Get trial by ID.

@@ -438,7 +438,7 @@ async def run_campaign(
     # Create campaign record
     campaign = Campaign(
         subject_name=subject_name,
-        chaos_type=chaos_type,
+        name=f"{subject_name}/{chaos_type}",
         trial_count=trial_count,
         baseline=baseline,
         created_at=now(),
@@ -578,11 +578,9 @@ async def run_campaign_from_config(
         raise
 
     # Create campaign record
-    # Store first subject/chaos only for baseline matching compatibility
-    # (campaigns typically test one subject, multi-subject stored as first only)
     campaign = Campaign(
         subject_name=config.subjects[0] if config.subjects else "unknown",
-        chaos_type=config.chaos_types[0].type if config.chaos_types else "unknown",
+        name=config.name,
         trial_count=total_trials,
         baseline=config.include_baseline,
         variant_name=config.variant,

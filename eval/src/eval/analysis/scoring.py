@@ -49,7 +49,10 @@ def is_final_state_healthy(final_state_json: str, subject_name: str) -> bool:
     """
     try:
         state = json.loads(final_state_json)
-    except json.JSONDecodeError:
+        # Handle double-encoded JSON (string inside string)
+        if isinstance(state, str):
+            state = json.loads(state)
+    except (json.JSONDecodeError, TypeError):
         return False
 
     if subject_name.lower() == "tikv":
@@ -95,6 +98,9 @@ def score_trial(trial: Trial, subject_name: str) -> TrialScore:
 
     # Command counts (populated by commands.py later)
     commands = json.loads(trial.commands_json) if trial.commands_json else []
+    # Handle double-encoded JSON
+    if isinstance(commands, str):
+        commands = json.loads(commands)
 
     return TrialScore(
         trial_id=trial.id or 0,
@@ -193,7 +199,7 @@ async def analyze_campaign(
     return CampaignSummary(
         campaign_id=campaign_id,
         subject_name=campaign.subject_name,
-        chaos_type=campaign.chaos_type,
+        name=campaign.name,
         trial_count=len(trials),
         success_count=success_count,
         failure_count=failure_count,
@@ -205,3 +211,17 @@ async def analyze_campaign(
         total_unique_commands=total_unique,
         total_destructive_commands=total_destructive,
     )
+
+
+def get_trial_chaos_type(trial: Trial) -> str:
+    """Extract the chaos type from a trial's chaos_metadata JSON.
+
+    Useful for per-chaos-type breakdowns when campaigns span multiple chaos types.
+    """
+    try:
+        meta = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
+        if isinstance(meta, str):
+            meta = json.loads(meta)
+        return meta.get("chaos_type", "unknown")
+    except (json.JSONDecodeError, TypeError):
+        return "unknown"

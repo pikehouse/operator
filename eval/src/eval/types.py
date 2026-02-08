@@ -15,6 +15,11 @@ class ChaosType(str, Enum):
     LATENCY = "latency"
     DISK_PRESSURE = "disk_pressure"
     NETWORK_PARTITION = "network_partition"
+    PROCESS_PAUSE = "process_pause"
+    PACKET_LOSS = "packet_loss"
+    ASYMMETRIC_PARTITION = "asymmetric_partition"
+    PD_LEADER_KILL = "pd_leader_kill"
+    LEADER_CONCENTRATION = "leader_concentration"
 
 
 @runtime_checkable
@@ -91,7 +96,7 @@ class Campaign:
 
     id: int | None = None
     subject_name: str = ""
-    chaos_type: str = ""
+    name: str = ""
     trial_count: int = 0
     baseline: bool = False
     variant_name: str = "default"

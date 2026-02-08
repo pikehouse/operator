@@ -7,17 +7,15 @@
     <a href="/" class="text-blue-600 hover:underline text-sm">&larr; Back to campaigns</a>
 </div>
 
-<h1 class="text-2xl font-bold mb-4">Campaign {{ campaign.id }}: {{ campaign.subject_name }}/{{ campaign.chaos_type }}</h1>
+<h1 class="text-2xl font-bold mb-4">Campaign {{ campaign.id }}: {{ campaign.name }}</h1>
 
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-2">Details</h2>
     <dl class="grid grid-cols-2 gap-2 text-sm">
+        <dt class="text-gray-500">Name:</dt>
+        <dd>{{ campaign.name }}</dd>
         <dt class="text-gray-500">Subject:</dt>
         <dd>{{ campaign.subject_name }}</dd>
-        <dt class="text-gray-500">Chaos Type:</dt>
-        <dd>{{ campaign.chaos_type }}</dd>
-        <dt class="text-gray-500">Chaos Description:</dt>
-        <dd class="font-medium text-orange-600">{{ chaos_description }}</dd>
         <dt class="text-gray-500">Trial Count:</dt>
         <dd>{{ campaign.trial_count }}</dd>
         <dt class="text-gray-500">Baseline:</dt>

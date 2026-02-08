@@ -231,7 +231,7 @@ def run_single(
 
                 campaign = Campaign(
                     subject_name=subject,
-                    chaos_type=chaos,
+                    name=f"{subject}/{chaos}",
                     trial_count=1,
                     baseline=baseline,
                     created_at=now(),
@@ -439,7 +439,7 @@ def run_campaign_cmd(
             trial_specs = expand_campaign_matrix(config)
             campaign = Campaign(
                 subject_name=config.subjects[0] if config.subjects else "tikv",
-                chaos_type=config.chaos_types[0].type if config.chaos_types else "unknown",
+                name=config.name,
                 trial_count=len(trial_specs),
                 baseline=config.include_baseline,
                 variant_name=config.variant,
@@ -568,7 +568,7 @@ def analyze(
         return
 
     # Plain text output
-    print(f"Campaign {campaign_id}: {summary.subject_name}/{summary.chaos_type}")
+    print(f"Campaign {campaign_id}: {summary.name}")
     print(f"Trials: {summary.trial_count}")
     print()
     print("Outcomes:")
@@ -643,7 +643,7 @@ def compare(
         return
 
     # Plain text output
-    print(f"Campaign Comparison: {result.subject_name}/{result.chaos_type}")
+    print(f"Campaign Comparison: {result.name}")
     print()
     print(f"{'Metric':<20} {'Campaign A':<15} {'Campaign B':<15} {'Delta':<15}")
     print("-" * 65)
@@ -716,7 +716,7 @@ def compare_baseline_cmd(
         return
 
     # Plain text output
-    print(f"Baseline Comparison: {result.subject_name}/{result.chaos_type}")
+    print(f"Baseline Comparison: {result.name}")
     print(f"Agent Campaign: {result.agent_campaign_id}")
     print(f"Baseline Campaign: {result.baseline_campaign_id}")
     print()
@@ -802,7 +802,7 @@ def compare_variants_cmd(
         return
 
     # Rich table output - balanced scorecard
-    table = Table(title=f"Variant Comparison: {result.subject_name}/{result.chaos_type}")
+    table = Table(title=f"Variant Comparison: {result.name}")
 
     table.add_column("Variant", style="cyan")
     table.add_column("Trials", justify="right")
@@ -1007,7 +1007,7 @@ def show_detail(
             data = {
                 "id": campaign.id,
                 "subject_name": campaign.subject_name,
-                "chaos_type": campaign.chaos_type,
+                "name": campaign.name,
                 "trial_count": campaign.trial_count,
                 "baseline": campaign.baseline,
                 "created_at": campaign.created_at,
@@ -1030,10 +1030,10 @@ def show_detail(
             return
 
         # Plain text campaign detail
-        print(f"Campaign {campaign.id}: {campaign.subject_name}/{campaign.chaos_type}")
+        print(f"Campaign {campaign.id}: {campaign.name}")
         print("-" * 50)
-        chaos_desc = get_chaos_description(campaign.chaos_type)
-        print(f"Chaos:    {chaos_desc}")
+        print(f"Name:     {campaign.name}")
+        print(f"Subject:  {campaign.subject_name}")
         print(f"Created:  {campaign.created_at}")
         print(f"Trials:   {campaign.trial_count}")
         print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
@@ -1094,12 +1094,11 @@ def list_campaigns(
     campaigns, total = asyncio.run(run())
 
     if json_output:
-        # Output JSON array with keys: id, subject_name, chaos_type, trial_count, baseline, variant_name, created_at
         data = [
             {
                 "id": c.id,
                 "subject_name": c.subject_name,
-                "chaos_type": c.chaos_type,
+                "name": c.name,
                 "trial_count": c.trial_count,
                 "baseline": c.baseline,
                 "variant_name": getattr(c, 'variant_name', 'default'),
@@ -1117,14 +1116,15 @@ def list_campaigns(
         print(f"Database: {db_path}")
         return
 
-    # Header row with fixed widths: ID(6), Date(12), Subject(10), Chaos(12), Variant(12), Trials(8), Baseline(8)
-    print(f"{'ID':<6} {'Date':<12} {'Subject':<10} {'Chaos':<12} {'Variant':<12} {'Trials':<8} {'Baseline':<8}")
-    print("-" * 70)
+    # Header row with fixed widths: ID(6), Date(12), Name(30), Variant(12), Trials(8), Baseline(8)
+    print(f"{'ID':<6} {'Date':<12} {'Name':<30} {'Variant':<12} {'Trials':<8} {'Baseline':<8}")
+    print("-" * 78)
     for c in campaigns:
         date_str = c.created_at[:10] if c.created_at else "N/A"
         baseline_str = "Yes" if c.baseline else "No"
         variant_str = getattr(c, 'variant_name', 'default')[:10]
-        print(f"{c.id:<6} {date_str:<12} {c.subject_name:<10} {c.chaos_type:<12} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8}")
+        name_str = c.name[:28] if c.name else "N/A"
+        print(f"{c.id:<6} {date_str:<12} {name_str:<30} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8}")
 
     # Show pagination info
     showing_end = min(offset + limit, total)

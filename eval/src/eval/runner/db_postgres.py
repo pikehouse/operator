@@ -35,7 +35,8 @@ POSTGRES_SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS campaigns (
     id SERIAL PRIMARY KEY,
     subject_name TEXT NOT NULL,
-    chaos_type TEXT NOT NULL,
+    chaos_type TEXT NOT NULL DEFAULT '',
+    name TEXT DEFAULT '',
     trial_count INTEGER NOT NULL,
     baseline BOOLEAN DEFAULT FALSE,
     variant_name TEXT DEFAULT 'default',
@@ -119,10 +120,22 @@ class PostgresDB:
             self._pool = None
 
     async def ensure_schema(self) -> None:
-        """Create tables if not exist."""
+        """Create tables if not exist and run migrations."""
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             await conn.execute(POSTGRES_SCHEMA_SQL)
+            # Migration: add name column if missing (existing databases)
+            col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'name'
+                )
+            """)
+            if not col_exists:
+                await conn.execute("ALTER TABLE campaigns ADD COLUMN name TEXT DEFAULT ''")
+                await conn.execute(
+                    "UPDATE campaigns SET name = subject_name || '/' || chaos_type WHERE name = '' OR name IS NULL"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
@@ -130,12 +143,13 @@ class PostgresDB:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, trial_count, baseline, variant_name, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
                 """,
                 campaign.subject_name,
-                campaign.chaos_type,
+                "",  # chaos_type kept for backward compat, no longer used
+                campaign.name,
                 campaign.trial_count,
                 campaign.baseline,
                 campaign.variant_name,
@@ -179,10 +193,12 @@ class PostgresDB:
                 "SELECT * FROM campaigns WHERE id = $1", campaign_id
             )
             if row:
+                # Read name column; fall back to subject_name/chaos_type for old DBs
+                name = row.get("name") or f"{row['subject_name']}/{row['chaos_type']}"
                 return Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
-                    chaos_type=row["chaos_type"],
+                    name=name,
                     trial_count=row["trial_count"],
                     baseline=row["baseline"],
                     variant_name=row["variant_name"] or "default",
@@ -251,7 +267,7 @@ class PostgresDB:
                 Campaign(
                     id=row["id"],
                     subject_name=row["subject_name"],
-                    chaos_type=row["chaos_type"],
+                    name=row.get("name") or f"{row['subject_name']}/{row['chaos_type']}",
                     trial_count=row["trial_count"],
                     baseline=row["baseline"],
                     variant_name=row["variant_name"] or "default",

@@ -18,7 +18,7 @@ class BaselineComparison(BaseModel):
     agent_campaign_id: int
     baseline_campaign_id: int
     subject_name: str
-    chaos_type: str
+    name: str
 
     # Agent metrics
     agent_trial_count: int
@@ -48,7 +48,7 @@ class CampaignComparison(BaseModel):
     campaign_a_id: int
     campaign_b_id: int
     subject_name: str
-    chaos_type: str
+    name: str
 
     # Campaign A metrics
     a_trial_count: int
@@ -128,11 +128,11 @@ async def compare_baseline(
     if baseline_campaign_id is None:
         # Query for matching baseline campaign
         baseline_campaign_id = await _find_baseline_campaign(
-            db, agent_campaign.subject_name, agent_campaign.chaos_type
+            db, agent_campaign.subject_name, agent_campaign.name
         )
         if baseline_campaign_id is None:
             raise ValueError(
-                f"No baseline campaign found for {agent_campaign.subject_name}/{agent_campaign.chaos_type}"
+                f"No baseline campaign found for {agent_campaign.name}"
             )
 
     baseline_summary = await analyze_campaign(db, baseline_campaign_id)
@@ -141,16 +141,16 @@ async def compare_baseline(
     if not baseline_campaign:
         raise ValueError(f"Baseline campaign {baseline_campaign_id} not found")
 
-    # Validate matching subject and chaos type
+    # Validate matching subject and name
     if agent_campaign.subject_name != baseline_campaign.subject_name:
         raise ValueError(
             f"Subject mismatch: agent={agent_campaign.subject_name}, "
             f"baseline={baseline_campaign.subject_name}"
         )
-    if agent_campaign.chaos_type != baseline_campaign.chaos_type:
+    if agent_campaign.name != baseline_campaign.name:
         raise ValueError(
-            f"Chaos type mismatch: agent={agent_campaign.chaos_type}, "
-            f"baseline={baseline_campaign.chaos_type}"
+            f"Campaign name mismatch: agent={agent_campaign.name}, "
+            f"baseline={baseline_campaign.name}"
         )
 
     # Compute deltas
@@ -174,7 +174,7 @@ async def compare_baseline(
         agent_campaign_id=agent_campaign_id,
         baseline_campaign_id=baseline_campaign_id,
         subject_name=agent_campaign.subject_name,
-        chaos_type=agent_campaign.chaos_type,
+        name=agent_campaign.name,
         agent_trial_count=agent_summary.trial_count,
         agent_win_rate=agent_summary.win_rate,
         agent_avg_detect_sec=agent_summary.avg_time_to_detect_sec,
@@ -218,14 +218,14 @@ async def compare_campaigns(
     if not a_campaign or not b_campaign:
         raise ValueError("One or both campaigns not found")
 
-    # Validate matching subject and chaos type
+    # Validate matching subject and name
     if a_campaign.subject_name != b_campaign.subject_name:
         raise ValueError(
             f"Subject mismatch: A={a_campaign.subject_name}, B={b_campaign.subject_name}"
         )
-    if a_campaign.chaos_type != b_campaign.chaos_type:
+    if a_campaign.name != b_campaign.name:
         raise ValueError(
-            f"Chaos type mismatch: A={a_campaign.chaos_type}, B={b_campaign.chaos_type}"
+            f"Campaign name mismatch: A={a_campaign.name}, B={b_campaign.name}"
         )
 
     # Compute deltas (B - A)
@@ -249,7 +249,7 @@ async def compare_campaigns(
         campaign_a_id=campaign_a_id,
         campaign_b_id=campaign_b_id,
         subject_name=a_campaign.subject_name,
-        chaos_type=a_campaign.chaos_type,
+        name=a_campaign.name,
         a_trial_count=a_summary.trial_count,
         a_win_rate=a_summary.win_rate,
         a_avg_resolve_sec=a_summary.avg_time_to_resolve_sec,
@@ -266,14 +266,14 @@ async def compare_campaigns(
 async def _find_baseline_campaign(
     db: EvalDBProtocol,
     subject_name: str,
-    chaos_type: str,
+    name: str,
 ) -> int | None:
-    """Find most recent baseline campaign matching subject and chaos type."""
+    """Find most recent baseline campaign matching subject and name."""
     # Use protocol methods to stay backend-agnostic
     campaigns = await db.get_all_campaigns(limit=1000)
     for c in campaigns:
         # get_all_campaigns returns ordered by created_at DESC
-        if c.subject_name == subject_name and c.chaos_type == chaos_type and c.baseline:
+        if c.subject_name == subject_name and c.name == name and c.baseline:
             return c.id
     return None
 
@@ -290,13 +290,13 @@ class VariantMetrics(BaseModel):
 
 
 class VariantComparison(BaseModel):
-    """Comparison of multiple variants for the same subject/chaos combination.
+    """Comparison of multiple variants for the same subject/name combination.
 
     Shows balanced scorecard - all metrics equally, no winner determination.
     User interprets tradeoffs.
     """
     subject_name: str
-    chaos_type: str
+    name: str
     variants: dict[str, VariantMetrics]  # variant_name -> metrics
 
 
@@ -326,17 +326,19 @@ async def compare_variants(
     all_campaigns = await db.get_all_campaigns(limit=10000)
 
     # Filter to matching non-baseline campaigns
+    # Match by name (which is now the campaign suite name, e.g., "tikv/node_kill")
+    target_name = f"{subject_name}/{chaos_type}"
     campaigns = [
         c for c in all_campaigns
         if c.subject_name == subject_name
-        and c.chaos_type == chaos_type
+        and c.name == target_name
         and not c.baseline
         and (variant_names is None or getattr(c, 'variant_name', 'default') in variant_names)
     ]
 
     if not campaigns:
         raise ValueError(
-            f"No campaigns found for {subject_name}/{chaos_type}"
+            f"No campaigns found for {target_name}"
             + (f" with variants {variant_names}" if variant_names else "")
         )
 
@@ -372,6 +374,6 @@ async def compare_variants(
 
     return VariantComparison(
         subject_name=subject_name,
-        chaos_type=chaos_type,
+        name=target_name,
         variants=results,
     )

@@ -11,8 +11,8 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Name</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Subject</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Chaos</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Trials</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Baseline</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Created</th>
@@ -24,8 +24,8 @@
                 <td class="px-4 py-2">
                     <a href="/campaign/{{ campaign.id }}" class="text-blue-600 hover:underline">{{ campaign.id }}</a>
                 </td>
+                <td class="px-4 py-2">{{ campaign.name }}</td>
                 <td class="px-4 py-2">{{ campaign.subject_name }}</td>
-                <td class="px-4 py-2">{{ campaign.chaos_type }}</td>
                 <td class="px-4 py-2">{{ campaign.trial_count }}</td>
                 <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
                 <td class="px-4 py-2 text-gray-500 text-sm">{{ campaign.created_at[:19] }}</td>

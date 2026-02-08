@@ -27,7 +27,7 @@ class CampaignSummary(BaseModel):
     """Aggregate metrics for a campaign."""
     campaign_id: int
     subject_name: str
-    chaos_type: str
+    name: str
     trial_count: int
     success_count: int
     failure_count: int

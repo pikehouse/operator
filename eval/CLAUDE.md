@@ -97,7 +97,7 @@ eval viewer                 # http://127.0.0.1:8000
 class Campaign:
     id: int | None
     subject_name: str      # "tikv"
-    chaos_type: str        # "node_kill", "latency", "network_partition"
+    name: str              # Campaign suite name (e.g., "my-chaos-suite" or "tikv/node_kill")
     trial_count: int
     baseline: bool = False
     variant_name: str = "default"
@@ -178,7 +178,7 @@ variant: "default"
 ## Database Schema
 
 **campaigns table:**
-- `id`, `subject_name`, `chaos_type`, `trial_count`, `baseline`, `variant_name`, `created_at`
+- `id`, `subject_name`, `chaos_type` (deprecated), `name`, `trial_count`, `baseline`, `variant_name`, `created_at`
 
 **trials table:**
 - `id`, `campaign_id`, `started_at`, `chaos_injected_at`, `ticket_created_at`, `resolved_at`, `ended_at`
