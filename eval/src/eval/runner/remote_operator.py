@@ -43,6 +43,8 @@ class RemoteOperatorProcesses:
         vm: Any,  # CloudVM protocol
         operator_image: str,
         anthropic_api_key: str,
+        subject_name: str = "tikv",
+        extra_env: dict[str, str] | None = None,
     ):
         """Initialize remote operator.
 
@@ -51,10 +53,15 @@ class RemoteOperatorProcesses:
             operator_image: Docker image URL for operator
                 (e.g., us-central1-docker.pkg.dev/PROJECT/eval/operator:latest)
             anthropic_api_key: API key for the agent's LLM calls
+            subject_name: Subject name for the monitor (e.g., 'tikv', 'chat-db-app')
+            extra_env: Additional environment variables for operator containers
+                (e.g., DATABASE_URL, APP_URL for chat-db-app)
         """
         self.vm = vm
         self.operator_image = operator_image
         self.anthropic_api_key = anthropic_api_key
+        self.subject_name = subject_name
+        self.extra_env = extra_env or {}
         self._started = False
 
     async def start(self) -> None:
@@ -86,15 +93,21 @@ class RemoteOperatorProcesses:
         # Create shared data volume
         await self.vm.run_command(f"docker volume create {DATA_VOLUME}")
 
+        # Build extra env flags for docker run
+        extra_env_flags = "".join(
+            f"-e {k}={v} " for k, v in self.extra_env.items()
+        )
+
         # Start monitor container
-        console.print("[blue]Starting operator monitor (5s interval)...[/blue]")
+        console.print(f"[blue]Starting operator monitor ({self.subject_name}, 5s interval)...[/blue]")
         exit_code, _, stderr = await self.vm.run_command(
             f"docker run -d --name {MONITOR_CONTAINER} --network=host "
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
+            f"{extra_env_flags}"
             f"{self.operator_image} "
-            f"uv run operator monitor run --subject tikv --db {OPERATOR_DB_PATH} --interval 5",
+            f"uv run operator monitor run --subject {self.subject_name} --db {OPERATOR_DB_PATH} --interval 5",
             timeout_sec=30.0,
         )
         if exit_code != 0:
@@ -107,6 +120,7 @@ class RemoteOperatorProcesses:
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
+            f"{extra_env_flags}"
             f"{self.operator_image} "
             f"uv run operator agent start --db {OPERATOR_DB_PATH}",
             timeout_sec=30.0,

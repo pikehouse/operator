@@ -1,0 +1,32 @@
+# Chat DB App for Cloud Eval (GCP + AlloyDB)
+#
+# No postgres service — app connects to AlloyDB via DATABASE_URL env var.
+# Uses pre-built images from Artifact Registry (no docker build needed).
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    ports:
+      - "${APP_HOST_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: "${DATABASE_URL}"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: on-failure
+
+  loadgen:
+    image: ${LOADGEN_IMAGE}
+    environment:
+      APP_URL: "http://app:8000"
+      NUM_USERS: "${NUM_USERS:-3}"
+      REQUEST_DELAY: "${REQUEST_DELAY:-2.0}"
+      STREAM_RATIO: "${STREAM_RATIO:-0.3}"
+      RAMP_UP_SECONDS: "${RAMP_UP_SECONDS:-10}"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: on-failure

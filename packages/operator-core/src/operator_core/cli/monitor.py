@@ -99,6 +99,16 @@ def run_monitor(
         print(f"  Rate limiter: {ratelimiter_url}")
         print(f"  Redis: {redis_url}")
         print(f"  Prometheus: {prometheus_url}")
+    elif subject == "chat-db-app":
+        app_url = os.environ.get("APP_URL", "http://localhost:8000")
+        db_dsn = os.environ.get("DATABASE_URL", "postgresql://chatapp:chatapp@localhost:5432/chatdb")
+        factory_kwargs = {
+            "app_url": app_url,
+            "db_dsn": db_dsn,
+        }
+        print(f"Starting monitor daemon for subject: {subject}")
+        print(f"  App URL: {app_url}")
+        print(f"  Database: {db_dsn.split('@')[-1] if '@' in db_dsn else db_dsn}")
     else:
         print(f"Error: Unknown subject '{subject}'")
         raise typer.Exit(1)

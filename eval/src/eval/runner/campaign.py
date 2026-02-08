@@ -22,6 +22,7 @@ class ChaosSpec(BaseModel):
             "memory_exhaustion", "cpu_starvation",  # Cloud-only
             "process_pause", "packet_loss", "asymmetric_partition",
             "pd_leader_kill", "leader_concentration",
+            "load_pressure", "db_kill", "db_disconnect",  # Chat DB App
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")
@@ -76,7 +77,7 @@ class CampaignConfig(BaseModel):
     @field_validator("subjects")
     @classmethod
     def validate_subjects(cls, v: list[str]) -> list[str]:
-        valid_subjects = ["tikv"]  # Extend as more subjects added
+        valid_subjects = ["tikv", "chat-db-app"]
         for s in v:
             if s not in valid_subjects:
                 raise ValueError(f"Invalid subject: {s}. Must be one of {valid_subjects}")

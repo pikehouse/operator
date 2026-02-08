@@ -56,9 +56,45 @@ echo "--- Enabling APIs ---"
 gcloud services enable \
     alloydb.googleapis.com \
     artifactregistry.googleapis.com \
+    servicenetworking.googleapis.com \
     run.googleapis.com \
     --project="${GCP_PROJECT}" \
     --quiet
+
+# ---------- Service Networking (VPC peering for AlloyDB) ----------
+
+echo ""
+echo "--- Configuring Service Networking ---"
+# AlloyDB requires a private services connection (VPC peering) to the
+# servicenetworking.googleapis.com producer network.
+PEERING_RANGE="google-managed-services-${GCP_NETWORK}"
+if gcloud compute addresses describe "${PEERING_RANGE}" \
+    --global --project="${GCP_PROJECT}" &>/dev/null; then
+    echo "IP range '${PEERING_RANGE}' already exists, skipping creation."
+else
+    gcloud compute addresses create "${PEERING_RANGE}" \
+        --global \
+        --purpose=VPC_PEERING \
+        --prefix-length=16 \
+        --network="${GCP_NETWORK}" \
+        --project="${GCP_PROJECT}"
+    echo "IP range '${PEERING_RANGE}' created."
+fi
+
+# Create or update VPC peering connection (idempotent)
+if gcloud services vpc-peerings list \
+    --service=servicenetworking.googleapis.com \
+    --network="${GCP_NETWORK}" \
+    --project="${GCP_PROJECT}" 2>/dev/null | grep -q servicenetworking; then
+    echo "VPC peering already exists, skipping."
+else
+    gcloud services vpc-peerings connect \
+        --service=servicenetworking.googleapis.com \
+        --ranges="${PEERING_RANGE}" \
+        --network="${GCP_NETWORK}" \
+        --project="${GCP_PROJECT}"
+    echo "VPC peering created."
+fi
 
 # ---------- AlloyDB Cluster ----------
 

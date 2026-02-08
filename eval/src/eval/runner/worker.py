@@ -160,6 +160,7 @@ class Worker:
                 enable_operator=enable_operator,
                 operator_image=operator_image,
                 anthropic_api_key=anthropic_api_key,
+                subject_name=work_item.subject_type,
             )
 
             # Store trial result
@@ -192,6 +193,7 @@ class Worker:
         enable_operator: bool = False,
         operator_image: str = "",
         anthropic_api_key: str = "",
+        subject_name: str = "tikv",
     ) -> Trial:
         """Run a single trial.
 
@@ -239,10 +241,17 @@ class Worker:
         if enable_operator and not baseline and hasattr(subject, "vm"):
             from eval.runner.remote_operator import RemoteOperatorProcesses
 
+            # Get subject-specific env vars for operator (e.g., DATABASE_URL)
+            extra_env = {}
+            if hasattr(subject, "get_operator_env"):
+                extra_env = subject.get_operator_env()
+
             remote_op = RemoteOperatorProcesses(
                 vm=subject.vm,
                 operator_image=operator_image,
                 anthropic_api_key=anthropic_api_key,
+                subject_name=subject_name,
+                extra_env=extra_env,
             )
 
         try:
