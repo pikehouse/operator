@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+#
+# GCP Setup Script for Chat DB App
+#
+# Provisions:
+#   - AlloyDB cluster + primary instance
+#   - Artifact Registry repository
+#   - Builds and pushes app + loadgen Docker images
+#
+# Prerequisites:
+#   - gcloud CLI authenticated with appropriate permissions
+#   - Docker installed and running
+#   - APIs enabled: alloydb.googleapis.com, artifactregistry.googleapis.com
+#
+# Usage:
+#   ./scripts/gcp-setup.sh
+#
+# Environment variables (optional overrides):
+#   GCP_PROJECT       - GCP project ID (default: from gcloud config)
+#   GCP_REGION        - GCP region (default: us-central1)
+#   GCP_NETWORK       - VPC network name (default: default)
+#   ALLOYDB_CLUSTER   - AlloyDB cluster name
+#   ALLOYDB_INSTANCE  - AlloyDB instance name
+#   ALLOYDB_PASSWORD   - AlloyDB postgres password
+#   AR_REPO           - Artifact Registry repository name
+
+set -euo pipefail
+
+# ---------- Configuration ----------
+
+GCP_PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
+GCP_REGION="${GCP_REGION:-us-central1}"
+GCP_NETWORK="${GCP_NETWORK:-default}"
+
+ALLOYDB_CLUSTER="${ALLOYDB_CLUSTER:-operator-eval-db-cluster}"
+ALLOYDB_INSTANCE="${ALLOYDB_INSTANCE:-operator-eval-db-primary}"
+ALLOYDB_PASSWORD="${ALLOYDB_PASSWORD:-operator-eval-$(openssl rand -hex 8)}"
+
+AR_REPO="${AR_REPO:-chat-db-app}"
+AR_LOCATION="${GCP_REGION}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_DIR="${SCRIPT_DIR}/../service"
+
+echo "=== Chat DB App GCP Setup ==="
+echo "Project:  ${GCP_PROJECT}"
+echo "Region:   ${GCP_REGION}"
+echo "Network:  ${GCP_NETWORK}"
+echo "Cluster:  ${ALLOYDB_CLUSTER}"
+echo "Instance: ${ALLOYDB_INSTANCE}"
+echo ""
+
+# ---------- Enable APIs ----------
+
+echo "--- Enabling APIs ---"
+gcloud services enable \
+    alloydb.googleapis.com \
+    artifactregistry.googleapis.com \
+    run.googleapis.com \
+    --project="${GCP_PROJECT}" \
+    --quiet
+
+# ---------- AlloyDB Cluster ----------
+
+echo ""
+echo "--- Creating AlloyDB Cluster ---"
+if gcloud alloydb clusters describe "${ALLOYDB_CLUSTER}" \
+    --region="${GCP_REGION}" \
+    --project="${GCP_PROJECT}" &>/dev/null; then
+    echo "Cluster '${ALLOYDB_CLUSTER}' already exists, skipping creation."
+else
+    gcloud alloydb clusters create "${ALLOYDB_CLUSTER}" \
+        --region="${GCP_REGION}" \
+        --project="${GCP_PROJECT}" \
+        --network="${GCP_NETWORK}" \
+        --password="${ALLOYDB_PASSWORD}" \
+        --quiet
+    echo "Cluster '${ALLOYDB_CLUSTER}' created."
+fi
+
+# ---------- AlloyDB Primary Instance ----------
+
+echo ""
+echo "--- Creating AlloyDB Primary Instance ---"
+if gcloud alloydb instances describe "${ALLOYDB_INSTANCE}" \
+    --cluster="${ALLOYDB_CLUSTER}" \
+    --region="${GCP_REGION}" \
+    --project="${GCP_PROJECT}" &>/dev/null; then
+    echo "Instance '${ALLOYDB_INSTANCE}' already exists, skipping creation."
+else
+    gcloud alloydb instances create "${ALLOYDB_INSTANCE}" \
+        --cluster="${ALLOYDB_CLUSTER}" \
+        --region="${GCP_REGION}" \
+        --project="${GCP_PROJECT}" \
+        --instance-type=PRIMARY \
+        --cpu-count=2 \
+        --quiet
+    echo "Instance '${ALLOYDB_INSTANCE}' created."
+fi
+
+# Get AlloyDB IP
+ALLOYDB_IP=$(gcloud alloydb instances describe "${ALLOYDB_INSTANCE}" \
+    --cluster="${ALLOYDB_CLUSTER}" \
+    --region="${GCP_REGION}" \
+    --project="${GCP_PROJECT}" \
+    --format="value(ipAddress)")
+
+echo "AlloyDB IP: ${ALLOYDB_IP}"
+
+# ---------- Artifact Registry ----------
+
+echo ""
+echo "--- Creating Artifact Registry Repository ---"
+if gcloud artifacts repositories describe "${AR_REPO}" \
+    --location="${AR_LOCATION}" \
+    --project="${GCP_PROJECT}" &>/dev/null; then
+    echo "Repository '${AR_REPO}' already exists, skipping creation."
+else
+    gcloud artifacts repositories create "${AR_REPO}" \
+        --repository-format=docker \
+        --location="${AR_LOCATION}" \
+        --project="${GCP_PROJECT}" \
+        --quiet
+    echo "Repository '${AR_REPO}' created."
+fi
+
+# Configure Docker authentication
+gcloud auth configure-docker "${AR_LOCATION}-docker.pkg.dev" --quiet
+
+AR_PREFIX="${AR_LOCATION}-docker.pkg.dev/${GCP_PROJECT}/${AR_REPO}"
+
+# ---------- Build and Push Images ----------
+
+echo ""
+echo "--- Building and Pushing Docker Images ---"
+
+# App image
+echo "Building chat-db-app image..."
+docker build \
+    --platform linux/amd64 \
+    -t "${AR_PREFIX}/chat-db-app:latest" \
+    "${SERVICE_DIR}/app"
+
+echo "Pushing chat-db-app image..."
+docker push "${AR_PREFIX}/chat-db-app:latest"
+
+# Loadgen image
+echo "Building loadgen image..."
+docker build \
+    --platform linux/amd64 \
+    -t "${AR_PREFIX}/loadgen:latest" \
+    "${SERVICE_DIR}/loadgen"
+
+echo "Pushing loadgen image..."
+docker push "${AR_PREFIX}/loadgen:latest"
+
+# ---------- Save Configuration ----------
+
+ENV_FILE="${SCRIPT_DIR}/../.env.gcp"
+cat > "${ENV_FILE}" <<EOF
+# GCP Configuration for Chat DB App
+# Generated by gcp-setup.sh on $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+GCP_PROJECT=${GCP_PROJECT}
+GCP_REGION=${GCP_REGION}
+
+# AlloyDB
+ALLOYDB_CLUSTER=${ALLOYDB_CLUSTER}
+ALLOYDB_INSTANCE=${ALLOYDB_INSTANCE}
+ALLOYDB_IP=${ALLOYDB_IP}
+ALLOYDB_PASSWORD=${ALLOYDB_PASSWORD}
+DATABASE_URL=postgresql://postgres:${ALLOYDB_PASSWORD}@${ALLOYDB_IP}:5432/chatdb
+
+# Artifact Registry
+AR_PREFIX=${AR_PREFIX}
+APP_IMAGE=${AR_PREFIX}/chat-db-app:latest
+LOADGEN_IMAGE=${AR_PREFIX}/loadgen:latest
+EOF
+
+echo ""
+echo "=== Setup Complete ==="
+echo "Configuration saved to: ${ENV_FILE}"
+echo ""
+echo "AlloyDB IP: ${ALLOYDB_IP}"
+echo "App image:  ${AR_PREFIX}/chat-db-app:latest"
+echo "Loadgen:    ${AR_PREFIX}/loadgen:latest"
+echo ""
+echo "Per-trial database creation (at eval runtime):"
+echo "  CREATE DATABASE chatdb_trial_{instance_id};"
+echo "  DROP DATABASE chatdb_trial_{instance_id};"

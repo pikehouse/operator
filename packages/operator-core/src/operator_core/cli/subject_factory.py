@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from operator_protocols import InvariantCheckerProtocol, SubjectProtocol
 
 # Hardcoded list of available subjects
-AVAILABLE_SUBJECTS = ["tikv", "ratelimiter"]
+AVAILABLE_SUBJECTS = ["tikv", "ratelimiter", "chat-db-app"]
 
 
 async def create_subject(
@@ -57,6 +57,11 @@ async def create_subject(
         from ratelimiter_observer.factory import create_ratelimiter_subject_and_checker
 
         return create_ratelimiter_subject_and_checker(**kwargs)
+    elif subject_name == "chat-db-app":
+        # Lazy import to avoid loading chat-db-app package unless needed
+        from chat_db_app_observer.factory import create_chat_db_app_subject_and_checker
+
+        return await create_chat_db_app_subject_and_checker(**kwargs)
     else:
         raise ValueError(
             f"Unknown subject '{subject_name}'. "

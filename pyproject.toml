@@ -7,6 +7,7 @@ dependencies = [
     "operator-core",
     "tikv-observer",
     "ratelimiter-observer",
+    "chat-db-app-observer",
     "python-dotenv>=1.0.0",
     "redis>=5.0.0",
 ]
@@ -27,6 +28,7 @@ operator-protocols = { workspace = true }
 tikv-observer = { workspace = true }
 ratelimiter-observer = { workspace = true }
 ratelimiter-service = { workspace = true }
+chat-db-app-observer = { workspace = true }
 
 [tool.pytest.ini_options]
 testpaths = ["packages", "subjects"]
