@@ -53,6 +53,16 @@ def run_monitor(
     redis_url: str = typer.Option(
         None, "--redis", envvar="REDIS_URL", help="Redis URL for rate limiter (e.g., redis://localhost:6379)"
     ),
+    app_url: str = typer.Option(
+        None, "--app-url", envvar="APP_URL", help="Chat DB App URL (e.g., http://localhost:8000)"
+    ),
+    db_dsn: str = typer.Option(
+        None, "--db-dsn", envvar="DB_DSN", help="PostgreSQL DSN for chat-db-app (e.g., postgresql://chatapp:chatapp@localhost:5432/chatdb)"
+    ),
+    subject_context_extra: str = typer.Option(
+        None, "--subject-context-extra", envvar="SUBJECT_CONTEXT_EXTRA",
+        help="Extra context appended to the agent prompt (e.g., workspace rebuild commands)"
+    ),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """
@@ -100,8 +110,10 @@ def run_monitor(
         print(f"  Redis: {redis_url}")
         print(f"  Prometheus: {prometheus_url}")
     elif subject == "chat-db-app":
-        app_url = os.environ.get("APP_URL", "http://localhost:8000")
-        db_dsn = os.environ.get("DATABASE_URL", "postgresql://chatapp:chatapp@localhost:5432/chatdb")
+        if not app_url:
+            app_url = os.environ.get("APP_URL", "http://localhost:8000")
+        if not db_dsn:
+            db_dsn = os.environ.get("DB_DSN", "postgresql://chatapp:chatapp@localhost:5432/chatdb")
         factory_kwargs = {
             "app_url": app_url,
             "db_dsn": db_dsn,
@@ -129,11 +141,20 @@ def run_monitor(
 
             # Load subject-specific agent prompt if available
             subject_context = None
+            # Map subject name to observer module name
+            observer_module = subject.replace("-", "_") + "_observer"
             try:
-                module = __import__(f"{subject}_observer", fromlist=["AGENT_PROMPT"])
+                module = __import__(observer_module, fromlist=["AGENT_PROMPT"])
                 subject_context = getattr(module, "AGENT_PROMPT", None)
             except ImportError:
                 pass
+
+            # Append extra context (e.g., workspace rebuild commands)
+            if subject_context_extra:
+                if subject_context:
+                    subject_context = subject_context + "\n" + subject_context_extra
+                else:
+                    subject_context = subject_context_extra
 
             loop = MonitorLoop(
                 subject=subject_instance,

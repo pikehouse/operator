@@ -144,6 +144,21 @@ def _create_local_tikv(instance_id: int = 0, **kwargs) -> EvalSubject:
     return TiKVEvalSubject(instance_id=instance_id, **kwargs)
 
 
+@SubjectRegistry.register("chat-db-app", "local")
+def _create_local_chat_db_app(instance_id: int = 0, **kwargs) -> EvalSubject:
+    """Create a local chat-db-app eval subject.
+
+    Args:
+        instance_id: Instance number for parallel execution (0, 1, 2, ...)
+        **kwargs: Additional arguments (workspace_base, etc.)
+
+    Returns:
+        ChatDBAppEvalSubject instance
+    """
+    from eval.subjects.chat_db_app import ChatDBAppEvalSubject
+    return ChatDBAppEvalSubject(instance_id=instance_id, **kwargs)
+
+
 # Register cloud subjects (lazy import to avoid dependency on asyncpg/google-cloud)
 @SubjectRegistry.register("tikv", "cloud-gcp")
 def _create_gcp_tikv(instance_id: int = 0, **kwargs) -> EvalSubject:

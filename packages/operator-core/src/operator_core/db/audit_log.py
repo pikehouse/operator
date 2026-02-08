@@ -189,6 +189,60 @@ class AuditLogDB:
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
 
+    def record_code_snapshot(
+        self,
+        session_id: str,
+        phase: str,
+        snapshot_data: dict,
+    ) -> int:
+        """
+        Record a code workspace snapshot (before or after agent edits).
+
+        Args:
+            session_id: Session identifier
+            phase: 'before' or 'after'
+            snapshot_data: Dict from CodeWorkspace.snapshot() plus optional
+                'diff_from_initial' and 'files_changed' keys.
+
+        Returns:
+            snapshot_id: The created snapshot record ID
+        """
+        now = datetime.now().isoformat()
+
+        # Parse files_changed from diff_stat if present
+        files_changed = snapshot_data.get("files_changed", 0)
+        diff_stat = snapshot_data.get("diff_stat", "")
+        if not files_changed and diff_stat:
+            # Count non-empty lines in diff --stat output
+            files_changed = sum(
+                1 for line in diff_stat.strip().splitlines()
+                if line and not line.strip().startswith("changed")
+                and "|" in line
+            )
+
+        cursor = self._conn.execute(
+            """
+            INSERT INTO code_snapshots (
+                session_id, captured_at, phase, commit_hash, tree_hash,
+                diff_from_initial, git_log, files_changed
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                now,
+                phase,
+                snapshot_data.get("commit_hash"),
+                snapshot_data.get("tree_hash"),
+                snapshot_data.get("diff_from_initial", ""),
+                snapshot_data.get("log", ""),
+                files_changed,
+            ),
+        )
+        self._conn.commit()
+
+        return cursor.lastrowid
+
     def get_entries_by_timerange(self, start_time: datetime, end_time: datetime) -> list[dict]:
         """
         Retrieve all log entries within a time range.

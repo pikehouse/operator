@@ -1,0 +1,16 @@
+name: chat-db-app-code-fix
+subjects: [chat-db-app]
+
+# The app has intentional bugs that manifest under load.
+# "Chaos" is just increasing load until naive patterns break.
+chaos_types:
+  - type: load_pressure
+    params:
+      num_users: 20
+      request_delay: 0.5
+      stream_ratio: 0.5
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

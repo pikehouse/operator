@@ -92,4 +92,21 @@ ON agent_sessions(status);
 
 CREATE INDEX IF NOT EXISTS idx_agent_log_entries_session
 ON agent_log_entries(session_id);
+
+-- Code workspace snapshots (before/after agent edits)
+CREATE TABLE IF NOT EXISTS code_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,              -- FK to agent_sessions
+    captured_at TEXT NOT NULL,             -- ISO8601
+    phase TEXT NOT NULL,                   -- 'before' or 'after'
+    commit_hash TEXT,
+    tree_hash TEXT,
+    diff_from_initial TEXT,                -- Full diff from initial commit
+    git_log TEXT,                          -- git log --oneline
+    files_changed INTEGER DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES agent_sessions(session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_code_snapshots_session
+ON code_snapshots(session_id);
 """

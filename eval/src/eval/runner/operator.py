@@ -30,6 +30,7 @@ class OperatorProcesses:
         operator_db_path: Path,
         project_root: Optional[Path] = None,
         eval_subject: Optional["EvalSubject"] = None,
+        subject_context_extra: Optional[str] = None,
     ):
         self.subject_name = subject_name
         self.project_root = project_root or self._find_project_root()
@@ -39,6 +40,7 @@ class OperatorProcesses:
         else:
             self.operator_db_path = (self.project_root / operator_db_path).resolve()
         self.eval_subject = eval_subject  # Used to reset cluster before starting
+        self.subject_context_extra = subject_context_extra
         self.monitor_proc: Optional[subprocess.Popen] = None
         self.agent_proc: Optional[subprocess.Popen] = None
         self._started = False
@@ -106,15 +108,33 @@ class OperatorProcesses:
         console.print(f"[dim]Starting operator in: {self.project_root}[/dim]")
         console.print(f"[dim]Using database: {self.operator_db_path}[/dim]")
 
+        # Build monitor command with subject-specific arguments
+        monitor_cmd = [
+            "uv", "run", "operator", "monitor", "run",
+            "--subject", self.subject_name,
+            "--db", str(self.operator_db_path),
+            "--interval", "5",  # Fast interval for eval
+        ]
+
+        # Add subject-specific CLI args
+        if self.subject_name == "chat-db-app" and self.eval_subject is not None:
+            subj = self.eval_subject
+            if hasattr(subj, "app_port"):
+                monitor_cmd.extend(["--app-url", f"http://localhost:{subj.app_port}"])
+            if hasattr(subj, "pg_port"):
+                monitor_cmd.extend([
+                    "--db-dsn",
+                    f"postgresql://chatapp:chatapp@localhost:{subj.pg_port}/chatdb",
+                ])
+
+        # Pass extra context (e.g., workspace rebuild commands)
+        if self.subject_context_extra:
+            monitor_cmd.extend(["--subject-context-extra", self.subject_context_extra])
+
         # Start monitor subprocess with fast check interval for eval
         console.print("[bold blue]Starting operator monitor (5s interval)...[/bold blue]")
         self.monitor_proc = subprocess.Popen(
-            [
-                "uv", "run", "operator", "monitor", "run",
-                "--subject", self.subject_name,
-                "--db", str(self.operator_db_path),
-                "--interval", "5",  # Fast interval for eval
-            ],
+            monitor_cmd,
             cwd=self.project_root,
             env=env,
             stdout=subprocess.PIPE,

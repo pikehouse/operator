@@ -499,7 +499,24 @@ def run_campaign_cmd(
             # Managed mode: start/stop operator for the campaign
             # Use first subject for monitor (campaigns usually test one subject)
             subject_name = config.subjects[0] if config.subjects else "tikv"
-            async with OperatorProcesses(subject_name, operator_db) as op:
+
+            # For subjects with code workspaces, create the eval subject first
+            # so we can pass workspace context to the operator
+            eval_subject = None
+            subject_context_extra = None
+            if subject_name == "chat-db-app":
+                from eval.subjects.factory import SubjectRegistry
+                eval_subject = SubjectRegistry.create(subject_name, instance_id=0)
+                # Ensure workspace is set up
+                await eval_subject._ensure_workspace()
+                subject_context_extra = eval_subject.get_agent_context()
+
+            async with OperatorProcesses(
+                subject_name,
+                operator_db,
+                eval_subject=eval_subject,
+                subject_context_extra=subject_context_extra,
+            ) as op:
                 # Use the resolved path from OperatorProcesses (relative to project root)
                 return await execute_campaign(op.operator_db_path)
         else:
