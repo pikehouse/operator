@@ -28,7 +28,7 @@
                 <td class="px-4 py-2">{{ campaign.subject_name }}</td>
                 <td class="px-4 py-2">{{ campaign.trial_count }}</td>
                 <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
-                <td class="px-4 py-2 text-gray-500 text-sm">{{ campaign.created_at[:19] }}</td>
+                <td class="px-4 py-2 text-gray-500 text-sm"><time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time></td>
             </tr>
             {% endfor %}
         </tbody>

@@ -3,6 +3,7 @@
 <head>
     <title>{% block title %}Eval Viewer{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-white shadow mb-4 px-4 py-2">
@@ -11,5 +12,39 @@
     <main class="container mx-auto px-4 pb-8">
         {% block content %}{% endblock %}
     </main>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Render markdown content
+        if (typeof marked !== 'undefined') {
+            document.querySelectorAll('.markdown-body[data-markdown]').forEach(function(el) {
+                var raw = el.getAttribute('data-markdown');
+                if (raw) el.innerHTML = marked.parse(raw);
+            });
+        }
+
+        // Convert UTC timestamps to user's local timezone (PST fallback)
+        var tz;
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch(e) { tz = 'America/Los_Angeles'; }
+
+        document.querySelectorAll('time[datetime]').forEach(function(el) {
+            var raw = el.getAttribute('datetime');
+            if (!raw || raw === 'N/A') return;
+            // Ensure UTC interpretation for naive timestamps
+            var iso = raw.includes('+') || raw.endsWith('Z') ? raw : raw + 'Z';
+            var d = new Date(iso);
+            if (isNaN(d)) return;
+
+            var mode = el.dataset.format || 'datetime';
+            var opts = { timeZone: tz };
+            if (mode === 'time') {
+                opts.hour = '2-digit'; opts.minute = '2-digit'; opts.second = '2-digit'; opts.hour12 = false;
+            } else {
+                opts.year = 'numeric'; opts.month = '2-digit'; opts.day = '2-digit';
+                opts.hour = '2-digit'; opts.minute = '2-digit'; opts.second = '2-digit'; opts.hour12 = false;
+            }
+            el.textContent = d.toLocaleString(undefined, opts);
+        });
+    });
+    </script>
 </body>
 </html>

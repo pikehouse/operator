@@ -21,7 +21,7 @@
         <dt class="text-gray-500">Baseline:</dt>
         <dd>{% if campaign.baseline %}<span class="text-blue-600">Yes (self-healing test)</span>{% else %}No{% endif %}</dd>
         <dt class="text-gray-500">Created:</dt>
-        <dd>{{ campaign.created_at }}</dd>
+        <dd>{% if campaign.created_at %}<time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time>{% else %}N/A{% endif %}</dd>
     </dl>
 </div>
 
@@ -57,16 +57,16 @@
                     </span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-sm">{{ item.trial.started_at[:19] if item.trial.started_at else "N/A" }}</td>
-                <td class="px-4 py-2 text-sm">{{ item.trial.chaos_injected_at[:19] if item.trial.chaos_injected_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">{% if item.trial.started_at %}<time datetime="{{ item.trial.started_at }}">{{ item.trial.started_at[:19] }}</time>{% else %}N/A{% endif %}</td>
+                <td class="px-4 py-2 text-sm">{% if item.trial.chaos_injected_at %}<time datetime="{{ item.trial.chaos_injected_at }}">{{ item.trial.chaos_injected_at[:19] }}</time>{% else %}N/A{% endif %}</td>
                 <td class="px-4 py-2 text-sm">
                     {% if item.trial.resolved_at %}
-                    <span class="text-green-600">{{ item.trial.resolved_at[:19] }}</span>
+                    <span class="text-green-600"><time datetime="{{ item.trial.resolved_at }}">{{ item.trial.resolved_at[:19] }}</time></span>
                     {% else %}
                     <span class="text-red-600">Not resolved</span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-sm">{{ item.trial.ended_at[:19] if item.trial.ended_at else "N/A" }}</td>
+                <td class="px-4 py-2 text-sm">{% if item.trial.ended_at %}<time datetime="{{ item.trial.ended_at }}">{{ item.trial.ended_at[:19] }}</time>{% else %}N/A{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -50,7 +50,7 @@
             {{ agent_conclusion.status }}
         </span>
     </div>
-    <div class="prose prose-sm max-w-none text-gray-800">
+    <div class="prose prose-sm max-w-none text-gray-800 markdown-body" data-markdown="{{ agent_conclusion.outcome_summary | e }}">
         {{ agent_conclusion.outcome_summary | replace('\n', '<br>') | safe }}
     </div>
 </div>
@@ -133,12 +133,12 @@
     <h2 class="text-lg font-semibold mb-2">Timing</h2>
     <dl class="grid grid-cols-2 gap-2 text-sm">
         <dt class="text-gray-500">Started:</dt>
-        <dd>{{ trial.started_at[:19] if trial.started_at else "N/A" }}</dd>
+        <dd>{% if trial.started_at %}<time datetime="{{ trial.started_at }}">{{ trial.started_at[:19] }}</time>{% else %}N/A{% endif %}</dd>
         <dt class="text-gray-500">Chaos Injected:</dt>
-        <dd>{{ trial.chaos_injected_at[:19] if trial.chaos_injected_at else "N/A" }}</dd>
+        <dd>{% if trial.chaos_injected_at %}<time datetime="{{ trial.chaos_injected_at }}">{{ trial.chaos_injected_at[:19] }}</time>{% else %}N/A{% endif %}</dd>
         <dt class="text-gray-500">Ticket Created:</dt>
         <dd>
-            {{ trial.ticket_created_at[:19] if trial.ticket_created_at else "N/A" }}
+            {% if trial.ticket_created_at %}<time datetime="{{ trial.ticket_created_at }}">{{ trial.ticket_created_at[:19] }}</time>{% else %}N/A{% endif %}
             {% if timing.detect_seconds is defined %}
             <span class="text-blue-600 text-xs ml-1">(+{{ timing.detect_seconds | int }}s after chaos)</span>
             {% endif %}
@@ -146,7 +146,7 @@
         <dt class="text-gray-500">Resolved:</dt>
         <dd>
             {% if trial.resolved_at %}
-            <span class="text-green-600">{{ trial.resolved_at[:19] }}</span>
+            <span class="text-green-600"><time datetime="{{ trial.resolved_at }}">{{ trial.resolved_at[:19] }}</time></span>
             {% if timing.resolve_seconds is defined %}
             <span class="text-green-600 text-xs ml-1">(+{{ timing.resolve_seconds | int }}s to resolve)</span>
             {% endif %}
@@ -155,7 +155,7 @@
             {% endif %}
         </dd>
         <dt class="text-gray-500">Ended:</dt>
-        <dd>{{ trial.ended_at[:19] if trial.ended_at else "N/A" }}</dd>
+        <dd>{% if trial.ended_at %}<time datetime="{{ trial.ended_at }}">{{ trial.ended_at[:19] }}</time>{% else %}N/A{% endif %}</dd>
     </dl>
 </div>
 
@@ -175,7 +175,7 @@
                     <span class="text-gray-400">—</span>
                     {% endif %}
                     {% if cmd.timestamp %}
-                    <span class="text-gray-500 font-mono">{{ cmd.timestamp[11:19] if cmd.timestamp|length > 19 else cmd.timestamp }}</span>
+                    <span class="text-gray-500 font-mono"><time datetime="{{ cmd.timestamp }}" data-format="time">{{ cmd.timestamp[11:19] if cmd.timestamp|length > 19 else cmd.timestamp }}</time></span>
                     {% endif %}
                 </div>
             </div>
@@ -228,7 +228,7 @@
                     {% elif loop.index == 1 %}
                     <span class="text-gray-400 text-xs">—</span>
                     {% endif %}
-                    <span class="text-xs text-gray-500 font-mono">{{ entry.timestamp[11:19] if entry.timestamp else "" }}</span>
+                    <span class="text-xs text-gray-500 font-mono">{% if entry.timestamp %}<time datetime="{{ entry.timestamp }}" data-format="time">{{ entry.timestamp[11:19] }}</time>{% endif %}</span>
                 </div>
             </div>
             {% if entry.reasoning %}
