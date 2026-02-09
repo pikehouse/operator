@@ -904,6 +904,8 @@ def show_detail(
         if json_output:
             # Parse commands_json for output
             commands = json.loads(t.commands_json) if t.commands_json else []
+            if isinstance(commands, str):
+                commands = json.loads(commands)
             data = {
                 "id": t.id,
                 "campaign_id": t.campaign_id,
@@ -986,6 +988,8 @@ def show_detail(
 
         # Commands list
         commands = json.loads(t.commands_json) if t.commands_json else []
+        if isinstance(commands, str):
+            commands = json.loads(commands)
         if commands:
             print(f"Commands ({len(commands)}):")
             for i, cmd in enumerate(commands, 1):

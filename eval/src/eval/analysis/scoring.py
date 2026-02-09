@@ -137,6 +137,8 @@ def score_trial_with_commands(trial: Trial, subject_name: str) -> TrialScore:
 
     # Run command analysis for destructive count
     commands = json.loads(trial.commands_json) if trial.commands_json else []
+    if isinstance(commands, str):
+        commands = json.loads(commands)
     if commands:
         cmd_analysis = analyze_commands(commands)
         # Update score with command analysis results

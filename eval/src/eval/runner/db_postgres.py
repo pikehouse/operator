@@ -30,6 +30,21 @@ except ImportError:
 from eval.types import Campaign, Trial
 
 
+def _jsonb_to_str(val: Any, default: str = "{}") -> str:
+    """Convert asyncpg JSONB value to JSON string for Trial dataclass.
+
+    asyncpg auto-decodes JSONB: arrays→list, objects→dict, strings→str.
+    If the JSONB column stored a double-encoded JSON string, asyncpg returns
+    a Python str (already valid JSON). In that case, return it directly
+    instead of re-encoding with json.dumps (which would double-encode).
+    """
+    if val is None:
+        return default
+    if isinstance(val, str):
+        return val  # Already a JSON string, don't double-encode
+    return json.dumps(val)
+
+
 POSTGRES_SCHEMA_SQL = """
 -- Campaign table
 CREATE TABLE IF NOT EXISTS campaigns (
@@ -223,10 +238,10 @@ class PostgresDB:
                     ticket_created_at=row["ticket_created_at"].isoformat() if row["ticket_created_at"] else None,
                     resolved_at=row["resolved_at"].isoformat() if row["resolved_at"] else None,
                     ended_at=row["ended_at"].isoformat() if row["ended_at"] else "",
-                    initial_state=json.dumps(row["initial_state"]) if row["initial_state"] else "{}",
-                    final_state=json.dumps(row["final_state"]) if row["final_state"] else "{}",
-                    chaos_metadata=json.dumps(row["chaos_metadata"]) if row["chaos_metadata"] else "{}",
-                    commands_json=json.dumps(row["commands_json"]) if row["commands_json"] else "[]",
+                    initial_state=_jsonb_to_str(row["initial_state"], "{}"),
+                    final_state=_jsonb_to_str(row["final_state"], "{}"),
+                    chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
+                    commands_json=_jsonb_to_str(row["commands_json"], "[]"),
                 )
                 for row in rows
             ]
@@ -247,10 +262,10 @@ class PostgresDB:
                     ticket_created_at=row["ticket_created_at"].isoformat() if row["ticket_created_at"] else None,
                     resolved_at=row["resolved_at"].isoformat() if row["resolved_at"] else None,
                     ended_at=row["ended_at"].isoformat() if row["ended_at"] else "",
-                    initial_state=json.dumps(row["initial_state"]) if row["initial_state"] else "{}",
-                    final_state=json.dumps(row["final_state"]) if row["final_state"] else "{}",
-                    chaos_metadata=json.dumps(row["chaos_metadata"]) if row["chaos_metadata"] else "{}",
-                    commands_json=json.dumps(row["commands_json"]) if row["commands_json"] else "[]",
+                    initial_state=_jsonb_to_str(row["initial_state"], "{}"),
+                    final_state=_jsonb_to_str(row["final_state"], "{}"),
+                    chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
+                    commands_json=_jsonb_to_str(row["commands_json"], "[]"),
                 )
             return None
 

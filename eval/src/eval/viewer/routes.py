@@ -119,6 +119,12 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
 
     # Parse commands and chaos metadata from JSON
     raw_commands = json.loads(trial.commands_json) if trial.commands_json else []
+    # Handle double-encoded JSON (JSONB round-trip can double-encode strings)
+    if isinstance(raw_commands, str):
+        try:
+            raw_commands = json.loads(raw_commands)
+        except (json.JSONDecodeError, TypeError):
+            raw_commands = []
     chaos_meta_raw = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
     # Handle double-encoded JSON or non-dict values
     if isinstance(chaos_meta_raw, str):
