@@ -116,7 +116,7 @@ packages/
 subjects/
 ├── tikv/                   # TiKV subject implementation
 ├── ratelimiter/            # Rate limiter subject implementation
-└── chat-db-app/            # Chat DB App subject (FastAPI + AlloyDB)
+└── chat-db-app/            # Chat DB App subject (FastAPI + PostgreSQL)
 
 demo/                       # Interactive TUI demo
 eval/                       # Evaluation harness and analysis
