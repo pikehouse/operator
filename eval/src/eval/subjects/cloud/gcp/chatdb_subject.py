@@ -150,18 +150,20 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             f"{self.docker_compose_cmd} -p {self.project_name} --env-file .env"
         )
         return f"""
-Source code access:
-- The service source code is at: {self.workspace_dir}/app/
-- You can read and edit these files to fix code-level issues
-- After editing, rebuild and restart the app:
+Directory layout:
+- docker-compose.yaml is at: {self.compose_dir}/docker-compose.yaml
+- Editable source code is at: {self.workspace_dir}/app/
+  (main.py, pool.py, models.py, streaming.py, Dockerfile)
+- These are separate directories — compose files are in {self.compose_dir}/, source is in {self.workspace_dir}/
+
+Rebuild after editing code:
     {compose_cmd} build app
     {compose_cmd} up -d app
-- To see the full service status:
+
+Other useful commands:
     {compose_cmd} ps
     {compose_cmd} logs app --tail 50
-- Track your changes with git:
     git -C {self.workspace_dir} diff
-    git -C {self.workspace_dir} add -A && git -C {self.workspace_dir} commit -m "description"
 """
 
     async def _upload_compose_files(self) -> None:

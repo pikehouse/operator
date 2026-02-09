@@ -25,16 +25,23 @@ Chat DB App context:
   4. No index on messages.conversation_id (full table scans)
   5. No retry on serialization failures
   6. No statement_timeout
-- Source code is in subjects/chat-db-app/service/app/
-  - pool.py: asyncpg pool creation (add max_size, command_timeout)
-  - models.py: query functions (fix read-modify-write, add index)
-  - streaming.py: streaming logic (narrow transaction scope)
-  - main.py: FastAPI endpoints
-- Key diagnostic queries:
+
+File layout (relative to workspace root):
+  docker-compose.yaml   ← compose file for all containers
+  app/
+    main.py             ← FastAPI endpoints
+    pool.py             ← asyncpg pool creation (add max_size, command_timeout)
+    models.py           ← query functions (fix read-modify-write, add index)
+    streaming.py        ← streaming logic (narrow transaction scope)
+    Dockerfile          ← app container image
+  loadgen/              ← load generator
+  config/               ← prometheus config
+
+Key diagnostic queries:
   - pg_stat_activity: connection states, idle-in-transaction, lock waiters
   - pg_stat_database: deadlock counts
-- App endpoints: /health (pool status), /metrics (Prometheus format)
-- Containers: postgres, app, loadgen, prometheus
+App endpoints: /health (pool status), /metrics (Prometheus format)
+Containers: postgres, app, loadgen, prometheus
 """
 
 from operator_protocols import InvariantViolation

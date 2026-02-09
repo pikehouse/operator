@@ -316,16 +316,17 @@ class ChatDBAppEvalSubject:
         workspace_path = ws.workspace_dir
 
         return f"""
-Source code access:
-- The service source code is at: {workspace_path}/app/
-- You can read and edit these files to fix code-level issues
-- After editing, rebuild and restart the app:
+Directory layout:
+- docker-compose.yaml is at: {workspace_path}/docker-compose.yaml
+- Editable source code is at: {workspace_path}/app/
+  (main.py, pool.py, models.py, streaming.py, Dockerfile)
+
+Rebuild after editing code:
     {ws.compose_command} build app
     {ws.compose_command} up -d app
-- To see the full service status:
+
+Other useful commands:
     {ws.compose_command} ps
     {ws.compose_command} logs app --tail 50
-- Track your changes with git:
     git -C {workspace_path} diff
-    git -C {workspace_path} add -A && git -C {workspace_path} commit -m "description"
 """
