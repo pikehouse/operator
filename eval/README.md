@@ -4,59 +4,111 @@ Runs campaigns of trials where chaos is injected into a test subject and an auto
 
 ## Prerequisites
 
-### GCP Cloud Campaigns
+- Docker and Docker Compose running
+- Python 3.12+
+- `uv` package manager
+- `ANTHROPIC_API_KEY` set in environment (or in `.env` at repo root)
 
-Cloud campaigns run on GCP Compute Engine VMs. Before running:
+## Running Local Campaigns
+
+Local campaigns run against Docker Compose clusters on your machine. No cloud setup needed.
+
+### Quick start: TiKV smoke test
 
 ```bash
-# Authenticate with GCP (required — tokens expire)
-gcloud auth login
-
-# Verify auth works
-gcloud compute instances list
+cd eval
+uv run eval run campaign campaigns/smoke-test.yaml
 ```
 
-### Environment Variables
+This runs 1 trial each of `node_kill`, `latency`, and `network_partition` against a local TiKV cluster. The harness starts Docker Compose, runs the operator, injects chaos, waits for detection and resolution, and records results.
 
-Copy `.env` to the repo root (or ensure these are set):
+### Available local campaigns
+
+| Campaign | Subject | What it tests |
+|----------|---------|---------------|
+| `smoke-test.yaml` | tikv | node_kill, latency, network_partition (1 trial each) |
+| `node-kill-test.yaml` | tikv | node_kill only (1 trial) |
+| `full-chaos.yaml` | tikv | node_kill, latency, network_partition (3 trials each) |
+| `cascading-failures.yaml` | tikv | pd_leader_kill, node_kill (3 trials each) |
+| `diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
+| `subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
+| `chat-db-app-code-fix.yaml` | chat-db-app | load_pressure (3 trials) |
+
+### Running any local campaign
+
+```bash
+cd eval
+uv run eval run campaign campaigns/<campaign-file>.yaml
+```
+
+### Running a single trial
+
+```bash
+cd eval
+uv run eval run --subject tikv --chaos node_kill --trials 1
+```
+
+## Running Cloud Campaigns (GCP)
+
+Cloud campaigns provision GCP VMs, run trials there, and store results in a shared PostgreSQL database.
+
+### Cloud prerequisites
+
+```bash
+# Authenticate with GCP (tokens expire — re-run if needed)
+gcloud auth login
+gcloud compute instances list  # Verify auth works
+```
+
+Ensure `.env` at repo root has:
 
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Agent LLM calls |
 | `EVAL_DATABASE_URL` | Cloud PostgreSQL for distributed execution |
+| `GCP_PROJECT` | GCP project ID |
 | `CHATDB_CLOUD_SQL_IP` | Chat DB App: Cloud SQL IP |
 | `CHATDB_CLOUD_SQL_PASSWORD` | Chat DB App: Cloud SQL password |
 | `CHATDB_APP_IMAGE` | Chat DB App: pre-built app image |
 | `CHATDB_LOADGEN_IMAGE` | Chat DB App: pre-built loadgen image |
-| `GCP_PROJECT` | GCP project ID |
 
-## Running a Campaign
-
-### 1. Enqueue
+### Enqueue a cloud campaign
 
 ```bash
 cd eval
-source ../.env  # or set env vars
+source ../.env
 
-# Chat DB App — agent fixes code
-uv run eval run campaign campaigns/chatdb-debug-edit.yaml --cloud=gcp
-
-# TiKV — agent diagnoses infra chaos
+# TiKV cloud smoke test
 uv run eval run campaign campaigns/cloud-smoke-operator.yaml --cloud=gcp
+
+# Chat DB App debug test
+uv run eval run campaign campaigns/chatdb-debug-edit.yaml --cloud=gcp
 ```
 
-### 2. Start a Worker
+### Start a worker
 
 ```bash
+cd eval
 uv run eval worker start --cloud=gcp \
   --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
 ```
 
 The worker claims items from the queue, provisions VMs, runs trials, and records results.
 
-### 3. Monitor Progress
+### Available cloud campaigns
+
+| Campaign | Subject | What it tests |
+|----------|---------|---------------|
+| `cloud-smoke-operator.yaml` | tikv | node_kill (1 trial) |
+| `chatdb-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
+| `chatdb-gcp-smoke.yaml` | chat-db-app | load_pressure, db_disconnect (1 trial each) |
+| `exotic-chaos-cloud.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
+
+### Monitor cloud progress
 
 ```bash
+cd eval
+
 # Queue status
 uv run eval worker status --remote
 
@@ -70,7 +122,56 @@ uv run eval show --trial <trial_id> --remote
 uv run eval viewer --remote
 ```
 
-## Recovering from Failures
+## Analysis
+
+After campaigns complete, analyze and compare results:
+
+```bash
+cd eval
+
+# List all campaigns
+uv run eval list
+
+# Score a campaign
+uv run eval analyze <campaign_id>
+uv run eval analyze <campaign_id> --commands    # Include LLM command classification
+
+# Compare two campaigns
+uv run eval compare <id1> <id2>
+
+# Compare agent vs auto-found baseline
+uv run eval compare-baseline <campaign_id>
+
+# Web UI
+uv run eval viewer                              # http://127.0.0.1:8000
+```
+
+For cloud results, add `--remote` to commands above.
+
+## Campaign Config Reference
+
+Campaign YAML files live in `eval/campaigns/`. Key fields:
+
+```yaml
+name: my-campaign
+subjects: [tikv]                 # tikv or chat-db-app
+chaos_types:
+  - type: node_kill
+  - type: latency
+    params: { min_ms: 50, max_ms: 150 }
+trials_per_combination: 3        # Repetitions per subject/chaos combo
+parallel: 1                      # Parallel instances (isolated Docker projects)
+cooldown_seconds: 10             # Wait between trials
+include_baseline: false          # Run no-chaos baseline trials
+variant: default                 # Agent config variant (see eval/variants/)
+cloud:                           # Omit for local campaigns
+  provider: gcp
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
+```
+
+## Recovering from Cloud Failures
 
 ```bash
 # Release stale work items (worker crashed)
@@ -81,41 +182,6 @@ gcloud compute instances list --filter="name~chatdb OR name~tikv-eval"
 
 # Delete orphaned VMs
 gcloud compute instances delete <name> --zone=us-central1-a --quiet
-```
-
-## Campaign Configs
-
-Campaign YAML files live in `eval/campaigns/`. Key fields:
-
-```yaml
-name: my-campaign
-subjects: [chat-db-app]        # or [tikv]
-chaos_types:
-  - type: debug_code_edit      # chat-db-app chaos types
-  - type: load_pressure
-  - type: node_kill            # tikv chaos types
-  - type: latency
-    params: { min_ms: 50, max_ms: 150 }
-trials_per_combination: 3
-include_baseline: false
-cloud:
-  provider: gcp
-  operator:
-    enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
-```
-
-## Analysis
-
-```bash
-# Score a campaign
-uv run eval analyze <campaign_id> --remote
-
-# Compare two campaigns
-uv run eval compare <id1> <id2> --remote
-
-# Compare agent vs baseline
-uv run eval compare-baseline <campaign_id> --remote
 ```
 
 ## Running Tests

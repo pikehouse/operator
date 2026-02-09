@@ -34,7 +34,7 @@ eval/
 
 ### Campaign
 A structured test execution that runs multiple trials. Defined via YAML with:
-- `subjects` - Systems to test (currently only "tikv")
+- `subjects` - Systems to test (`tikv`, `chat-db-app`)
 - `chaos_types` - List of chaos types with optional params
 - `trials_per_combination` - Repetitions per subject/chaos combo
 - `variant` - Agent configuration to use
@@ -134,13 +134,29 @@ class TrialScore(BaseModel):
     destructive_count: int
 ```
 
-## Chaos Types (TiKV)
+## Chaos Types
+
+### TiKV
 
 | Type | Implementation | Parameters |
 |------|----------------|------------|
 | `node_kill` | SIGKILL TiKV container | None |
 | `latency` | tc netem on TiKV | `min_ms`, `max_ms` |
-| `network_partition` | iptables block TiKV ↔ peers | None |
+| `network_partition` | iptables block TiKV ↔ peers and TiKV ↔ PD | None |
+| `process_pause` | SIGSTOP/SIGCONT (freeze process) | None |
+| `packet_loss` | tc netem intermittent failures | `percent` |
+| `asymmetric_partition` | Block traffic to one peer only | None |
+| `pd_leader_kill` | Kill random PD control plane node | None |
+| `leader_concentration` | Concentrate all region leaders on one store | None |
+| `disk_pressure` | Fill tmpfs (cloud only) | None |
+
+### Chat-DB-App
+
+| Type | Implementation | Parameters |
+|------|----------------|------------|
+| `load_pressure` | Increase loadgen intensity | `NUM_USERS`, `REQUEST_DELAY`, `STREAM_RATIO` |
+| `db_disconnect` | Block VM ↔ Cloud SQL traffic (cloud only) | None |
+| `debug_code_edit` | Inject subtle bugs into app code (cloud only) | None |
 
 ## Variants
 
@@ -227,6 +243,18 @@ In managed mode, `OperatorProcesses` context manager:
 6. Terminates both on exit
 
 Commands extracted from `operator.db` via SQL query on `agent_log_entries` table.
+
+## Documentation
+
+`eval/README.md` is the user-facing source of truth for how to run campaigns. Keep it in sync when changing:
+
+- CLI commands or flags
+- Campaign YAML files (add/remove entries in the campaign tables)
+- Supported subjects or chaos types
+- Prerequisites or environment variables
+- Analysis commands
+
+The root `README.md` links to `eval/README.md` for eval details — don't duplicate instructions there.
 
 ## Running Tests
 

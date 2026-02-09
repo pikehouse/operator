@@ -192,6 +192,17 @@ cd eval && uv run pytest tests/
 - Commit working code with passing tests
 - Tests and implementation go in the same commit when they're for the same change
 
+## Documentation
+
+User-facing instructions live in READMEs, not CLAUDE.md files. Keep them in sync:
+
+| What | Where |
+|------|-------|
+| Demo instructions | `README.md` (root) |
+| Eval campaign instructions | `eval/README.md` |
+
+When changing user-facing behavior (CLI commands, campaign configs, prerequisites, new subjects), update the corresponding README. The campaign tables in `eval/README.md` list every YAML file in `eval/campaigns/` — add new campaigns there too.
+
 ## Design Principles
 
 1. **operator-protocols has ZERO dependencies** - Can be imported anywhere
