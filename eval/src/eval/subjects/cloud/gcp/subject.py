@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from eval.subjects.cloud.base import CloudSubjectBase, _parse_compose_json
+from eval.subjects.cloud.gcp.cos_helpers import (
+    install_compose_plugin,
+    configure_artifact_registry,
+)
 from eval.subjects.cloud.gcp.vm import GCPVM
 
 logger = logging.getLogger(__name__)
@@ -93,19 +97,7 @@ class GCPTiKVSubject(CloudSubjectBase):
         then uploads the cloud-specific compose file that uses pre-built
         images from Artifact Registry (no docker build needed on VM).
         """
-        # Install Docker Compose plugin on COS.
-        # COS has noexec on /home and /tmp, so we download to /tmp then
-        # sudo-copy to /var/lib/toolbox (exec-enabled) and configure as
-        # a Docker CLI plugin via --config flag.
-        await self.vm.run_command(
-            "curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 "
-            "-o /tmp/docker-compose-download && "
-            "sudo mkdir -p /var/lib/toolbox/docker-config/cli-plugins && "
-            "sudo cp /tmp/docker-compose-download /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
-            "sudo chmod +x /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
-            "rm -f /tmp/docker-compose-download",
-            timeout_sec=60.0,
-        )
+        await install_compose_plugin(self.vm)
 
         # Create directory on VM
         await self.vm.run_command(f"mkdir -p {self.compose_dir}")
@@ -116,18 +108,7 @@ class GCPTiKVSubject(CloudSubjectBase):
             f"{self.compose_dir}/docker-compose.yaml",
         )
 
-        # Configure Artifact Registry auth for both default and toolbox docker configs.
-        # COS has docker-credential-gcr pre-installed; gcloud CLI is NOT available.
-        await self.vm.run_command(
-            "docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev",
-            timeout_sec=30.0,
-        )
-        # Copy credential config to toolbox docker config (used by compose plugin)
-        await self.vm.run_command(
-            "sudo cp ~/.docker/config.json /var/lib/toolbox/docker-config/config.json && "
-            "sudo chmod 644 /var/lib/toolbox/docker-config/config.json",
-            timeout_sec=10.0,
-        )
+        await configure_artifact_registry(self.vm)
 
         # Pull images
         await self.vm.run_command(

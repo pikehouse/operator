@@ -7,24 +7,35 @@ import os
 from pathlib import Path
 from typing import Any
 
-from eval.subjects.cloud.base import CloudSubjectBase, _parse_compose_json
+from eval.subjects.cloud.base import CloudSubjectBase
+from eval.subjects.cloud.gcp.cos_helpers import (
+    install_compose_plugin,
+    configure_artifact_registry,
+    upload_directory,
+)
 from eval.subjects.cloud.gcp.vm import GCPVM
 
 logger = logging.getLogger(__name__)
 
+# COS exec-safe workspace path
+WORKSPACE_DIR = "/var/lib/workspace"
+
 
 class GCPChatDBAppSubject(CloudSubjectBase):
-    """Chat DB App running on GCP Compute Engine with AlloyDB.
+    """Chat DB App running on GCP Compute Engine with Cloud SQL.
 
     The app + loadgen run in Docker on a GCP VM, connecting to a shared
-    AlloyDB cluster. Each trial gets an isolated database on AlloyDB.
+    Cloud SQL instance. Each trial gets an isolated database on Cloud SQL.
+
+    The service source is uploaded to a git-tracked workspace on the VM
+    so the agent can edit code and rebuild the app container.
 
     Chaos types:
     - load_pressure: Run additional heavy loadgen container
-    - db_disconnect: iptables block VM → AlloyDB traffic
+    - db_disconnect: iptables block VM → Cloud SQL traffic
     """
 
-    CLOUD_CHAOS_TYPES = ["load_pressure", "db_disconnect"]
+    CLOUD_CHAOS_TYPES = ["load_pressure", "db_disconnect", "debug_code_edit"]
 
     def __init__(
         self,
@@ -32,8 +43,8 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         project: str | None = None,
         zone: str = "us-central1-a",
         machine_type: str = "e2-standard-2",
-        alloydb_ip: str | None = None,
-        alloydb_password: str | None = None,
+        cloud_sql_ip: str | None = None,
+        cloud_sql_password: str | None = None,
         compose_dir: str = "/tmp/chatdb",
     ):
         """Initialize GCP Chat DB App subject.
@@ -43,8 +54,8 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             project: GCP project ID
             zone: GCP zone
             machine_type: VM machine type
-            alloydb_ip: AlloyDB IP (from .env.gcp or env var)
-            alloydb_password: AlloyDB password (from .env.gcp or env var)
+            cloud_sql_ip: Cloud SQL IP (from .env.gcp or env var)
+            cloud_sql_password: Cloud SQL password (from .env.gcp or env var)
             compose_dir: Directory on VM for compose files
         """
         vm = GCPVM(
@@ -62,26 +73,41 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         )
         self.instance_id = instance_id
         self.compose_dir = compose_dir
+        self.workspace_dir = WORKSPACE_DIR
 
-        # AlloyDB connection details (from env vars or constructor)
-        self.alloydb_ip = alloydb_ip or os.environ.get("ALLOYDB_IP", "")
-        self.alloydb_password = alloydb_password or os.environ.get(
-            "ALLOYDB_PASSWORD", ""
+        # Cloud SQL connection details (from env vars or constructor)
+        self.cloud_sql_ip = cloud_sql_ip or os.environ.get("CHATDB_CLOUD_SQL_IP", "")
+        self.cloud_sql_password = cloud_sql_password or os.environ.get(
+            "CHATDB_CLOUD_SQL_PASSWORD", ""
         )
 
         # Per-trial database name for isolation
         self.trial_db_name = f"chatdb_trial_{instance_id}"
 
         # Image URLs from env
-        self.app_image = os.environ.get("APP_IMAGE", "")
-        self.loadgen_image = os.environ.get("LOADGEN_IMAGE", "")
+        self.app_image = os.environ.get("CHATDB_APP_IMAGE", "")
+        self.loadgen_image = os.environ.get("CHATDB_LOADGEN_IMAGE", "")
 
-        # Local cloud compose file to upload
-        self._local_compose = (
+        # Local service directory to upload (subjects/chat-db-app/service/)
+        # Try Docker image path first, fall back to repo-relative path
+        docker_path = Path("/usr/local/lib/subjects/chat-db-app/service")
+        repo_path = (
+            Path(__file__).parents[6] / "subjects" / "chat-db-app" / "service"
+        )
+        self._local_service_dir = docker_path if docker_path.exists() else repo_path
+
+        # Cloud compose overlay
+        docker_cloud_compose = Path(
+            "/usr/local/lib/subjects/chat-db-app/docker-compose.cloud.yaml"
+        )
+        repo_cloud_compose = (
             Path(__file__).parents[6]
             / "subjects"
             / "chat-db-app"
             / "docker-compose.cloud.yaml"
+        )
+        self._local_cloud_compose = (
+            docker_cloud_compose if docker_cloud_compose.exists() else repo_cloud_compose
         )
 
         # Chaos loadgen container name
@@ -91,10 +117,14 @@ class GCPChatDBAppSubject(CloudSubjectBase):
     def database_url(self) -> str:
         """Construct DATABASE_URL for this trial's isolated database."""
         return (
-            f"postgresql://postgres:{self.alloydb_password}"
-            f"@{self.alloydb_ip}:5432/{self.trial_db_name}"
-            f"?sslmode=require"
+            f"postgresql://chatapp:{self.cloud_sql_password}"
+            f"@{self.cloud_sql_ip}:5432/{self.trial_db_name}"
         )
+
+    @property
+    def workspace_volume_mount(self) -> str:
+        """Return the Docker volume mount for the workspace directory."""
+        return f"{self.workspace_dir}:{self.workspace_dir}"
 
     def get_operator_env(self) -> dict[str, str]:
         """Return extra env vars needed by the operator containers.
@@ -105,34 +135,73 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         """
         return {
             "DATABASE_URL": self.database_url,
+            "DB_DSN": self.database_url,
             "APP_URL": "http://localhost:8000",
         }
 
+    def get_agent_context(self) -> str:
+        """Return prompt context for the agent.
+
+        Includes workspace path and the exact compose commands the agent
+        should use to rebuild the app after editing code.
+        """
+        compose_cmd = (
+            f"cd {self.compose_dir} && "
+            f"{self.docker_compose_cmd} -p {self.project_name} --env-file .env"
+        )
+        return f"""
+Source code access:
+- The service source code is at: {self.workspace_dir}/app/
+- You can read and edit these files to fix code-level issues
+- After editing, rebuild and restart the app:
+    {compose_cmd} build app
+    {compose_cmd} up -d app
+- To see the full service status:
+    {compose_cmd} ps
+    {compose_cmd} logs app --tail 50
+- Track your changes with git:
+    git -C {self.workspace_dir} diff
+    git -C {self.workspace_dir} add -A && git -C {self.workspace_dir} commit -m "description"
+"""
+
     async def _upload_compose_files(self) -> None:
-        """Upload Docker Compose files and configure the VM."""
-        # Install Docker Compose plugin on COS
+        """Upload service source, compose files, and configure the VM.
+
+        Uploads the entire service directory to the workspace, overlays
+        the cloud compose file, initialises a git repo for code tracking,
+        and writes the .env with Cloud SQL connection details.
+        """
+        await install_compose_plugin(self.vm)
+
+        # Create workspace and compose directories
         await self.vm.run_command(
-            "curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 "
-            "-o /tmp/docker-compose-download && "
-            "sudo mkdir -p /var/lib/toolbox/docker-config/cli-plugins && "
-            "sudo cp /tmp/docker-compose-download /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
-            "sudo chmod +x /var/lib/toolbox/docker-config/cli-plugins/docker-compose && "
-            "rm -f /tmp/docker-compose-download",
-            timeout_sec=60.0,
+            f"sudo mkdir -p {self.workspace_dir} && "
+            f"sudo chown $(id -u):$(id -g) {self.workspace_dir} && "
+            f"mkdir -p {self.compose_dir}"
         )
 
-        # Create directory on VM
-        await self.vm.run_command(f"mkdir -p {self.compose_dir}")
+        # Upload entire service directory to workspace
+        await upload_directory(
+            self.vm, str(self._local_service_dir), self.workspace_dir
+        )
 
-        # Upload cloud compose file
+        # Overlay cloud compose as the primary docker-compose.yaml
         await self.vm.upload_file(
-            str(self._local_compose),
+            str(self._local_cloud_compose),
             f"{self.compose_dir}/docker-compose.yaml",
         )
 
-        # Write .env file on VM with image URLs and database URL
+        # Init git repo in workspace for code tracking
+        await self.vm.run_command(
+            f"cd {self.workspace_dir} && "
+            "git init && git add -A && "
+            'git -c user.email="eval@operator" -c user.name="eval" '
+            'commit -m "initial"',
+            timeout_sec=30.0,
+        )
+
+        # Write .env file with Cloud SQL connection and image URLs
         env_content = (
-            f"APP_IMAGE={self.app_image}\n"
             f"LOADGEN_IMAGE={self.loadgen_image}\n"
             f"DATABASE_URL={self.database_url}\n"
         )
@@ -140,27 +209,17 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             f"cat > {self.compose_dir}/.env << 'ENVEOF'\n{env_content}ENVEOF"
         )
 
-        # Configure Artifact Registry auth
-        await self.vm.run_command(
-            "docker-credential-gcr configure-docker --registries=us-central1-docker.pkg.dev",
-            timeout_sec=30.0,
-        )
-        # Copy credential config to toolbox docker config
-        await self.vm.run_command(
-            "sudo cp ~/.docker/config.json /var/lib/toolbox/docker-config/config.json && "
-            "sudo chmod 644 /var/lib/toolbox/docker-config/config.json",
-            timeout_sec=10.0,
-        )
+        await configure_artifact_registry(self.vm)
 
-        # Pull images (compose images + postgres:16 for DB admin via psql)
+        # Pull loadgen image + postgres:16 for DB admin via psql
         await self.vm.run_command(
-            f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} --env-file .env pull",
+            f"docker pull {self.loadgen_image}",
             timeout_sec=300.0,
         )
         await self.vm.run_command("docker pull postgres:16", timeout_sec=120.0)
 
     async def reset(self) -> None:
-        """Reset subject: tear down containers, recreate trial database, start fresh."""
+        """Reset subject: tear down containers, reset code, recreate trial database, start fresh."""
         if not self._created:
             await self.setup()
 
@@ -169,11 +228,17 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} down -v --remove-orphans"
         )
 
-        # Drop and recreate trial database on AlloyDB
-        # Use a temporary postgres container to run psql against AlloyDB
+        # Reset workspace code to initial state
+        await self.vm.run_command(
+            f"cd {self.workspace_dir} && git reset --hard HEAD && git clean -fd",
+            timeout_sec=30.0,
+        )
+
+        # Drop and recreate trial database on Cloud SQL
+        # Use a temporary postgres container to run psql against Cloud SQL
         psql_cmd = (
             f"docker run --rm postgres:16 psql "
-            f"'postgresql://postgres:{self.alloydb_password}@{self.alloydb_ip}:5432/postgres?sslmode=require'"
+            f"'postgresql://chatapp:{self.cloud_sql_password}@{self.cloud_sql_ip}:5432/postgres'"
         )
         await self.vm.run_command(
             f'{psql_cmd} -c "DROP DATABASE IF EXISTS {self.trial_db_name};"',
@@ -184,10 +249,10 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             timeout_sec=60.0,
         )
 
-        # Compose up (app auto-creates tables on startup)
+        # Compose up (app builds from workspace source, auto-creates tables on startup)
         await self.vm.run_command(
-            f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} --env-file .env up -d --wait",
-            timeout_sec=120.0,
+            f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} --env-file .env up -d --build --wait",
+            timeout_sec=180.0,
         )
 
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
@@ -218,7 +283,7 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         return False
 
     async def capture_state(self) -> dict[str, Any]:
-        """Capture app state via /health and /metrics endpoints."""
+        """Capture app state via /health and /metrics, plus workspace git state."""
         state: dict[str, Any] = {}
         try:
             # Health endpoint
@@ -240,6 +305,26 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         except Exception as e:
             state["error"] = str(e)
 
+        # Workspace git snapshot
+        try:
+            exit_code, commit_hash, _ = await self.vm.run_command(
+                f"git -C {self.workspace_dir} rev-parse HEAD"
+            )
+            if exit_code == 0:
+                _, dirty_output, _ = await self.vm.run_command(
+                    f"git -C {self.workspace_dir} status --porcelain"
+                )
+                _, diff_output, _ = await self.vm.run_command(
+                    f"git -C {self.workspace_dir} diff HEAD"
+                )
+                state["code_workspace"] = {
+                    "commit": commit_hash.strip(),
+                    "dirty": bool(dirty_output.strip()),
+                    "diff": diff_output.strip(),
+                }
+        except Exception as e:
+            state["code_workspace"] = {"error": str(e)}
+
         return state
 
     def get_chaos_types(self) -> list[str]:
@@ -257,6 +342,9 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             return await self._inject_load_pressure(**params)
         elif chaos_type == "db_disconnect":
             return await self._inject_db_disconnect()
+        elif chaos_type == "debug_code_edit":
+            # No system-level chaos — ticket injection happens in the worker
+            return {"chaos_type": "debug_code_edit"}
 
         raise ValueError(f"Unknown chaos type: {chaos_type}")
 
@@ -271,10 +359,12 @@ class GCPChatDBAppSubject(CloudSubjectBase):
                 )
                 await self.vm.run_command(f"docker rm -f {container}")
             elif chaos_type == "db_disconnect":
-                alloydb_ip = chaos_metadata.get("alloydb_ip", self.alloydb_ip)
+                cloud_sql_ip = chaos_metadata.get("cloud_sql_ip", self.cloud_sql_ip)
                 await self.vm.run_command(
-                    f"sudo iptables -D OUTPUT -d {alloydb_ip} -p tcp --dport 5432 -j DROP"
+                    f"sudo iptables -D OUTPUT -d {cloud_sql_ip} -p tcp --dport 5432 -j DROP"
                 )
+            elif chaos_type == "debug_code_edit":
+                pass  # No system-level chaos to clean up
         except Exception as e:
             logger.debug(f"Cleanup note: {e}")
 
@@ -319,15 +409,15 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         }
 
     async def _inject_db_disconnect(self) -> dict[str, Any]:
-        """Block VM traffic to AlloyDB using iptables.
+        """Block VM traffic to Cloud SQL using iptables.
 
         Simulates a network partition between the app and the database.
         """
         await self.vm.run_command(
-            f"sudo iptables -I OUTPUT -d {self.alloydb_ip} -p tcp --dport 5432 -j DROP"
+            f"sudo iptables -I OUTPUT -d {self.cloud_sql_ip} -p tcp --dport 5432 -j DROP"
         )
 
         return {
             "chaos_type": "db_disconnect",
-            "alloydb_ip": self.alloydb_ip,
+            "cloud_sql_ip": self.cloud_sql_ip,
         }

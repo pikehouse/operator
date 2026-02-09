@@ -246,12 +246,23 @@ class Worker:
             if hasattr(subject, "get_operator_env"):
                 extra_env = subject.get_operator_env()
 
+            # Get optional agent context and workspace mount
+            subject_context_extra = ""
+            if hasattr(subject, "get_agent_context"):
+                subject_context_extra = subject.get_agent_context()
+
+            workspace_volume_mount = ""
+            if hasattr(subject, "workspace_volume_mount"):
+                workspace_volume_mount = subject.workspace_volume_mount
+
             remote_op = RemoteOperatorProcesses(
                 vm=subject.vm,
                 operator_image=operator_image,
                 anthropic_api_key=anthropic_api_key,
                 subject_name=subject_name,
                 extra_env=extra_env,
+                subject_context_extra=subject_context_extra,
+                workspace_volume_mount=workspace_volume_mount,
             )
 
         try:
@@ -275,6 +286,20 @@ class Worker:
                 console.print(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
                 chaos_injected_at = now()
                 chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)
+
+                # For debug_code_edit, inject a synthetic ticket via the operator DB
+                if chaos_type == "debug_code_edit" and remote_op:
+                    agent_context = ""
+                    if hasattr(subject, "get_agent_context"):
+                        agent_context = subject.get_agent_context()
+                    await remote_op.inject_ticket(
+                        invariant_name="operator_override",
+                        message=(
+                            "Add a comment '# AGENT_WAS_HERE' to the top of app/main.py, "
+                            "then rebuild and restart the app."
+                        ),
+                        subject_context=agent_context,
+                    )
             else:
                 chaos_injected_at = now()
 

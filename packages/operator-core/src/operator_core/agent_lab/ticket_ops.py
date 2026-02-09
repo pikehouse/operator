@@ -81,6 +81,7 @@ class TicketOpsDB:
             diagnosis=row["diagnosis"],
             metric_snapshot=json.loads(row["metric_snapshot"]) if row["metric_snapshot"] else None,
             subject_context=row["subject_context"],
+            type=row["type"],
             variant_model=row["variant_model"],
             variant_system_prompt=row["variant_system_prompt"],
             variant_tools_config=row["variant_tools_config"],

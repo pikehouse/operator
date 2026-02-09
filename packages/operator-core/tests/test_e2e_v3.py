@@ -27,7 +27,7 @@ from operator_protocols import (
     InvariantViolation,
 )
 from operator_core.monitor.loop import MonitorLoop
-from operator_core.monitor.types import TicketStatus
+from operator_core.monitor.types import TicketStatus, TicketType
 from operator_core.db.tickets import TicketDB
 from operator_core.agent_lab.ticket_ops import TicketOpsDB
 from operator_core.db.audit_log import AuditLogDB
@@ -501,6 +501,39 @@ class TestE2EFlow:
             await loop._check_cycle(db)
             tickets = await db.list_tickets()
             assert tickets[0].status == TicketStatus.RESOLVED
+
+    @pytest.mark.asyncio
+    async def test_operator_override_ticket_not_auto_resolved(self, tmp_path: Path):
+        """Operator-override tickets should survive auto-resolve (no matching violation)."""
+        db_path = tmp_path / "test.db"
+
+        subject = MockSubject(healthy=True)
+        checker = MockChecker(subject)
+        loop = MonitorLoop(
+            subject=subject, checker=checker, db_path=db_path, interval_seconds=1.0
+        )
+
+        async with TicketDB(db_path) as db:
+            # Manually insert an operator-override ticket
+            violation = InvariantViolation(
+                invariant_name="operator_override",
+                message="Add a comment to main.py",
+                first_seen=datetime.now(),
+                last_seen=datetime.now(),
+                severity="warning",
+            )
+            ticket = await db.create_or_update_ticket(
+                violation, type=TicketType.OPERATOR_OVERRIDE
+            )
+            assert ticket.type == TicketType.OPERATOR_OVERRIDE
+
+            # Run a check cycle — no violations exist, but the override ticket
+            # should NOT be auto-resolved
+            await loop._check_cycle(db)
+
+            tickets = await db.list_tickets(status=TicketStatus.OPEN)
+            assert len(tickets) == 1
+            assert tickets[0].type == TicketType.OPERATOR_OVERRIDE
 
 
 # =============================================================================

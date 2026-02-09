@@ -29,6 +29,13 @@ class TicketStatus(str, Enum):
     RESOLVED = "resolved"
 
 
+class TicketType(str, Enum):
+    """Distinguishes how a ticket was created."""
+
+    VIOLATION_OBSERVED = "violation-observed"  # From monitor invariant check
+    OPERATOR_OVERRIDE = "operator-override"  # Manually injected operational task
+
+
 @dataclass
 class Ticket:
     """
@@ -77,6 +84,7 @@ class Ticket:
     subject_context: str | None = None
     variant_model: str | None = None
     variant_system_prompt: str | None = None
+    type: str = TicketType.VIOLATION_OBSERVED
     variant_tools_config: str | None = None  # JSON string
     created_at: datetime | None = None
     updated_at: datetime | None = None

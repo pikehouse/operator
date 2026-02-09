@@ -188,21 +188,6 @@ def _create_gcp_tikv(instance_id: int = 0, **kwargs) -> EvalSubject:
         ) from e
 
 
-@SubjectRegistry.register("chat-db-app", "local")
-def _create_local_chatdb(instance_id: int = 0, **kwargs) -> EvalSubject:
-    """Create a local Chat DB App eval subject.
-
-    Args:
-        instance_id: Instance number for parallel execution (0, 1, 2, ...)
-        **kwargs: Additional arguments (compose_file, etc.)
-
-    Returns:
-        ChatDBAppEvalSubject instance
-    """
-    from eval.subjects.chatdb import ChatDBAppEvalSubject
-    return ChatDBAppEvalSubject(instance_id=instance_id, **kwargs)
-
-
 @SubjectRegistry.register("chat-db-app", "cloud-gcp")
 def _create_gcp_chatdb(instance_id: int = 0, **kwargs) -> EvalSubject:
     """Create a GCP Chat DB App eval subject.

@@ -32,6 +32,8 @@ RUN pip install --no-cache-dir ".[cloud]"
 
 # Copy subject compose files needed for cloud trials
 COPY subjects/tikv/docker-compose.cloud.yaml /usr/local/lib/subjects/tikv/docker-compose.cloud.yaml
+COPY subjects/chat-db-app/docker-compose.cloud.yaml /usr/local/lib/subjects/chat-db-app/docker-compose.cloud.yaml
+COPY subjects/chat-db-app/service/ /usr/local/lib/subjects/chat-db-app/service/
 
 # Default command: start worker
 ENTRYPOINT ["eval"]

@@ -21,7 +21,7 @@ from typing import Any
 import aiosqlite
 
 from operator_core.db.schema import SCHEMA_SQL
-from operator_core.monitor.types import Ticket, TicketStatus, make_violation_key
+from operator_core.monitor.types import Ticket, TicketStatus, TicketType, make_violation_key
 from operator_protocols import InvariantViolation
 
 
@@ -116,6 +116,7 @@ class TicketDB:
             diagnosis=row["diagnosis"],
             metric_snapshot=metric_snapshot,
             subject_context=row["subject_context"],
+            type=row["type"],
             variant_model=row["variant_model"],
             variant_system_prompt=row["variant_system_prompt"],
             variant_tools_config=row["variant_tools_config"],
@@ -129,6 +130,7 @@ class TicketDB:
         metric_snapshot: dict[str, Any] | None = None,
         batch_key: str | None = None,
         subject_context: str | None = None,
+        type: str = TicketType.VIOLATION_OBSERVED,
     ) -> Ticket:
         """
         Create a new ticket or update an existing open ticket.
@@ -198,8 +200,9 @@ class TicketDB:
             """
             INSERT INTO tickets (
                 violation_key, invariant_name, store_id, message, severity,
-                first_seen_at, last_seen_at, batch_key, metric_snapshot, subject_context
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                first_seen_at, last_seen_at, batch_key, metric_snapshot, subject_context,
+                type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 violation_key,
@@ -212,6 +215,7 @@ class TicketDB:
                 batch_key,
                 snapshot_json,
                 subject_context,
+                type,
             ),
         )
         await self._conn.commit()
@@ -332,11 +336,13 @@ class TicketDB:
         """
         now = datetime.now()
 
-        # Get all open, non-held tickets
+        # Get all open, non-held, violation-observed tickets
+        # (operator-override tickets have no matching violation key to keep them alive)
         async with self._conn.execute(
             """
             SELECT id, violation_key FROM tickets
             WHERE status != 'resolved' AND held = 0
+              AND type != 'operator-override'
             """,
         ) as cursor:
             rows = await cursor.fetchall()

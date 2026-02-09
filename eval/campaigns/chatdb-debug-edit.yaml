@@ -1,0 +1,14 @@
+name: chatdb-debug-code-edit
+subjects: [chat-db-app]
+chaos_types:
+  - type: debug_code_edit
+trials_per_combination: 1
+include_baseline: false
+cloud:
+  provider: gcp
+  project: null
+  zone: us-central1-a
+  machine_type: e2-standard-2
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest

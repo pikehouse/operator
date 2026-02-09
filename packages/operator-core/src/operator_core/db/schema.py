@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     invariant_name TEXT NOT NULL,
     store_id TEXT,                         -- NULL for cluster-wide violations
     status TEXT NOT NULL DEFAULT 'open',   -- open, acknowledged, diagnosed, resolved
+    type TEXT NOT NULL DEFAULT 'violation-observed',  -- violation-observed, operator-override
     held BOOLEAN NOT NULL DEFAULT 0,       -- Prevent auto-resolve
     batch_key TEXT,                        -- Group related violations
     occurrence_count INTEGER NOT NULL DEFAULT 1,

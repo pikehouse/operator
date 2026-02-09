@@ -1,11 +1,13 @@
-# Chat DB App for Cloud Eval (GCP + AlloyDB)
+# Chat DB App for Cloud Eval (GCP + Cloud SQL)
 #
-# No postgres service — app connects to AlloyDB via DATABASE_URL env var.
-# Uses pre-built images from Artifact Registry (no docker build needed).
+# No postgres service — app connects to Cloud SQL via DATABASE_URL env var.
+# App builds from workspace source (agent can edit and rebuild).
+# Loadgen uses pre-built image from Artifact Registry.
 
 services:
   app:
-    image: ${APP_IMAGE}
+    build:
+      context: /var/lib/workspace/app
     ports:
       - "${APP_HOST_PORT:-8000}:8000"
     environment:

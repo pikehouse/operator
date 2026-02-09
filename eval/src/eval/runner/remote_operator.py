@@ -45,6 +45,8 @@ class RemoteOperatorProcesses:
         anthropic_api_key: str,
         subject_name: str = "tikv",
         extra_env: dict[str, str] | None = None,
+        subject_context_extra: str = "",
+        workspace_volume_mount: str = "",
     ):
         """Initialize remote operator.
 
@@ -56,12 +58,19 @@ class RemoteOperatorProcesses:
             subject_name: Subject name for the monitor (e.g., 'tikv', 'chat-db-app')
             extra_env: Additional environment variables for operator containers
                 (e.g., DATABASE_URL, APP_URL for chat-db-app)
+            subject_context_extra: Additional agent prompt context (e.g., workspace
+                rebuild commands). Passed via --subject-context-extra flag.
+            workspace_volume_mount: Docker volume mount for workspace directory
+                (e.g., '/var/lib/workspace:/var/lib/workspace'). Added to both
+                monitor and agent containers so the agent can access source code.
         """
         self.vm = vm
         self.operator_image = operator_image
         self.anthropic_api_key = anthropic_api_key
         self.subject_name = subject_name
         self.extra_env = extra_env or {}
+        self.subject_context_extra = subject_context_extra
+        self.workspace_volume_mount = workspace_volume_mount
         self._started = False
 
     async def start(self) -> None:
@@ -98,16 +107,30 @@ class RemoteOperatorProcesses:
             f"-e {k}={v} " for k, v in self.extra_env.items()
         )
 
+        # Build optional volume mount for workspace
+        workspace_mount_flag = ""
+        if self.workspace_volume_mount:
+            workspace_mount_flag = f"-v {self.workspace_volume_mount} "
+
+        # Build optional subject-context-extra flag for monitor
+        context_extra_flag = ""
+        if self.subject_context_extra:
+            # Escape single quotes in the context string for shell
+            escaped_context = self.subject_context_extra.replace("'", "'\\''")
+            context_extra_flag = f" --subject-context-extra '{escaped_context}'"
+
         # Start monitor container
         console.print(f"[blue]Starting operator monitor ({self.subject_name}, 5s interval)...[/blue]")
         exit_code, _, stderr = await self.vm.run_command(
             f"docker run -d --name {MONITOR_CONTAINER} --network=host "
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
+            f"{workspace_mount_flag}"
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
             f"{extra_env_flags}"
             f"{self.operator_image} "
-            f"uv run operator monitor run --subject {self.subject_name} --db {OPERATOR_DB_PATH} --interval 5",
+            f"uv run operator monitor run --subject {self.subject_name} --db {OPERATOR_DB_PATH} --interval 5"
+            f"{context_extra_flag}",
             timeout_sec=30.0,
         )
         if exit_code != 0:
@@ -119,6 +142,7 @@ class RemoteOperatorProcesses:
             f"docker run -d --name {AGENT_CONTAINER} --network=host "
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
+            f"{workspace_mount_flag}"
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
             f"{extra_env_flags}"
             f"{self.operator_image} "
@@ -220,6 +244,67 @@ class RemoteOperatorProcesses:
             return int(stdout.strip())
         except ValueError:
             return 0
+
+    async def inject_ticket(
+        self,
+        invariant_name: str,
+        message: str,
+        subject_context: str = "",
+        severity: str = "warning",
+    ) -> None:
+        """Inject a synthetic operator-override ticket into operator.db.
+
+        Creates a ticket with type='operator-override' and held=1 so the
+        monitor's auto-resolve won't clear it (no matching violation exists).
+
+        Uses a parameterized Python script to avoid shell/SQL escaping issues.
+
+        Args:
+            invariant_name: Name for the injected invariant
+            message: Human-readable task description for the agent
+            subject_context: Optional agent prompt context
+            severity: Ticket severity level
+        """
+        import base64
+
+        violation_key = f"override:{invariant_name}"
+
+        # Encode values as base64 to avoid all shell/quote escaping issues
+        params = {
+            "violation_key": violation_key,
+            "invariant_name": invariant_name,
+            "message": message,
+            "severity": severity,
+            "subject_context": subject_context,
+        }
+        params_b64 = base64.b64encode(json.dumps(params).encode()).decode()
+
+        python_script = (
+            "import sqlite3, json, base64; "
+            f"p = json.loads(base64.b64decode('{params_b64}')); "
+            f"conn = sqlite3.connect('{OPERATOR_DB_PATH}'); "
+            "from datetime import datetime as dt; "
+            "now = dt.utcnow().isoformat(); "
+            "conn.execute("
+            "'INSERT INTO tickets "
+            "(violation_key, invariant_name, message, severity, "
+            "first_seen_at, last_seen_at, status, held, type, subject_context) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)', "
+            "[p['violation_key'], p['invariant_name'], p['message'], p['severity'], "
+            "now, now, 'open', 'operator-override', p['subject_context']]); "
+            "conn.commit(); conn.close(); print('OK')"
+        )
+
+        exit_code, stdout, stderr = await self.vm.run_command(
+            f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
+            timeout_sec=10.0,
+        )
+
+        if exit_code != 0:
+            logger.warning(f"inject_ticket failed: {stderr}")
+            console.print(f"[red]Failed to inject ticket: {stderr}[/red]")
+        else:
+            console.print(f"[green]Injected operator-override ticket: {invariant_name}[/green]")
 
     async def force_resolve_all_tickets(self) -> int:
         """Force-resolve all open tickets before injecting chaos.
