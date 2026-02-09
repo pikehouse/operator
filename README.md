@@ -6,38 +6,34 @@ An autonomous AI system for monitoring and remediating distributed systems. Oper
 
 Operator implements a three-component control loop:
 
-```
-                              ┌───────────────┐
-                              │    MONITOR    │
-                              │  (host/cron)  │
-                              └───────┬───────┘
-                                      │ observe()
-                                      ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DOCKER NETWORK                                 │
-│                                                                             │
-│   ┌───────────────────────────────────────┐    ┌────────────────────────┐   │
-│   │              SUBJECT                  │    │         AGENT          │   │
-│   │           (TiKV cluster)              │    │      (containerized)   │   │
-│   │                                       │    │                        │   │
-│   │  ┌───────┐  ┌───────┐  ┌───────┐      │    │  ┌──────────────────┐  │   │
-│   │  │ tikv0 │  │ tikv1 │  │ tikv2 │      │◀───┼──│  Claude + shell  │  │   │
-│   │  └───────┘  └───────┘  └───────┘      │    │  └──────────────────┘  │   │
-│   │  ┌───────┐  ┌───────┐  ┌───────┐      │    │           │            │   │
-│   │  │  pd0  │  │  pd1  │  │  pd2  │      │    │           │ docker     │   │
-│   │  └───────┘  └───────┘  └───────┘      │    │           ▼ socket     │   │
-│   │                                       │    │  ┌──────────────────┐  │   │
-│   │                                       │◀───┼──│ container control│  │   │
-│   │                                       │    │  └──────────────────┘  │   │
-│   └───────────────────────────────────────┘    └────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                      ▲
-                              tickets │ (SQLite)
-                                      │
-                    ┌─────────────────┴─────────────────┐
-                    │  Monitor writes    Agent reads    │
-                    └───────────────────────────────────┘
+```mermaid
+flowchart TD
+    Monitor["MONITOR\n(host/cron)"]
+    Monitor -->|"observe()"| Subject
+
+    subgraph Docker["DOCKER NETWORK"]
+        subgraph Subject["SUBJECT (TiKV cluster)"]
+            tikv0 & tikv1 & tikv2
+            pd0 & pd1 & pd2
+        end
+        subgraph Agent["AGENT (containerized)"]
+            Claude["Claude + shell"]
+            Control["container control"]
+            Claude -->|"docker socket"| Control
+        end
+    end
+
+    Control -->|"manage containers"| Subject
+    Claude -->|"inspect / exec"| Subject
+
+    subgraph DB["SQLite (tickets)"]
+        direction LR
+        writes["Monitor writes"]
+        reads["Agent reads"]
+    end
+
+    Monitor --> writes
+    reads --> Agent
 ```
 
 ### Components
@@ -50,24 +46,22 @@ Operator implements a three-component control loop:
 
 ### Data Flow
 
-```
-1. Monitor Loop (every n seconds)
-   │
-   ├─▶ subject.observe()          # Gather cluster state
-   │
-   ├─▶ checker.check(observation) # Detect invariant violations
-   │
-   └─▶ Create/update tickets      # Persist to SQLite
+```mermaid
+flowchart LR
+    subgraph MonitorLoop["1. Monitor Loop (every n seconds)"]
+        direction TB
+        observe["subject.observe()"] --> check["checker.check(observation)"]
+        check --> tickets["Create / update tickets\n(SQLite)"]
+    end
 
-2. Agent Loop (continuous polling)
-   │
-   ├─▶ Poll for open tickets      # From SQLite
-   │
-   ├─▶ Claude analyzes ticket     # With cluster context
-   │
-   ├─▶ Execute shell commands     # Via mounted Docker socket
-   │
-   └─▶ Resolve or escalate        # Update ticket status
+    subgraph AgentLoop["2. Agent Loop (continuous polling)"]
+        direction TB
+        poll["Poll open tickets\n(SQLite)"] --> analyze["Claude analyzes ticket"]
+        analyze --> exec["Execute shell commands\n(Docker socket)"]
+        exec --> resolve["Resolve or escalate"]
+    end
+
+    MonitorLoop -->|"tickets"| AgentLoop
 ```
 
 ## Demo
@@ -112,44 +106,38 @@ The eval system runs structured experiments (campaigns) to measure agent perform
 
 ### Architecture
 
-```
-┌──────────────┐      ┌─────────────────────────────────────────────────────┐
-│   CAMPAIGN   │      │                     HARNESS                         │
-│    (YAML)    │─────▶│                  (orchestrates)                     │
-│              │      │                                                     │
-│  - subjects  │      │  For each trial:                                    │
-│  - chaos     │      │    1. Reset subject to clean state                  │
-│  - trials    │      │    2. Capture initial state snapshot                │
-│  - variant   │      │    3. Inject chaos (node_kill, latency, etc.)       │
-└──────────────┘      │    4. Wait for ticket creation (monitor detects)    │
-                      │    5. Wait for ticket resolution (agent fixes)      │
-                      │    6. Capture final state snapshot                  │
-                      │    7. Record trial data                             │
-                      └──────────────────────┬──────────────────────────────┘
-                                             │
-                                             ▼
-                      ┌─────────────────────────────────────────────────────┐
-                      │                   TRIAL DATA                        │
-                      │                                                     │
-                      │  ┌─────────┐  ┌─────────┐  ┌─────────┐             │
-                      │  │ Trial 1 │  │ Trial 2 │  │ Trial N │  ...        │
-                      │  │         │  │         │  │         │             │
-                      │  │ t_detect│  │ t_detect│  │ t_detect│             │
-                      │  │ t_resolve│ │ t_resolve│ │ t_resolve│            │
-                      │  │ commands│  │ commands│  │ commands│             │
-                      │  │ states  │  │ states  │  │ states  │             │
-                      │  └─────────┘  └─────────┘  └─────────┘             │
-                      └──────────────────────┬──────────────────────────────┘
-                                             │
-                                             ▼
-                      ┌─────────────────────────────────────────────────────┐
-                      │                    ANALYSIS                         │
-                      │                                                     │
-                      │  • Win rate (success / total trials)                │
-                      │  • Average time-to-detect                           │
-                      │  • Average time-to-resolve                          │
-                      │  • Command counts (total, unique, destructive)      │
-                      └─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Campaign["CAMPAIGN (YAML)"]
+        config["subjects\nchaos types\ntrials\nvariant"]
+    end
+
+    Campaign --> Harness
+
+    subgraph Harness["HARNESS (orchestrates each trial)"]
+        direction TB
+        step1["1. Reset subject to clean state"]
+        step2["2. Capture initial state snapshot"]
+        step3["3. Inject chaos (node_kill, latency, …)"]
+        step4["4. Wait for ticket creation (monitor detects)"]
+        step5["5. Wait for ticket resolution (agent fixes)"]
+        step6["6. Capture final state snapshot"]
+        step7["7. Record trial data"]
+        step1 --> step2 --> step3 --> step4 --> step5 --> step6 --> step7
+    end
+
+    Harness --> TrialData
+
+    subgraph TrialData["TRIAL DATA"]
+        direction LR
+        t1["Trial 1"] & t2["Trial 2"] & tN["Trial N …"]
+    end
+
+    TrialData --> Analysis
+
+    subgraph Analysis["ANALYSIS"]
+        metrics["Win rate\nAvg time-to-detect\nAvg time-to-resolve\nCommand counts"]
+    end
 ```
 
 ### Key Concepts
@@ -226,7 +214,8 @@ packages/
 
 subjects/
 ├── tikv/                   # TiKV subject implementation
-└── ratelimiter/            # Rate limiter subject implementation
+├── ratelimiter/            # Rate limiter subject implementation
+└── chat-db-app/            # Chat DB App subject (FastAPI + AlloyDB)
 
 demo/                       # Interactive TUI demo
 eval/                       # Evaluation harness and analysis
