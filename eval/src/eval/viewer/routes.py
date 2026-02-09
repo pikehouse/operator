@@ -142,7 +142,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
     if detect_sec is not None:
         timing["detect_seconds"] = detect_sec
     resolve_sec = compute_duration_seconds(
-        trial.ticket_created_at or "", trial.resolved_at
+        trial.ticket_created_at, trial.resolved_at
     )
     if resolve_sec is not None:
         timing["resolve_seconds"] = resolve_sec

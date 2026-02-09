@@ -9,14 +9,14 @@ from eval.runner.db import EvalDBProtocol
 from eval.analysis.types import TrialScore, CampaignSummary, TrialOutcome
 
 
-def compute_duration_seconds(start_iso: str, end_iso: str | None) -> float | None:
+def compute_duration_seconds(start_iso: str | None, end_iso: str | None) -> float | None:
     """Compute duration in seconds between ISO8601 timestamps.
 
     Handles mixed timezone-aware and timezone-naive timestamps:
     - If start has timezone and end doesn't, assume end is local time and convert
     - If both naive, assume both are UTC
     """
-    if end_iso is None:
+    if not start_iso or end_iso is None:
         return None
     start = datetime.fromisoformat(start_iso)
     end = datetime.fromisoformat(end_iso)
