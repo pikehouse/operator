@@ -176,6 +176,12 @@ class Worker:
             console.print(f"[red]Work item {work_item.id} failed:[/red] {e!s}")
 
         finally:
+            # Always clean up the subject (deletes GCP VM)
+            if self._current_subject:
+                try:
+                    await self._cleanup_subject(self._current_subject)
+                except Exception as e:
+                    logger.warning(f"Error cleaning up subject: {e}")
             self._current_subject = None
 
             # Mark work item complete (or failed)
