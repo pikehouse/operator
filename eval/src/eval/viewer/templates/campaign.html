@@ -25,6 +25,32 @@
     </dl>
 </div>
 
+{% if summary and summary.total > 0 %}
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-2">Summary</h2>
+    <div class="flex gap-6 text-sm">
+        <div>
+            <span class="text-gray-500">Win rate:</span>
+            <span class="font-semibold {% if summary.win_rate >= 80 %}text-green-700{% elif summary.win_rate >= 50 %}text-yellow-700{% else %}text-red-700{% endif %}">
+                {{ summary.success_count }}/{{ summary.total }} ({{ summary.win_rate }}%)
+            </span>
+        </div>
+        {% if summary.median_detect is not none %}
+        <div>
+            <span class="text-gray-500">Median detect:</span>
+            <span class="font-semibold">{{ summary.median_detect }}s</span>
+        </div>
+        {% endif %}
+        {% if summary.median_resolve is not none %}
+        <div>
+            <span class="text-gray-500">Median resolve:</span>
+            <span class="font-semibold">{{ summary.median_resolve }}s</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {% if topology_svg %}
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-2">Deployment Architecture</h2>
@@ -40,11 +66,11 @@
         <thead class="bg-gray-50">
             <tr>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Status</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Started</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Chaos Injected</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Resolved</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Ended</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Outcome</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Scenario</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Detect</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Resolve</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Commands</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
@@ -64,16 +90,30 @@
                     </span>
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-sm">{% if item.trial.started_at %}<time datetime="{{ item.trial.started_at }}">{{ item.trial.started_at[:19] }}</time>{% else %}N/A{% endif %}</td>
-                <td class="px-4 py-2 text-sm">{% if item.trial.chaos_injected_at %}<time datetime="{{ item.trial.chaos_injected_at }}">{{ item.trial.chaos_injected_at[:19] }}</time>{% else %}N/A{% endif %}</td>
                 <td class="px-4 py-2 text-sm">
-                    {% if item.trial.resolved_at %}
-                    <span class="text-green-600"><time datetime="{{ item.trial.resolved_at }}">{{ item.trial.resolved_at[:19] }}</time></span>
+                    {% if item.is_baseline %}
+                    <span class="text-gray-400">Baseline (no chaos)</span>
                     {% else %}
-                    <span class="text-red-600">Not resolved</span>
+                    {{ item.chaos_description }}
                     {% endif %}
                 </td>
-                <td class="px-4 py-2 text-sm">{% if item.trial.ended_at %}<time datetime="{{ item.trial.ended_at }}">{{ item.trial.ended_at[:19] }}</time>{% else %}N/A{% endif %}</td>
+                <td class="px-4 py-2 text-sm font-mono">
+                    {% if item.detect_sec is not none %}
+                    {{ item.detect_sec }}s
+                    {% else %}
+                    <span class="text-gray-400">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-sm font-mono">
+                    {% if item.resolve_sec is not none %}
+                    <span class="text-green-700">{{ item.resolve_sec }}s</span>
+                    {% else %}
+                    <span class="text-red-600">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2 text-sm font-mono text-gray-600">
+                    {{ item.cmd_count }}
+                </td>
             </tr>
             {% endfor %}
         </tbody>

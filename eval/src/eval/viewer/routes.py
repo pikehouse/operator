@@ -59,14 +59,56 @@ async def get_campaign(request: Request, campaign_id: int):
             except (json.JSONDecodeError, Exception):
                 pass
 
-        # Enrich trials with outcome status
+        # Enrich trials with outcome, timing, chaos description, command count
+        from eval.analysis.scoring import compute_duration_seconds
         trial_data = []
+        success_count = 0
+        detect_times = []
+        resolve_times = []
         for t in trials:
             outcome = "success" if t.resolved_at else "timeout"
+            if outcome == "success":
+                success_count += 1
+
+            # Per-trial chaos description
+            chaos_meta = safe_json_loads(t.chaos_metadata)
+            if not isinstance(chaos_meta, dict):
+                chaos_meta = {}
+            chaos_type = chaos_meta.get("chaos_type", "none")
+            trial_chaos_desc = get_chaos_description(chaos_type, chaos_meta)
+            is_baseline = chaos_type == "none" or (not chaos_meta)
+
+            # Timing
+            detect_sec = compute_duration_seconds(t.chaos_injected_at, t.ticket_created_at)
+            resolve_sec = compute_duration_seconds(t.chaos_injected_at, t.resolved_at)
+            if detect_sec is not None:
+                detect_times.append(detect_sec)
+            if resolve_sec is not None:
+                resolve_times.append(resolve_sec)
+
+            # Command count
+            cmds = safe_json_loads(t.commands_json, [])
+            cmd_count = len(cmds) if isinstance(cmds, list) else 0
+
             trial_data.append({
                 "trial": t,
                 "outcome": outcome,
+                "chaos_description": trial_chaos_desc,
+                "is_baseline": is_baseline,
+                "detect_sec": round(detect_sec, 1) if detect_sec is not None else None,
+                "resolve_sec": round(resolve_sec, 1) if resolve_sec is not None else None,
+                "cmd_count": cmd_count,
             })
+
+        # Summary stats
+        total = len(trials)
+        summary = {
+            "total": total,
+            "success_count": success_count,
+            "win_rate": round(100 * success_count / total) if total else 0,
+            "median_detect": round(sorted(detect_times)[len(detect_times) // 2], 1) if detect_times else None,
+            "median_resolve": round(sorted(resolve_times)[len(resolve_times) // 2], 1) if resolve_times else None,
+        }
 
         return request.app.state.templates.TemplateResponse(
             "campaign.html",
@@ -76,6 +118,7 @@ async def get_campaign(request: Request, campaign_id: int):
                 "trials": trial_data,
                 "chaos_description": chaos_description,
                 "topology_svg": topology_svg,
+                "summary": summary,
             },
         )
     finally:

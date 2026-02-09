@@ -67,6 +67,15 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
         "network_partition": "Network partition from peers",
         "memory_exhaustion": "Memory pressure via stress (cloud-only)",
         "cpu_starvation": "CPU starvation via stress (cloud-only)",
+        "process_pause": "Process frozen with SIGSTOP",
+        "packet_loss": "Intermittent packet loss",
+        "asymmetric_partition": "Asymmetric network partition",
+        "pd_leader_kill": "PD leader node killed",
+        "leader_concentration": "Region leaders concentrated on one store",
+        "load_pressure": "Load pressure test",
+        "db_disconnect": "Database connection blocked",
+        "debug_code_edit": "Bugs injected into app code",
+        "none": "Baseline (no chaos)",
     }
     desc = descriptions.get(chaos_type, chaos_type)
 
@@ -77,6 +86,16 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
             desc = f"Disk filled to {chaos_meta['fill_percent']}%"
         elif chaos_type == "node_kill" and chaos_meta.get("target_container"):
             desc = f"Kill {chaos_meta['target_container']} (SIGKILL)"
+        elif chaos_type == "packet_loss" and chaos_meta.get("percent") is not None:
+            desc = f"Packet loss ({chaos_meta['percent']}%)"
+        elif chaos_type == "load_pressure":
+            parts = []
+            if chaos_meta.get("num_users") is not None:
+                parts.append(f"{chaos_meta['num_users']} users")
+            if chaos_meta.get("stream_ratio") is not None:
+                parts.append(f"{int(float(chaos_meta['stream_ratio']) * 100)}% streaming")
+            if parts:
+                desc = f"Load pressure ({', '.join(parts)})"
 
     return desc
 
