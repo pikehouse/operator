@@ -47,6 +47,7 @@ class RemoteOperatorProcesses:
         extra_env: dict[str, str] | None = None,
         subject_context_extra: str = "",
         workspace_volume_mount: str = "",
+        extra_volume_mounts: list[str] | None = None,
     ):
         """Initialize remote operator.
 
@@ -63,6 +64,9 @@ class RemoteOperatorProcesses:
             workspace_volume_mount: Docker volume mount for workspace directory
                 (e.g., '/var/lib/workspace:/var/lib/workspace'). Added to both
                 monitor and agent containers so the agent can access source code.
+            extra_volume_mounts: Additional volume mounts for the agent container
+                (e.g., compose dir, toolbox config). Each entry is a Docker -v arg
+                like '/host/path:/container/path'.
         """
         self.vm = vm
         self.operator_image = operator_image
@@ -71,6 +75,7 @@ class RemoteOperatorProcesses:
         self.extra_env = extra_env or {}
         self.subject_context_extra = subject_context_extra
         self.workspace_volume_mount = workspace_volume_mount
+        self.extra_volume_mounts = extra_volume_mounts or []
         self._started = False
 
     async def start(self) -> None:
@@ -107,10 +112,13 @@ class RemoteOperatorProcesses:
             f"-e {k}={v} " for k, v in self.extra_env.items()
         )
 
-        # Build optional volume mount for workspace
+        # Build optional volume mounts for workspace and extras
         workspace_mount_flag = ""
         if self.workspace_volume_mount:
             workspace_mount_flag = f"-v {self.workspace_volume_mount} "
+        extra_mounts_flag = "".join(
+            f"-v {m} " for m in self.extra_volume_mounts
+        )
 
         # Build optional subject-context-extra flag for monitor
         context_extra_flag = ""
@@ -143,6 +151,7 @@ class RemoteOperatorProcesses:
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
             f"{workspace_mount_flag}"
+            f"{extra_mounts_flag}"
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
             f"{extra_env_flags}"
             f"{self.operator_image} "

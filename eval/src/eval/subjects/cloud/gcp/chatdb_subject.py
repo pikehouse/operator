@@ -126,6 +126,19 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         """Return the Docker volume mount for the workspace directory."""
         return f"{self.workspace_dir}:{self.workspace_dir}"
 
+    @property
+    def extra_volume_mounts(self) -> list[str]:
+        """Return additional volume mounts for the agent container.
+
+        The agent needs access to:
+        - compose_dir: docker-compose.yaml and .env for rebuilding the app
+        - toolbox docker-config: COS compose plugin (docker CLI plugin)
+        """
+        return [
+            f"{self.compose_dir}:{self.compose_dir}",
+            "/var/lib/toolbox/docker-config:/var/lib/toolbox/docker-config:ro",
+        ]
+
     def get_operator_env(self) -> dict[str, str]:
         """Return extra env vars needed by the operator containers.
 

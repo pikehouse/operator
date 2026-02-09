@@ -255,6 +255,10 @@ class Worker:
             if hasattr(subject, "workspace_volume_mount"):
                 workspace_volume_mount = subject.workspace_volume_mount
 
+            extra_volume_mounts = []
+            if hasattr(subject, "extra_volume_mounts"):
+                extra_volume_mounts = subject.extra_volume_mounts
+
             remote_op = RemoteOperatorProcesses(
                 vm=subject.vm,
                 operator_image=operator_image,
@@ -263,6 +267,7 @@ class Worker:
                 extra_env=extra_env,
                 subject_context_extra=subject_context_extra,
                 workspace_volume_mount=workspace_volume_mount,
+                extra_volume_mounts=extra_volume_mounts,
             )
 
         try:
