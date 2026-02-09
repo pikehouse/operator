@@ -44,26 +44,40 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def _query_operator_db(db_path: Path, fn, default=None):
+    """Run a sync sqlite3 query in a thread pool.
+
+    Args:
+        db_path: Path to operator.db
+        fn: Callable(conn) -> result. Called with an open sqlite3 connection.
+        default: Return value if db doesn't exist or OperationalError occurs.
+    """
+    if not db_path.exists():
+        return default
+
+    def run():
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            return fn(conn)
+        except sqlite3.OperationalError:
+            return default
+        finally:
+            conn.close()
+
+    return await asyncio.to_thread(run)
+
+
 async def get_max_ticket_id(operator_db_path: Path) -> int:
     """Get the maximum ticket ID in operator.db, or 0 if no tickets exist.
 
     Used to filter out tickets created during cluster startup.
     """
-    if not operator_db_path.exists():
-        return 0
+    def query(conn):
+        result = conn.execute("SELECT MAX(id) FROM tickets").fetchone()[0]
+        return result if result else 0
 
-    def query():
-        conn = sqlite3.connect(operator_db_path)
-        try:
-            cursor = conn.execute("SELECT MAX(id) FROM tickets")
-            result = cursor.fetchone()[0]
-            return result if result else 0
-        except sqlite3.OperationalError:
-            return 0
-        finally:
-            conn.close()
-
-    return await asyncio.to_thread(query)
+    return await _query_operator_db(operator_db_path, query, default=0)
 
 
 async def force_resolve_all_tickets(operator_db_path: Path) -> int:
@@ -72,36 +86,24 @@ async def force_resolve_all_tickets(operator_db_path: Path) -> int:
     This ensures that chaos-induced violations create NEW tickets instead of
     updating existing open tickets from cluster startup.
 
-    For eval purposes, we don't want transient startup tickets to interfere
-    with chaos detection.
-
     Args:
         operator_db_path: Path to operator.db
 
     Returns:
         Number of tickets resolved
     """
-    if not operator_db_path.exists():
-        return 0
+    def resolve_all(conn):
+        cursor = conn.execute(
+            """
+            UPDATE tickets
+            SET status = 'resolved', resolved_at = datetime('now'), held = 0
+            WHERE status != 'resolved'
+            """
+        )
+        conn.commit()
+        return cursor.rowcount
 
-    def resolve_all():
-        conn = sqlite3.connect(operator_db_path)
-        try:
-            cursor = conn.execute(
-                """
-                UPDATE tickets
-                SET status = 'resolved', resolved_at = datetime('now'), held = 0
-                WHERE status != 'resolved'
-                """
-            )
-            conn.commit()
-            return cursor.rowcount
-        except sqlite3.OperationalError:
-            return 0
-        finally:
-            conn.close()
-
-    count = await asyncio.to_thread(resolve_all)
+    count = await _query_operator_db(operator_db_path, resolve_all, default=0)
     if count > 0:
         console.print(f"[dim]Force-resolved {count} startup ticket(s)[/dim]")
     return count
@@ -120,14 +122,7 @@ async def extract_commands_from_operator_db(
     Returns:
         List of command dicts with tool_name, tool_params, exit_code
     """
-    if not operator_db_path.exists():
-        return []
-
-    # Use sync sqlite3 in thread pool (operator.db is sync)
-    def query_commands():
-        conn = sqlite3.connect(operator_db_path)
-        conn.row_factory = sqlite3.Row
-        # Get commands from the most recent session (handles fresh databases in managed mode)
+    def query(conn):
         cursor = conn.execute(
             """
             SELECT tool_name, tool_params, exit_code, timestamp
@@ -139,8 +134,6 @@ async def extract_commands_from_operator_db(
             ORDER BY timestamp
             """
         )
-        rows = cursor.fetchall()
-        conn.close()
         return [
             {
                 "tool_name": row["tool_name"],
@@ -148,10 +141,10 @@ async def extract_commands_from_operator_db(
                 "exit_code": row["exit_code"],
                 "timestamp": row["timestamp"],
             }
-            for row in rows
+            for row in cursor.fetchall()
         ]
 
-    return await asyncio.to_thread(query_commands)
+    return await _query_operator_db(operator_db_path, query, default=[])
 
 
 async def extract_operator_data(
@@ -168,126 +161,103 @@ async def extract_operator_data(
     Returns:
         Dict with keys: monitor_detection, agent_session, reasoning_entries, code_snapshots
     """
-    if not operator_db_path.exists():
-        return {}
-
-    def query_operator_data():
-        conn = sqlite3.connect(operator_db_path)
-        conn.row_factory = sqlite3.Row
+    def query(conn):
         result: dict[str, Any] = {}
 
-        try:
-            # Get most recent ticket
-            cursor = conn.execute(
-                """
-                SELECT id, invariant_name, message, severity, first_seen_at, last_seen_at,
-                       metric_snapshot
-                FROM tickets
-                ORDER BY id DESC
-                LIMIT 1
-                """
-            )
-            ticket_row = cursor.fetchone()
+        # Get most recent ticket
+        ticket_row = conn.execute(
+            """
+            SELECT id, invariant_name, message, severity, first_seen_at, last_seen_at,
+                   metric_snapshot
+            FROM tickets ORDER BY id DESC LIMIT 1
+            """
+        ).fetchone()
 
-            if ticket_row:
-                metric_snapshot = ticket_row["metric_snapshot"]
-                if isinstance(metric_snapshot, str):
-                    try:
-                        metric_snapshot = json.loads(metric_snapshot)
-                    except (json.JSONDecodeError, TypeError):
-                        pass
+        if ticket_row:
+            metric_snapshot = ticket_row["metric_snapshot"]
+            if isinstance(metric_snapshot, str):
+                try:
+                    metric_snapshot = json.loads(metric_snapshot)
+                except (json.JSONDecodeError, TypeError):
+                    pass
 
-                result["monitor_detection"] = {
-                    "ticket_id": ticket_row["id"],
-                    "invariant_name": ticket_row["invariant_name"],
-                    "message": ticket_row["message"],
-                    "severity": ticket_row["severity"],
-                    "first_seen_at": ticket_row["first_seen_at"],
-                    "last_seen_at": ticket_row["last_seen_at"],
-                    "metric_snapshot": metric_snapshot,
+            result["monitor_detection"] = {
+                "ticket_id": ticket_row["id"],
+                "invariant_name": ticket_row["invariant_name"],
+                "message": ticket_row["message"],
+                "severity": ticket_row["severity"],
+                "first_seen_at": ticket_row["first_seen_at"],
+                "last_seen_at": ticket_row["last_seen_at"],
+                "metric_snapshot": metric_snapshot,
+            }
+
+            ticket_id = ticket_row["id"]
+
+            # Get agent session linked to this ticket
+            session_row = conn.execute(
+                """
+                SELECT session_id, status, outcome_summary, started_at, ended_at
+                FROM agent_sessions WHERE ticket_id = ?
+                ORDER BY started_at DESC LIMIT 1
+                """,
+                (ticket_id,),
+            ).fetchone()
+
+            if session_row:
+                result["agent_session"] = {
+                    "session_id": session_row["session_id"],
+                    "status": session_row["status"],
+                    "outcome_summary": session_row["outcome_summary"],
+                    "started_at": session_row["started_at"],
+                    "ended_at": session_row["ended_at"],
                 }
 
-                ticket_id = ticket_row["id"]
-
-                # Get agent session linked to this ticket
-                cursor = conn.execute(
+                entries = conn.execute(
                     """
-                    SELECT session_id, status, outcome_summary, started_at, ended_at
-                    FROM agent_sessions
-                    WHERE ticket_id = ?
-                    ORDER BY started_at DESC
-                    LIMIT 1
+                    SELECT entry_type, content, raw_content, tool_name, tool_params,
+                           exit_code, timestamp
+                    FROM agent_log_entries WHERE session_id = ?
+                    ORDER BY timestamp
                     """,
-                    (ticket_id,),
-                )
-                session_row = cursor.fetchone()
-
-                if session_row:
-                    result["agent_session"] = {
-                        "session_id": session_row["session_id"],
-                        "status": session_row["status"],
-                        "outcome_summary": session_row["outcome_summary"],
-                        "started_at": session_row["started_at"],
-                        "ended_at": session_row["ended_at"],
+                    (session_row["session_id"],),
+                ).fetchall()
+                result["reasoning_entries"] = [
+                    {
+                        "entry_type": e["entry_type"],
+                        "content": e["raw_content"] or e["content"] or "",
+                        "tool_name": e["tool_name"],
+                        "tool_params": e["tool_params"],
+                        "exit_code": e["exit_code"],
+                        "timestamp": e["timestamp"],
                     }
+                    for e in entries
+                ]
 
-                    # Get all log entries for this session
-                    cursor = conn.execute(
-                        """
-                        SELECT entry_type, content, raw_content, tool_name, tool_params,
-                               exit_code, timestamp
-                        FROM agent_log_entries
-                        WHERE session_id = ?
-                        ORDER BY timestamp
-                        """,
-                        (session_row["session_id"],),
-                    )
-                    entries = cursor.fetchall()
-                    result["reasoning_entries"] = [
-                        {
-                            "entry_type": e["entry_type"],
-                            "content": e["raw_content"] or e["content"] or "",
-                            "tool_name": e["tool_name"],
-                            "tool_params": e["tool_params"],
-                            "exit_code": e["exit_code"],
-                            "timestamp": e["timestamp"],
-                        }
-                        for e in entries
-                    ]
-
-            # Get code snapshots (may not exist)
-            try:
-                cursor = conn.execute(
-                    """
-                    SELECT phase, commit_hash, diff_from_initial, files_changed, captured_at
-                    FROM code_snapshots
-                    ORDER BY captured_at
-                    """
-                )
-                snapshots = cursor.fetchall()
-                if snapshots:
-                    result["code_snapshots"] = [
-                        {
-                            "phase": s["phase"],
-                            "commit_hash": s["commit_hash"],
-                            "diff_from_initial": s["diff_from_initial"],
-                            "files_changed": s["files_changed"],
-                            "captured_at": s["captured_at"],
-                        }
-                        for s in snapshots
-                    ]
-            except sqlite3.OperationalError:
-                pass  # code_snapshots table may not exist
-
+        # Get code snapshots (may not exist)
+        try:
+            snapshots = conn.execute(
+                """
+                SELECT phase, commit_hash, diff_from_initial, files_changed, captured_at
+                FROM code_snapshots ORDER BY captured_at
+                """
+            ).fetchall()
+            if snapshots:
+                result["code_snapshots"] = [
+                    {
+                        "phase": s["phase"],
+                        "commit_hash": s["commit_hash"],
+                        "diff_from_initial": s["diff_from_initial"],
+                        "files_changed": s["files_changed"],
+                        "captured_at": s["captured_at"],
+                    }
+                    for s in snapshots
+                ]
         except sqlite3.OperationalError:
-            pass  # Tables may not exist if agent never ran
-
-        finally:
-            conn.close()
+            pass  # code_snapshots table may not exist
 
         return result
 
-    return await asyncio.to_thread(query_operator_data)
+    return await _query_operator_db(operator_db_path, query, default={})
 
 
 async def update_ticket_variant(

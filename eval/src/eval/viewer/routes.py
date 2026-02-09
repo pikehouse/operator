@@ -4,43 +4,19 @@ import json
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
-from eval.runner.db import EvalDB, EvalDBProtocol
+from eval.runner.db import EvalDBProtocol, get_db
+from eval.types import get_chaos_description, safe_json_loads
 
 router = APIRouter()
 
 
 async def _get_viewer_db(request: Request) -> EvalDBProtocol:
     """Get the appropriate database backend from app state."""
-    if getattr(request.app.state, 'remote', False):
-        from eval.runner.db_postgres import PostgresDB
-        db = PostgresDB(request.app.state.db_url)
-        await db.ensure_schema()
-        return db
-    else:
-        db = EvalDB(request.app.state.db_path)
-        await db.ensure_schema()
-        return db
-
-
-def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
-    """Get human-readable chaos type description."""
-    descriptions = {
-        "node_kill": "Container killed with SIGKILL",
-        "latency": "Network latency injection",
-        "disk_pressure": "Disk space exhaustion",
-        "network_partition": "Network partition from peers",
-    }
-    desc = descriptions.get(chaos_type, chaos_type)
-
-    if chaos_meta:
-        if chaos_type == "latency" and chaos_meta.get("min_ms") is not None:
-            desc = f"Network latency ({chaos_meta['min_ms']}-{chaos_meta['max_ms']}ms)"
-        elif chaos_type == "disk_pressure" and chaos_meta.get("fill_percent") is not None:
-            desc = f"Disk filled to {chaos_meta['fill_percent']}%"
-        elif chaos_type == "node_kill" and chaos_meta.get("target_container"):
-            desc = f"Kill {chaos_meta['target_container']} (SIGKILL)"
-
-    return desc
+    return await get_db(
+        remote=getattr(request.app.state, 'remote', False),
+        db_path=getattr(request.app.state, 'db_path', None),
+        db_url=getattr(request.app.state, 'db_url', None),
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -129,21 +105,12 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
         return HTMLResponse(content="Trial not found", status_code=404)
 
     # Parse commands and chaos metadata from JSON
-    raw_commands = json.loads(trial.commands_json) if trial.commands_json else []
-    # Handle double-encoded JSON (JSONB round-trip can double-encode strings)
-    if isinstance(raw_commands, str):
-        try:
-            raw_commands = json.loads(raw_commands)
-        except (json.JSONDecodeError, TypeError):
-            raw_commands = []
-    chaos_meta_raw = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
-    # Handle double-encoded JSON or non-dict values
-    if isinstance(chaos_meta_raw, str):
-        try:
-            chaos_meta_raw = json.loads(chaos_meta_raw)
-        except (json.JSONDecodeError, TypeError):
-            chaos_meta_raw = {}
-    chaos_meta = chaos_meta_raw if isinstance(chaos_meta_raw, dict) else {}
+    raw_commands = safe_json_loads(trial.commands_json, [])
+    if not isinstance(raw_commands, list):
+        raw_commands = []
+    chaos_meta = safe_json_loads(trial.chaos_metadata)
+    if not isinstance(chaos_meta, dict):
+        chaos_meta = {}
 
     # Extract command strings from various formats
     commands = []
@@ -169,32 +136,16 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
     chaos_description = get_chaos_description(chaos_type, chaos_meta)
 
     # Calculate timing deltas
+    from eval.analysis.scoring import compute_duration_seconds
     timing = {}
-    if trial.ticket_created_at and trial.chaos_injected_at:
-        from datetime import datetime, timezone
-        try:
-            chaos_time = datetime.fromisoformat(trial.chaos_injected_at.replace("Z", "+00:00"))
-            ticket_time = datetime.fromisoformat(trial.ticket_created_at.replace("Z", "+00:00"))
-            if chaos_time.tzinfo is None:
-                chaos_time = chaos_time.replace(tzinfo=timezone.utc)
-            if ticket_time.tzinfo is None:
-                ticket_time = ticket_time.replace(tzinfo=timezone.utc)
-            timing["detect_seconds"] = (ticket_time - chaos_time).total_seconds()
-        except Exception:
-            pass
-
-    if trial.resolved_at and trial.ticket_created_at:
-        from datetime import datetime, timezone
-        try:
-            ticket_time = datetime.fromisoformat(trial.ticket_created_at.replace("Z", "+00:00"))
-            resolve_time = datetime.fromisoformat(trial.resolved_at.replace("Z", "+00:00"))
-            if ticket_time.tzinfo is None:
-                ticket_time = ticket_time.replace(tzinfo=timezone.utc)
-            if resolve_time.tzinfo is None:
-                resolve_time = resolve_time.replace(tzinfo=timezone.utc)
-            timing["resolve_seconds"] = (resolve_time - ticket_time).total_seconds()
-        except Exception:
-            pass
+    detect_sec = compute_duration_seconds(trial.chaos_injected_at, trial.ticket_created_at)
+    if detect_sec is not None:
+        timing["detect_seconds"] = detect_sec
+    resolve_sec = compute_duration_seconds(
+        trial.ticket_created_at or "", trial.resolved_at
+    )
+    if resolve_sec is not None:
+        timing["resolve_seconds"] = resolve_sec
 
     # Fetch reasoning entries, agent conclusion, and monitor detection
     # Priority: stored operator_data_json in trial record, then live operator.db fallback
@@ -242,20 +193,8 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                         pass
 
                 # Calculate elapsed time
-                elapsed_seconds = None
                 curr_ts = e.get("timestamp")
-                if curr_ts and prev_ts:
-                    try:
-                        from datetime import datetime, timezone
-                        curr_time = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
-                        prev_time = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
-                        if curr_time.tzinfo is None:
-                            curr_time = curr_time.replace(tzinfo=timezone.utc)
-                        if prev_time.tzinfo is None:
-                            prev_time = prev_time.replace(tzinfo=timezone.utc)
-                        elapsed_seconds = (curr_time - prev_time).total_seconds()
-                    except Exception:
-                        pass
+                elapsed_seconds = compute_duration_seconds(prev_ts or "", curr_ts) if curr_ts and prev_ts else None
                 if curr_ts:
                     prev_ts = curr_ts
 
@@ -273,7 +212,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
 
         def get_ticket_and_session():
             """Query ticket and agent session for this trial."""
-            from datetime import datetime, timezone
+            from eval.types import parse_iso_datetime
 
             try:
                 conn = sqlite3.connect(operator_db_path)
@@ -282,8 +221,8 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
 
                 # Convert trial UTC times to local time for comparison
                 # (operator.db stores local time without timezone)
-                trial_start = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
-                trial_end = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
+                trial_start = parse_iso_datetime(trial.started_at)
+                trial_end = parse_iso_datetime(trial.ended_at)
 
                 # Convert to local time strings (without timezone) for SQLite comparison
                 local_start = trial_start.astimezone().replace(tzinfo=None).isoformat()
@@ -375,21 +314,8 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                             pass
 
                     # Calculate elapsed time from previous entry
-                    elapsed_seconds = None
                     curr_ts = e["timestamp"]
-                    if curr_ts and prev_ts:
-                        try:
-                            from datetime import datetime, timezone
-                            curr_time = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
-                            prev_time = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
-                            if curr_time.tzinfo is None:
-                                curr_time = curr_time.replace(tzinfo=timezone.utc)
-                            if prev_time.tzinfo is None:
-                                prev_time = prev_time.replace(tzinfo=timezone.utc)
-                            elapsed_seconds = (curr_time - prev_time).total_seconds()
-                        except Exception:
-                            pass
-
+                    elapsed_seconds = compute_duration_seconds(prev_ts or "", curr_ts) if curr_ts and prev_ts else None
                     if curr_ts:
                         prev_ts = curr_ts
 
@@ -411,9 +337,8 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             agent_conclusion = session_info
 
             # Get reasoning entries
-            from datetime import datetime
-            trial_start = datetime.fromisoformat(trial.started_at.replace("Z", "+00:00"))
-            trial_end = datetime.fromisoformat(trial.ended_at.replace("Z", "+00:00"))
+            trial_start = parse_iso_datetime(trial.started_at)
+            trial_end = parse_iso_datetime(trial.ended_at)
             local_start = trial_start.astimezone().replace(tzinfo=None).isoformat()
             local_end = trial_end.astimezone().replace(tzinfo=None).isoformat()
 
@@ -425,8 +350,6 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             pass
 
     # Extract reasoning from commands for display with elapsed time calculation
-    from datetime import datetime, timezone
-
     commands_with_reasoning = []
     prev_timestamp = None
 
@@ -443,21 +366,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                 command_str = str(cmd)
 
             timestamp = cmd.get("timestamp", "")
-            elapsed_seconds = None
-
-            # Calculate elapsed time from previous command
-            if timestamp and prev_timestamp:
-                try:
-                    curr_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    prev_time = datetime.fromisoformat(prev_timestamp.replace("Z", "+00:00"))
-                    if curr_time.tzinfo is None:
-                        curr_time = curr_time.replace(tzinfo=timezone.utc)
-                    if prev_time.tzinfo is None:
-                        prev_time = prev_time.replace(tzinfo=timezone.utc)
-                    elapsed_seconds = (curr_time - prev_time).total_seconds()
-                except Exception:
-                    pass
-
+            elapsed_seconds = compute_duration_seconds(prev_timestamp or "", timestamp) if timestamp and prev_timestamp else None
             if timestamp:
                 prev_timestamp = timestamp
 

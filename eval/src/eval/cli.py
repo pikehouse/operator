@@ -10,11 +10,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from eval.runner.db import EvalDB, EvalDBProtocol
+from eval.runner.db import EvalDB, EvalDBProtocol, get_db
 from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config
 from eval.runner.campaign import load_campaign_config, CampaignConfig
 from eval.subjects.factory import SubjectRegistry
-from eval.types import EvalSubject
+from eval.types import EvalSubject, get_chaos_description, safe_json_loads
 from eval.variants import load_all_variants
 
 
@@ -63,58 +63,13 @@ app.add_typer(worker_app, name="worker")
 console = Console()
 
 
-async def get_db(remote: bool, db_path: Path) -> EvalDBProtocol:
-    """Get the appropriate database backend.
-
-    Args:
-        remote: If True, use PostgresDB via EVAL_DATABASE_URL
-        db_path: Local SQLite path (used when remote=False)
-    """
-    if remote:
-        db_url = os.environ.get("EVAL_DATABASE_URL")
-        if not db_url:
-            console.print("[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]")
-            raise typer.Exit(1)
-        from eval.runner.db_postgres import PostgresDB
-        db = PostgresDB(db_url)
-        await db.ensure_schema()
-        return db
-    else:
-        db = EvalDB(db_path)
-        await db.ensure_schema()
-        return db
-
-
-def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
-    """Get human-readable chaos type description.
-
-    Args:
-        chaos_type: Chaos type identifier
-        chaos_meta: Optional chaos metadata dict for param details
-
-    Returns:
-        Human-readable description
-    """
-    descriptions = {
-        "node_kill": "Container killed with SIGKILL",
-        "latency": "Network latency injection",
-        "disk_pressure": "Disk space exhaustion",
-        "network_partition": "Network partition from peers",
-        "memory_exhaustion": "Memory pressure via stress (cloud-only)",
-        "cpu_starvation": "CPU starvation via stress (cloud-only)",
-    }
-    desc = descriptions.get(chaos_type, chaos_type)
-
-    # Add param details if available
-    if chaos_meta:
-        if chaos_type == "latency" and chaos_meta.get("min_ms") is not None:
-            desc = f"Network latency ({chaos_meta['min_ms']}-{chaos_meta['max_ms']}ms)"
-        elif chaos_type == "disk_pressure" and chaos_meta.get("fill_percent") is not None:
-            desc = f"Disk filled to {chaos_meta['fill_percent']}%"
-        elif chaos_type == "node_kill" and chaos_meta.get("target_container"):
-            desc = f"Kill {chaos_meta['target_container']} (SIGKILL)"
-
-    return desc
+async def _get_db_or_exit(remote: bool, db_path: Path) -> EvalDBProtocol:
+    """CLI wrapper around get_db() that exits on error."""
+    try:
+        return await get_db(remote=remote, db_path=db_path)
+    except RuntimeError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
 
 
 def get_subject(subject_name: str, mode: str = "local") -> EvalSubject:
@@ -567,7 +522,7 @@ def analyze(
     from eval.analysis import analyze_campaign, CampaignSummary
 
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             return await analyze_campaign(db, campaign_id, include_command_analysis=include_commands)
         finally:
@@ -642,7 +597,7 @@ def compare(
     from eval.analysis import compare_campaigns, CampaignComparison
 
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             return await compare_campaigns(db, campaign_a, campaign_b)
         finally:
@@ -715,7 +670,7 @@ def compare_baseline_cmd(
     from eval.analysis import compare_baseline, BaselineComparison
 
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             return await compare_baseline(db, campaign_id, baseline_id)
         finally:
@@ -801,7 +756,7 @@ def compare_variants_cmd(
         variant_list = [v.strip() for v in variants.split(",")]
 
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             return await compare_variants(db, subject, chaos, variant_list)
         finally:
@@ -866,7 +821,7 @@ def show_detail(
         eval show 1 --remote     # Show from cloud database
     """
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             if trial:
                 # Fetch trial by ID
@@ -902,10 +857,7 @@ def show_detail(
         chaos_meta = json.loads(t.chaos_metadata) if t.chaos_metadata else {}
 
         if json_output:
-            # Parse commands_json for output
-            commands = json.loads(t.commands_json) if t.commands_json else []
-            if isinstance(commands, str):
-                commands = json.loads(commands)
+            commands = safe_json_loads(t.commands_json, [])
             data = {
                 "id": t.id,
                 "campaign_id": t.campaign_id,
@@ -948,36 +900,17 @@ def show_detail(
         print(f"  Chaos injected: {t.chaos_injected_at[:19] if t.chaos_injected_at else 'N/A'}")
 
         # Calculate time deltas
-        if t.ticket_created_at and t.chaos_injected_at:
-            from datetime import datetime, timezone
-            try:
-                chaos_time = datetime.fromisoformat(t.chaos_injected_at.replace("Z", "+00:00"))
-                ticket_time = datetime.fromisoformat(t.ticket_created_at.replace("Z", "+00:00"))
-                # Handle timezone-naive timestamps (assume UTC)
-                if chaos_time.tzinfo is None:
-                    chaos_time = chaos_time.replace(tzinfo=timezone.utc)
-                if ticket_time.tzinfo is None:
-                    ticket_time = ticket_time.replace(tzinfo=timezone.utc)
-                delta_detect = (ticket_time - chaos_time).total_seconds()
-                print(f"  Ticket created: {t.ticket_created_at[:19]} (+{delta_detect:.0f}s after chaos)")
-            except Exception:
-                print(f"  Ticket created: {t.ticket_created_at[:19] if t.ticket_created_at else 'N/A'}")
+        from eval.analysis.scoring import compute_duration_seconds
+
+        delta_detect = compute_duration_seconds(t.chaos_injected_at, t.ticket_created_at)
+        if delta_detect is not None:
+            print(f"  Ticket created: {t.ticket_created_at[:19]} (+{delta_detect:.0f}s after chaos)")
         elif t.ticket_created_at:
             print(f"  Ticket created: {t.ticket_created_at[:19]}")
 
-        if t.resolved_at and t.ticket_created_at:
-            from datetime import datetime, timezone
-            try:
-                ticket_time = datetime.fromisoformat(t.ticket_created_at.replace("Z", "+00:00"))
-                resolve_time = datetime.fromisoformat(t.resolved_at.replace("Z", "+00:00"))
-                if ticket_time.tzinfo is None:
-                    ticket_time = ticket_time.replace(tzinfo=timezone.utc)
-                if resolve_time.tzinfo is None:
-                    resolve_time = resolve_time.replace(tzinfo=timezone.utc)
-                delta_resolve = (resolve_time - ticket_time).total_seconds()
-                print(f"  Resolved:       {t.resolved_at[:19]} (+{delta_resolve:.0f}s to resolve)")
-            except Exception:
-                print(f"  Resolved:       {t.resolved_at[:19] if t.resolved_at else 'N/A'}")
+        delta_resolve = compute_duration_seconds(t.ticket_created_at or "", t.resolved_at)
+        if delta_resolve is not None:
+            print(f"  Resolved:       {t.resolved_at[:19]} (+{delta_resolve:.0f}s to resolve)")
         elif t.resolved_at:
             print(f"  Resolved:       {t.resolved_at[:19]}")
         else:
@@ -987,9 +920,7 @@ def show_detail(
         print()
 
         # Commands list
-        commands = json.loads(t.commands_json) if t.commands_json else []
-        if isinstance(commands, str):
-            commands = json.loads(commands)
+        commands = safe_json_loads(t.commands_json, [])
         if commands:
             print(f"Commands ({len(commands)}):")
             for i, cmd in enumerate(commands, 1):
@@ -1103,7 +1034,7 @@ def list_campaigns(
 ) -> None:
     """List all campaigns in the database."""
     async def run():
-        db = await get_db(remote, db_path)
+        db = await _get_db_or_exit(remote, db_path)
         try:
             campaigns = await db.get_all_campaigns(limit=limit, offset=offset)
             total = await db.count_campaigns()

@@ -32,7 +32,7 @@ class TestGetDb:
 
     def test_get_db_local(self, tmp_db):
         """get_db(remote=False) returns an EvalDB instance."""
-        from eval.cli import get_db
+        from eval.runner.db import get_db
 
         async def _test():
             db = await get_db(remote=False, db_path=tmp_db)
@@ -42,21 +42,21 @@ class TestGetDb:
         run_async(_test())
 
     def test_get_db_remote_missing_url(self, tmp_db):
-        """get_db(remote=True) exits when EVAL_DATABASE_URL is not set."""
-        from eval.cli import get_db
+        """get_db(remote=True) raises RuntimeError when EVAL_DATABASE_URL is not set."""
+        from eval.runner.db import get_db
 
         async def _test():
             with patch.dict(os.environ, {}, clear=True):
                 # Remove EVAL_DATABASE_URL if present
                 os.environ.pop("EVAL_DATABASE_URL", None)
-                with pytest.raises((SystemExit, ClickExit)):
+                with pytest.raises(RuntimeError):
                     await get_db(remote=True, db_path=tmp_db)
 
         run_async(_test())
 
     def test_get_db_remote_with_url(self, tmp_db):
         """get_db(remote=True) returns a PostgresDB instance when URL is set."""
-        from eval.cli import get_db
+        from eval.runner.db import get_db
 
         async def _test():
             with patch.dict(os.environ, {"EVAL_DATABASE_URL": "postgresql://localhost/test"}):

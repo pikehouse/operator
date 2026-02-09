@@ -1,11 +1,84 @@
 """Type definitions for evaluation harness."""
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
+
+
+def safe_json_loads(data: str | None, default=None):
+    """Parse JSON string, handling double-encoded values from JSONB.
+
+    Many JSON fields in the database can end up double-encoded (a JSON string
+    inside a JSON string) due to JSONB round-trips. This function handles that
+    transparently.
+
+    Args:
+        data: JSON string (possibly double-encoded), or None
+        default: Default value if data is falsy (defaults to {})
+
+    Returns:
+        Parsed Python object
+    """
+    if not data:
+        return default if default is not None else {}
+    result = json.loads(data)
+    if isinstance(result, str):
+        result = json.loads(result)
+    return result
+
+
+def parse_iso_datetime(iso_str: str | None) -> datetime | None:
+    """Parse ISO8601 string to datetime, handling timezone-naive strings.
+
+    Naive timestamps are assumed to be UTC.
+
+    Args:
+        iso_str: ISO8601 timestamp string, or None
+
+    Returns:
+        Timezone-aware datetime (UTC), or None
+    """
+    if iso_str is None:
+        return None
+    dt = datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> str:
+    """Get human-readable chaos type description.
+
+    Args:
+        chaos_type: Chaos type identifier
+        chaos_meta: Optional chaos metadata dict for param details
+
+    Returns:
+        Human-readable description
+    """
+    descriptions = {
+        "node_kill": "Container killed with SIGKILL",
+        "latency": "Network latency injection",
+        "disk_pressure": "Disk space exhaustion",
+        "network_partition": "Network partition from peers",
+        "memory_exhaustion": "Memory pressure via stress (cloud-only)",
+        "cpu_starvation": "CPU starvation via stress (cloud-only)",
+    }
+    desc = descriptions.get(chaos_type, chaos_type)
+
+    if chaos_meta:
+        if chaos_type == "latency" and chaos_meta.get("min_ms") is not None:
+            desc = f"Network latency ({chaos_meta['min_ms']}-{chaos_meta['max_ms']}ms)"
+        elif chaos_type == "disk_pressure" and chaos_meta.get("fill_percent") is not None:
+            desc = f"Disk filled to {chaos_meta['fill_percent']}%"
+        elif chaos_type == "node_kill" and chaos_meta.get("target_container"):
+            desc = f"Kill {chaos_meta['target_container']} (SIGKILL)"
+
+    return desc
 
 
 class ChaosType(str, Enum):
@@ -105,6 +178,44 @@ class Campaign:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
 
+    @classmethod
+    def from_row(cls, row, *, keys: set[str] | None = None) -> "Campaign":
+        """Construct from a database row (dict-like).
+
+        Handles fallbacks for optional columns (variant_name, topology_json, name)
+        that may be missing in older databases. Works with both aiosqlite.Row
+        and asyncpg.Record.
+
+        Args:
+            row: Dict-like row (aiosqlite.Row or asyncpg.Record)
+            keys: Column names present in row. If None, uses row.keys().
+        """
+        if keys is None:
+            keys = set(row.keys())
+        name = row["name"] if "name" in keys and row["name"] else (
+            f"{row['subject_name']}/{row['chaos_type']}"
+        )
+        # topology_json: asyncpg auto-decodes JSONB to dict; convert back to string
+        topo_raw = row["topology_json"] if "topology_json" in keys else None
+        if topo_raw and not isinstance(topo_raw, str):
+            topo = json.dumps(topo_raw)
+        else:
+            topo = topo_raw or ""
+        # created_at: asyncpg returns datetime; convert to ISO string
+        created = row["created_at"]
+        if created and not isinstance(created, str):
+            created = created.isoformat()
+        return cls(
+            id=row["id"],
+            subject_name=row["subject_name"],
+            name=name,
+            trial_count=row["trial_count"],
+            baseline=bool(row["baseline"]),
+            variant_name=(row["variant_name"] if "variant_name" in keys and row["variant_name"] else "default"),
+            topology_json=topo,
+            created_at=created or "",
+        )
+
 
 @dataclass
 class Trial:
@@ -122,6 +233,55 @@ class Trial:
     chaos_metadata: str = ""  # JSON blob
     commands_json: str = "[]"  # JSON array of commands
     operator_data_json: str = "{}"  # JSON blob of operator monitoring data
+
+    @classmethod
+    def from_row(cls, row, *, keys: set[str] | None = None, jsonb_to_str=None) -> "Trial":
+        """Construct from a database row (dict-like).
+
+        Handles fallbacks for optional columns (operator_data_json) that may
+        be missing in older databases.
+
+        Args:
+            row: Dict-like row (aiosqlite.Row or asyncpg.Record)
+            keys: Column names present in row. If None, uses row.keys().
+            jsonb_to_str: Optional function to convert JSONB values to strings.
+                          Used by PostgresDB where asyncpg auto-decodes JSONB.
+                          Defaults to str passthrough for SQLite.
+        """
+        if keys is None:
+            keys = set(row.keys())
+        if jsonb_to_str is None:
+            jsonb_to_str = lambda val, default: val if val is not None else default
+
+        def _ts(val) -> str:
+            """Convert timestamp value to ISO string."""
+            if val is None:
+                return ""
+            return val if isinstance(val, str) else val.isoformat()
+
+        def _ts_opt(val) -> str | None:
+            """Convert optional timestamp value to ISO string or None."""
+            if val is None:
+                return None
+            return val if isinstance(val, str) else val.isoformat()
+
+        return cls(
+            id=row["id"],
+            campaign_id=row["campaign_id"],
+            started_at=_ts(row["started_at"]),
+            chaos_injected_at=_ts(row["chaos_injected_at"]),
+            ticket_created_at=_ts_opt(row["ticket_created_at"]),
+            resolved_at=_ts_opt(row["resolved_at"]),
+            ended_at=_ts(row["ended_at"]),
+            initial_state=jsonb_to_str(row["initial_state"], "{}"),
+            final_state=jsonb_to_str(row["final_state"], "{}"),
+            chaos_metadata=jsonb_to_str(row["chaos_metadata"], "{}"),
+            commands_json=jsonb_to_str(row["commands_json"], "[]"),
+            operator_data_json=jsonb_to_str(
+                row["operator_data_json"] if "operator_data_json" in keys else None,
+                "{}",
+            ),
+        )
 
 
 class VariantConfig(BaseModel):

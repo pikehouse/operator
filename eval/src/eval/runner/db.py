@@ -6,6 +6,7 @@ For distributed cloud execution, see db_postgres.py.
 Both backends implement the same interface (EvalDBProtocol) for compatibility.
 """
 
+import os
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -53,6 +54,38 @@ class EvalDBProtocol(Protocol):
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""
         ...
+
+
+async def get_db(
+    remote: bool = False,
+    db_path: Path | None = None,
+    db_url: str | None = None,
+) -> EvalDBProtocol:
+    """Get the appropriate database backend.
+
+    Args:
+        remote: If True, use PostgresDB
+        db_path: Local SQLite path (used when remote=False, defaults to eval.db)
+        db_url: PostgreSQL URL (used when remote=True, falls back to EVAL_DATABASE_URL)
+
+    Returns:
+        Initialized database backend
+
+    Raises:
+        RuntimeError: If remote=True but no database URL available
+    """
+    if remote:
+        url = db_url or os.environ.get("EVAL_DATABASE_URL")
+        if not url:
+            raise RuntimeError("EVAL_DATABASE_URL not found (check .env)")
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(url)
+        await db.ensure_schema()
+        return db
+    else:
+        db = EvalDB(db_path or Path("eval.db"))
+        await db.ensure_schema()
+        return db
 
 
 SCHEMA_SQL = """
@@ -221,21 +254,7 @@ class EvalDB:
             )
             row = await cursor.fetchone()
             if row:
-                keys = row.keys()
-                # Read name column; fall back to subject_name/chaos_type for old DBs
-                name = row["name"] if "name" in keys and row["name"] else (
-                    f"{row['subject_name']}/{row['chaos_type']}"
-                )
-                return Campaign(
-                    id=row["id"],
-                    subject_name=row["subject_name"],
-                    name=name,
-                    trial_count=row["trial_count"],
-                    baseline=bool(row["baseline"]),
-                    variant_name=row["variant_name"] if "variant_name" in keys else "default",
-                    topology_json=row["topology_json"] if "topology_json" in keys else "",
-                    created_at=row["created_at"],
-                )
+                return Campaign.from_row(row)
             return None
 
     async def get_trials(self, campaign_id: int) -> list[Trial]:
@@ -247,23 +266,7 @@ class EvalDB:
                 (campaign_id,),
             )
             rows = await cursor.fetchall()
-            return [
-                Trial(
-                    id=row["id"],
-                    campaign_id=row["campaign_id"],
-                    started_at=row["started_at"],
-                    chaos_injected_at=row["chaos_injected_at"],
-                    ticket_created_at=row["ticket_created_at"],
-                    resolved_at=row["resolved_at"],
-                    ended_at=row["ended_at"],
-                    initial_state=row["initial_state"],
-                    final_state=row["final_state"],
-                    chaos_metadata=row["chaos_metadata"],
-                    commands_json=row["commands_json"],
-                    operator_data_json=row["operator_data_json"] if "operator_data_json" in row.keys() else "{}",
-                )
-                for row in rows
-            ]
+            return [Trial.from_row(row) for row in rows]
 
     async def get_all_campaigns(self, limit: int = 100, offset: int = 0) -> list[Campaign]:
         """Get all campaigns with pagination.
@@ -282,23 +285,7 @@ class EvalDB:
                 (limit, offset),
             )
             rows = await cursor.fetchall()
-            results = []
-            for row in rows:
-                keys = row.keys()
-                name = row["name"] if "name" in keys and row["name"] else (
-                    f"{row['subject_name']}/{row['chaos_type']}"
-                )
-                results.append(Campaign(
-                    id=row["id"],
-                    subject_name=row["subject_name"],
-                    name=name,
-                    trial_count=row["trial_count"],
-                    baseline=bool(row["baseline"]),
-                    variant_name=row["variant_name"] if "variant_name" in keys else "default",
-                    topology_json=row["topology_json"] if "topology_json" in keys else "",
-                    created_at=row["created_at"],
-                ))
-            return results
+            return [Campaign.from_row(row) for row in rows]
 
     async def get_trial(self, trial_id: int) -> Trial | None:
         """Get trial by ID.
@@ -316,21 +303,7 @@ class EvalDB:
             )
             row = await cursor.fetchone()
             if row:
-                keys = row.keys()
-                return Trial(
-                    id=row["id"],
-                    campaign_id=row["campaign_id"],
-                    started_at=row["started_at"],
-                    chaos_injected_at=row["chaos_injected_at"],
-                    ticket_created_at=row["ticket_created_at"],
-                    resolved_at=row["resolved_at"],
-                    ended_at=row["ended_at"],
-                    initial_state=row["initial_state"],
-                    final_state=row["final_state"],
-                    chaos_metadata=row["chaos_metadata"],
-                    commands_json=row["commands_json"],
-                    operator_data_json=row["operator_data_json"] if "operator_data_json" in keys else "{}",
-                )
+                return Trial.from_row(row)
             return None
 
     async def count_campaigns(self) -> int:

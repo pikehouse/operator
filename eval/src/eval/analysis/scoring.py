@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from statistics import mean
 
-from eval.types import Trial
+from eval.types import Trial, parse_iso_datetime, safe_json_loads
 from eval.runner.db import EvalDBProtocol
 from eval.analysis.types import TrialScore, CampaignSummary, TrialOutcome
 
@@ -48,10 +48,7 @@ def is_final_state_healthy(final_state_json: str, subject_name: str) -> bool:
     - Other subjects: default to True if final_state exists
     """
     try:
-        state = json.loads(final_state_json)
-        # Handle double-encoded JSON (string inside string)
-        if isinstance(state, str):
-            state = json.loads(state)
+        state = safe_json_loads(final_state_json)
     except (json.JSONDecodeError, TypeError):
         return False
 
@@ -97,10 +94,7 @@ def score_trial(trial: Trial, subject_name: str) -> TrialScore:
         outcome = TrialOutcome.FAILURE
 
     # Command counts (populated by commands.py later)
-    commands = json.loads(trial.commands_json) if trial.commands_json else []
-    # Handle double-encoded JSON
-    if isinstance(commands, str):
-        commands = json.loads(commands)
+    commands = safe_json_loads(trial.commands_json, [])
 
     return TrialScore(
         trial_id=trial.id or 0,
@@ -136,9 +130,7 @@ def score_trial_with_commands(trial: Trial, subject_name: str) -> TrialScore:
     score = score_trial(trial, subject_name)
 
     # Run command analysis for destructive count
-    commands = json.loads(trial.commands_json) if trial.commands_json else []
-    if isinstance(commands, str):
-        commands = json.loads(commands)
+    commands = safe_json_loads(trial.commands_json, [])
     if commands:
         cmd_analysis = analyze_commands(commands)
         # Update score with command analysis results
@@ -221,9 +213,7 @@ def get_trial_chaos_type(trial: Trial) -> str:
     Useful for per-chaos-type breakdowns when campaigns span multiple chaos types.
     """
     try:
-        meta = json.loads(trial.chaos_metadata) if trial.chaos_metadata else {}
-        if isinstance(meta, str):
-            meta = json.loads(meta)
+        meta = safe_json_loads(trial.chaos_metadata)
         return meta.get("chaos_type", "unknown")
     except (json.JSONDecodeError, TypeError):
         return "unknown"

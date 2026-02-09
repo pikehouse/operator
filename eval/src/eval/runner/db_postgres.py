@@ -9,18 +9,9 @@ execution.
 """
 
 import json
-from datetime import datetime, timezone
 from typing import Any
 
-
-def parse_iso_datetime(iso_str: str | None) -> datetime | None:
-    """Parse ISO8601 string to datetime, handling timezone-naive strings."""
-    if iso_str is None:
-        return None
-    dt = datetime.fromisoformat(iso_str)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
+from eval.types import parse_iso_datetime
 
 try:
     import asyncpg
@@ -224,19 +215,7 @@ class PostgresDB:
                 "SELECT * FROM campaigns WHERE id = $1", campaign_id
             )
             if row:
-                # Read name column; fall back to subject_name/chaos_type for old DBs
-                name = row.get("name") or f"{row['subject_name']}/{row['chaos_type']}"
-                topo = row["topology_json"] if "topology_json" in row.keys() else None
-                return Campaign(
-                    id=row["id"],
-                    subject_name=row["subject_name"],
-                    name=name,
-                    trial_count=row["trial_count"],
-                    baseline=row["baseline"],
-                    variant_name=row["variant_name"] or "default",
-                    topology_json=json.dumps(topo) if topo else "",
-                    created_at=row["created_at"].isoformat() if row["created_at"] else "",
-                )
+                return Campaign.from_row(row)
             return None
 
     async def get_trials(self, campaign_id: int) -> list[Trial]:
@@ -247,23 +226,7 @@ class PostgresDB:
                 "SELECT * FROM trials WHERE campaign_id = $1 ORDER BY id",
                 campaign_id,
             )
-            return [
-                Trial(
-                    id=row["id"],
-                    campaign_id=row["campaign_id"],
-                    started_at=row["started_at"].isoformat() if row["started_at"] else "",
-                    chaos_injected_at=row["chaos_injected_at"].isoformat() if row["chaos_injected_at"] else "",
-                    ticket_created_at=row["ticket_created_at"].isoformat() if row["ticket_created_at"] else None,
-                    resolved_at=row["resolved_at"].isoformat() if row["resolved_at"] else None,
-                    ended_at=row["ended_at"].isoformat() if row["ended_at"] else "",
-                    initial_state=_jsonb_to_str(row["initial_state"], "{}"),
-                    final_state=_jsonb_to_str(row["final_state"], "{}"),
-                    chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
-                    commands_json=_jsonb_to_str(row["commands_json"], "[]"),
-                    operator_data_json=_jsonb_to_str(row.get("operator_data_json"), "{}"),
-                )
-                for row in rows
-            ]
+            return [Trial.from_row(row, jsonb_to_str=_jsonb_to_str) for row in rows]
 
     async def get_trial(self, trial_id: int) -> Trial | None:
         """Get trial by ID."""
@@ -273,20 +236,7 @@ class PostgresDB:
                 "SELECT * FROM trials WHERE id = $1", trial_id
             )
             if row:
-                return Trial(
-                    id=row["id"],
-                    campaign_id=row["campaign_id"],
-                    started_at=row["started_at"].isoformat() if row["started_at"] else "",
-                    chaos_injected_at=row["chaos_injected_at"].isoformat() if row["chaos_injected_at"] else "",
-                    ticket_created_at=row["ticket_created_at"].isoformat() if row["ticket_created_at"] else None,
-                    resolved_at=row["resolved_at"].isoformat() if row["resolved_at"] else None,
-                    ended_at=row["ended_at"].isoformat() if row["ended_at"] else "",
-                    initial_state=_jsonb_to_str(row["initial_state"], "{}"),
-                    final_state=_jsonb_to_str(row["final_state"], "{}"),
-                    chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
-                    commands_json=_jsonb_to_str(row["commands_json"], "[]"),
-                    operator_data_json=_jsonb_to_str(row.get("operator_data_json"), "{}")
-                )
+                return Trial.from_row(row, jsonb_to_str=_jsonb_to_str)
             return None
 
     async def get_all_campaigns(self, limit: int = 100, offset: int = 0) -> list[Campaign]:
@@ -298,20 +248,7 @@ class PostgresDB:
                 limit,
                 offset,
             )
-            campaigns = []
-            for row in rows:
-                topo = row["topology_json"] if "topology_json" in row.keys() else None
-                campaigns.append(Campaign(
-                    id=row["id"],
-                    subject_name=row["subject_name"],
-                    name=row.get("name") or f"{row['subject_name']}/{row['chaos_type']}",
-                    trial_count=row["trial_count"],
-                    baseline=row["baseline"],
-                    variant_name=row["variant_name"] or "default",
-                    topology_json=json.dumps(topo) if topo else "",
-                    created_at=row["created_at"].isoformat() if row["created_at"] else "",
-                ))
-            return campaigns
+            return [Campaign.from_row(row) for row in rows]
 
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""
