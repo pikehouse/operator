@@ -124,9 +124,12 @@ class Worker:
 
         try:
             # Create subject for this work item
+            # Use work_item.id as instance_id so parallel workers get
+            # isolated Cloud SQL databases (chatdb_trial_{id}) and
+            # non-colliding VM name prefixes.
             subject = SubjectRegistry.create(
                 work_item.subject_type,
-                instance_id=0,  # Cloud subjects don't need instance isolation
+                instance_id=work_item.id,
                 mode=self.mode,
             )
             self._current_subject = subject
