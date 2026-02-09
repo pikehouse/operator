@@ -67,15 +67,24 @@
             <tr>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Outcome</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Scenario</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Detection</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Detect</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Resolve</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Commands</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Cmds</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Agent Summary</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
+        <tbody>
             {% for item in trials %}
-            <tr class="hover:bg-gray-50">
+            {% if item.group_first %}
+            <tr class="bg-gray-50 border-t-2 border-gray-200">
+                <td colspan="7" class="px-4 py-1.5 border-l-4 {{ item.group_color }}">
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">{{ item.group_label }}</span>
+                    <span class="text-xs text-gray-400 ml-2">{{ item.group_size }} trial{{ 's' if item.group_size != 1 else '' }}</span>
+                </td>
+            </tr>
+            {% endif %}
+            <tr class="hover:bg-gray-50 border-l-4 {{ item.group_color }}">
                 <td class="px-4 py-2">
                     <a href="/trial/{{ item.trial.id }}" class="text-blue-600 hover:underline">{{ item.trial.id }}</a>
                 </td>
@@ -91,10 +100,12 @@
                     {% endif %}
                 </td>
                 <td class="px-4 py-2 text-sm">
-                    {% if item.is_baseline %}
-                    <span class="text-gray-400">Baseline (no chaos)</span>
+                    {% if item.detection_invariant %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                        {{ item.detection_invariant }}
+                    </span>
                     {% else %}
-                    {{ item.chaos_description }}
+                    <span class="text-gray-400">-</span>
                     {% endif %}
                 </td>
                 <td class="px-4 py-2 text-sm font-mono">
@@ -113,6 +124,13 @@
                 </td>
                 <td class="px-4 py-2 text-sm font-mono text-gray-600">
                     {{ item.cmd_count }}
+                </td>
+                <td class="px-4 py-2 text-sm text-gray-600 max-w-md truncate" title="{{ item.agent_summary or '' }}">
+                    {% if item.agent_summary %}
+                    {{ item.agent_summary }}
+                    {% else %}
+                    <span class="text-gray-400">-</span>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

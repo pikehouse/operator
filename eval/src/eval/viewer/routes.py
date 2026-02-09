@@ -90,6 +90,26 @@ async def get_campaign(request: Request, campaign_id: int):
             cmds = safe_json_loads(t.commands_json, [])
             cmd_count = len(cmds) if isinstance(cmds, list) else 0
 
+            # Detection invariant and agent summary from operator data
+            detection_invariant = None
+            agent_summary = None
+            op_data = safe_json_loads(t.operator_data_json)
+            if isinstance(op_data, dict):
+                det = op_data.get("monitor_detection")
+                if isinstance(det, dict):
+                    detection_invariant = det.get("invariant_name")
+                sess = op_data.get("agent_session")
+                if isinstance(sess, dict) and sess.get("outcome_summary"):
+                    # Take first sentence as brief summary
+                    full = sess["outcome_summary"].strip()
+                    first_line = full.split("\n")[0]
+                    # Truncate to ~120 chars
+                    agent_summary = first_line[:120] + ("..." if len(first_line) > 120 else "")
+
+            # Group key: chaos type + sorted params for consistent grouping
+            chaos_params = {k: v for k, v in chaos_meta.items() if k != "chaos_type"}
+            group_key = f"{chaos_type}|{json.dumps(chaos_params, sort_keys=True)}" if not is_baseline else "baseline"
+
             trial_data.append({
                 "trial": t,
                 "outcome": outcome,
@@ -98,7 +118,43 @@ async def get_campaign(request: Request, campaign_id: int):
                 "detect_sec": round(detect_sec, 1) if detect_sec is not None else None,
                 "resolve_sec": round(resolve_sec, 1) if resolve_sec is not None else None,
                 "cmd_count": cmd_count,
+                "detection_invariant": detection_invariant,
+                "agent_summary": agent_summary,
+                "group_key": group_key,
             })
+
+        # Sort trials by group (baselines last), then by trial ID within group
+        trial_data.sort(key=lambda x: (x["is_baseline"], x["group_key"], x["trial"].id))
+
+        # Assign group colors (consistent palette)
+        group_colors = [
+            "border-blue-400",
+            "border-emerald-400",
+            "border-purple-400",
+            "border-orange-400",
+            "border-pink-400",
+            "border-cyan-400",
+        ]
+        seen_groups: dict[str, int] = {}
+        for item in trial_data:
+            gk = item["group_key"]
+            if gk not in seen_groups:
+                seen_groups[gk] = len(seen_groups)
+            item["group_color"] = group_colors[seen_groups[gk] % len(group_colors)]
+            item["group_size"] = 0  # filled in below
+            item["group_label"] = item["chaos_description"] if not item["is_baseline"] else "Baseline"
+
+        # Count group sizes for showing group headers
+        from collections import Counter
+        group_counts = Counter(item["group_key"] for item in trial_data)
+        prev_group = None
+        for item in trial_data:
+            if item["group_key"] != prev_group:
+                item["group_first"] = True
+                item["group_size"] = group_counts[item["group_key"]]
+                prev_group = item["group_key"]
+            else:
+                item["group_first"] = False
 
         # Summary stats
         total = len(trials)
