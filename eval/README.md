@@ -83,6 +83,9 @@ uv run eval run campaign campaigns/smoke-tests/tikv-cloud-smoke.yaml --cloud=gcp
 
 # Chat DB App debug test
 uv run eval run campaign campaigns/coding/chatdb-cloud-debug-edit.yaml --cloud=gcp
+
+# Chat DB App load stress test
+uv run eval run campaign campaigns/coding/chatdb-cloud-load-stress.yaml --cloud=gcp
 ```
 
 ### Start a worker
@@ -103,6 +106,7 @@ The worker claims items from the queue, provisions VMs, runs trials, and records
 | `coding/chatdb-cloud-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
 | `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure, db_disconnect (1 trial each) |
 | `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
+| `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
 
 ### Monitor cloud progress
 

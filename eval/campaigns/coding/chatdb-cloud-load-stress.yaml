@@ -1,0 +1,27 @@
+name: chatdb-cloud-load-stress
+subjects: [chat-db-app]
+
+# Aggressive load to force code-level fixes.
+# 50 users with 60% streaming overwhelms the naive 10-connection pool,
+# causes severe lock contention on the users table, and triggers
+# multiple invariant violations that require code changes to resolve.
+chaos_types:
+  - type: load_pressure
+    params:
+      num_users: 50
+      request_delay: 0.1
+      stream_ratio: 0.6
+
+trials_per_combination: 5
+parallel: 1
+cooldown_seconds: 15
+include_baseline: true
+
+cloud:
+  provider: gcp
+  project: null
+  zone: us-central1-a
+  machine_type: e2-standard-2
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
