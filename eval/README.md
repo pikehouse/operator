@@ -17,7 +17,7 @@ Local campaigns run against Docker Compose clusters on your machine. No cloud se
 
 ```bash
 cd eval
-uv run eval run campaign campaigns/smoke-test.yaml
+uv run eval run campaign campaigns/smoke-tests/tikv-smoke.yaml
 ```
 
 This runs 1 trial each of `node_kill`, `latency`, and `network_partition` against a local TiKV cluster. The harness starts Docker Compose, runs the operator, injects chaos, waits for detection and resolution, and records results.
@@ -26,13 +26,13 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 
 | Campaign | Subject | What it tests |
 |----------|---------|---------------|
-| `smoke-test.yaml` | tikv | node_kill, latency, network_partition (1 trial each) |
-| `node-kill-test.yaml` | tikv | node_kill only (1 trial) |
-| `full-chaos.yaml` | tikv | node_kill, latency, network_partition (3 trials each) |
-| `cascading-failures.yaml` | tikv | pd_leader_kill, node_kill (3 trials each) |
-| `diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
-| `subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
-| `chat-db-app-code-fix.yaml` | chat-db-app | load_pressure (3 trials) |
+| `smoke-tests/tikv-smoke.yaml` | tikv | node_kill, latency, network_partition (1 trial each) |
+| `operations/tikv-node-kill.yaml` | tikv | node_kill only (1 trial) |
+| `operations/tikv-full-chaos.yaml` | tikv | node_kill, latency, network_partition (3 trials each) |
+| `operations/tikv-cascading-failures.yaml` | tikv | pd_leader_kill, node_kill (3 trials each) |
+| `operations/tikv-diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
+| `operations/tikv-subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
+| `coding/chatdb-code-fix.yaml` | chat-db-app | load_pressure (3 trials) |
 
 ### Running any local campaign
 
@@ -79,10 +79,10 @@ cd eval
 source ../.env
 
 # TiKV cloud smoke test
-uv run eval run campaign campaigns/cloud-smoke-operator.yaml --cloud=gcp
+uv run eval run campaign campaigns/smoke-tests/tikv-cloud-smoke.yaml --cloud=gcp
 
 # Chat DB App debug test
-uv run eval run campaign campaigns/chatdb-debug-edit.yaml --cloud=gcp
+uv run eval run campaign campaigns/coding/chatdb-cloud-debug-edit.yaml --cloud=gcp
 ```
 
 ### Start a worker
@@ -99,10 +99,10 @@ The worker claims items from the queue, provisions VMs, runs trials, and records
 
 | Campaign | Subject | What it tests |
 |----------|---------|---------------|
-| `cloud-smoke-operator.yaml` | tikv | node_kill (1 trial) |
-| `chatdb-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
-| `chatdb-gcp-smoke.yaml` | chat-db-app | load_pressure, db_disconnect (1 trial each) |
-| `exotic-chaos-cloud.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
+| `smoke-tests/tikv-cloud-smoke.yaml` | tikv | node_kill (1 trial) |
+| `coding/chatdb-cloud-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
+| `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure, db_disconnect (1 trial each) |
+| `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
 
 ### Monitor cloud progress
 
@@ -150,7 +150,7 @@ For cloud results, add `--remote` to commands above.
 
 ## Campaign Config Reference
 
-Campaign YAML files live in `eval/campaigns/`. Key fields:
+Campaign YAML files live in `eval/campaigns/` organized by category (`smoke-tests/`, `coding/`, `operations/`). Key fields:
 
 ```yaml
 name: my-campaign

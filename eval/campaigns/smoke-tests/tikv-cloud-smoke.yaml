@@ -1,4 +1,4 @@
-name: cloud-smoke-operator
+name: tikv-cloud-smoke
 subjects: [tikv]
 
 # Single node_kill trial to verify operator integration works end-to-end

@@ -1,4 +1,4 @@
-name: cascading-failures
+name: tikv-cascading-failures
 subjects: [tikv]
 
 # Control plane disruption and node failures that can cascade

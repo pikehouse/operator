@@ -46,7 +46,7 @@ Workers pull from the Cloud SQL queue, execute trials (each in an isolated Docke
 # 4. Run a campaign
 cd eval
 source ../.env
-uv run eval run campaign campaigns/smoke-test.yaml --cloud=gcp
+uv run eval run campaign campaigns/smoke-tests/tikv-smoke.yaml --cloud=gcp
 
 # 5. Stop workers when done
 ./eval/scripts/gcp-workers.sh stop

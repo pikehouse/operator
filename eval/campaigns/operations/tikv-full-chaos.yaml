@@ -1,4 +1,4 @@
-name: full-chaos-campaign
+name: tikv-full-chaos
 subjects: [tikv]
 
 chaos_types:

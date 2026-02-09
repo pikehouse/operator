@@ -1,4 +1,4 @@
-name: chatdb-debug-code-edit
+name: chatdb-cloud-debug-edit
 subjects: [chat-db-app]
 chaos_types:
   - type: debug_code_edit

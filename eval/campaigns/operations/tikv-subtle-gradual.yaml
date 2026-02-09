@@ -1,4 +1,4 @@
-name: subtle-gradual
+name: tikv-subtle-gradual
 subjects: [tikv]
 
 # Subtle failures that develop gradually or have non-obvious symptoms

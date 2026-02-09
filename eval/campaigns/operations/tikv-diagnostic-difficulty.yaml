@@ -1,4 +1,4 @@
-name: diagnostic-difficulty
+name: tikv-diagnostic-difficulty
 subjects: [tikv]
 
 # Failures that are diagnostically ambiguous -- symptoms are noisy or misleading

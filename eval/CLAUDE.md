@@ -25,7 +25,7 @@ eval/
 │   │       ├── subject.py  # TiKVEvalSubject implementation
 │   │       └── chaos.py    # Chaos injection (node_kill, latency, partition)
 │   └── viewer/             # Web UI for browsing campaigns/trials
-├── campaigns/              # Campaign YAML configs
+├── campaigns/              # Campaign YAML configs (smoke-tests/, coding/, operations/)
 ├── variants/               # Agent configuration variants
 └── eval.db                 # SQLite database (auto-created)
 ```
@@ -63,7 +63,7 @@ Computes metrics from trials:
 eval run --subject tikv --chaos node_kill --trials 1
 
 # Run campaign from YAML
-eval run campaign campaigns/full-chaos.yaml
+eval run campaign campaigns/operations/tikv-full-chaos.yaml
 
 # With external operator (not managed)
 eval run campaign config.yaml --operator-running
@@ -176,7 +176,7 @@ tools_config:
 ## Campaign Config Example
 
 ```yaml
-name: full-chaos-campaign
+name: tikv-full-chaos
 subjects: [tikv]
 chaos_types:
   - type: node_kill

@@ -162,7 +162,7 @@ uv run operator agent start --db operator.db
 uv run operator tickets list
 
 # Run eval campaign
-cd eval && uv run eval run campaign campaigns/smoke-test.yaml
+cd eval && uv run eval run campaign campaigns/smoke-tests/tikv-smoke.yaml
 ```
 
 ## Development Workflow

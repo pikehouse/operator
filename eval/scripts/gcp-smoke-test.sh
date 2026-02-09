@@ -143,7 +143,7 @@ async def smoke_test():
         print('  ./scripts/gcp-workers.sh start 5')
         print('')
         print('  # Run a campaign')
-        print('  eval run campaign campaigns/smoke-test.yaml --cloud=gcp')
+        print('  eval run campaign campaigns/smoke-tests/tikv-smoke.yaml --cloud=gcp')
 
     except Exception as e:
         print(f'    FAILED: {e}')

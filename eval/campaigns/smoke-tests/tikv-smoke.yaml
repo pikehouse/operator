@@ -1,4 +1,4 @@
-name: smoke-test
+name: tikv-smoke
 subjects: [tikv]
 
 # One trial of each chaos type to verify everything works

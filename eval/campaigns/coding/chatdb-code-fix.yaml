@@ -1,4 +1,4 @@
-name: chat-db-app-code-fix
+name: chatdb-code-fix
 subjects: [chat-db-app]
 
 # The app has intentional bugs that manifest under load.

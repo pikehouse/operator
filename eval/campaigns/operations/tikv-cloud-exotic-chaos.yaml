@@ -1,4 +1,4 @@
-name: exotic-chaos-cloud
+name: tikv-cloud-exotic-chaos
 subjects: [tikv]
 
 # All 5 new exotic failure modes

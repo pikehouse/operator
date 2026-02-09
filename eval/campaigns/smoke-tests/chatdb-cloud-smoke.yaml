@@ -1,4 +1,4 @@
-name: chatdb-gcp-smoke
+name: chatdb-cloud-smoke
 subjects: [chat-db-app]
 chaos_types:
   - type: load_pressure
