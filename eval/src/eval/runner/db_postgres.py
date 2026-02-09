@@ -155,6 +155,17 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE trials ADD COLUMN operator_data_json JSONB DEFAULT '{}'::jsonb"
                 )
+            # Migration: add topology_json column if missing
+            topo_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'topology_json'
+                )
+            """)
+            if not topo_col_exists:
+                await conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN topology_json JSONB"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
