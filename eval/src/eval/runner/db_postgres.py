@@ -70,7 +70,8 @@ CREATE TABLE IF NOT EXISTS trials (
     initial_state JSONB,
     final_state JSONB,
     chaos_metadata JSONB,
-    commands_json JSONB
+    commands_json JSONB,
+    operator_data_json JSONB DEFAULT '{}'::jsonb
 );
 
 -- Work queue for distributed execution
@@ -151,6 +152,17 @@ class PostgresDB:
                 await conn.execute(
                     "UPDATE campaigns SET name = subject_name || '/' || chaos_type WHERE name = '' OR name IS NULL"
                 )
+            # Migration: add operator_data_json column if missing
+            op_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'trials' AND column_name = 'operator_data_json'
+                )
+            """)
+            if not op_col_exists:
+                await conn.execute(
+                    "ALTER TABLE trials ADD COLUMN operator_data_json JSONB DEFAULT '{}'::jsonb"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
@@ -183,8 +195,9 @@ class PostgresDB:
                 INSERT INTO trials (
                     campaign_id, started_at, chaos_injected_at,
                     ticket_created_at, resolved_at, ended_at,
-                    initial_state, final_state, chaos_metadata, commands_json
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb)
+                    initial_state, final_state, chaos_metadata, commands_json,
+                    operator_data_json
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb)
                 RETURNING id
                 """,
                 trial.campaign_id,
@@ -197,6 +210,7 @@ class PostgresDB:
                 trial.final_state or "{}",
                 trial.chaos_metadata or "{}",
                 trial.commands_json or "[]",
+                trial.operator_data_json or "{}",
             )
             return row["id"]
 
@@ -242,6 +256,7 @@ class PostgresDB:
                     final_state=_jsonb_to_str(row["final_state"], "{}"),
                     chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
                     commands_json=_jsonb_to_str(row["commands_json"], "[]"),
+                    operator_data_json=_jsonb_to_str(row.get("operator_data_json"), "{}"),
                 )
                 for row in rows
             ]
@@ -266,6 +281,7 @@ class PostgresDB:
                     final_state=_jsonb_to_str(row["final_state"], "{}"),
                     chaos_metadata=_jsonb_to_str(row["chaos_metadata"], "{}"),
                     commands_json=_jsonb_to_str(row["commands_json"], "[]"),
+                    operator_data_json=_jsonb_to_str(row.get("operator_data_json"), "{}")
                 )
             return None
 

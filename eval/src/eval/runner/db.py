@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS trials (
     final_state TEXT NOT NULL,
     chaos_metadata TEXT NOT NULL,
     commands_json TEXT NOT NULL DEFAULT '[]',
+    operator_data_json TEXT NOT NULL DEFAULT '{}',
     FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
 );
 
@@ -142,6 +143,17 @@ class EvalDB:
                 )
                 await db.commit()
 
+            # Check if operator_data_json column exists on trials
+            cursor = await db.execute("PRAGMA table_info(trials)")
+            trial_columns = await cursor.fetchall()
+            trial_column_names = [col[1] for col in trial_columns]
+
+            if "operator_data_json" not in trial_column_names:
+                await db.execute(
+                    "ALTER TABLE trials ADD COLUMN operator_data_json TEXT NOT NULL DEFAULT '{}'"
+                )
+                await db.commit()
+
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
         async with aiosqlite.connect(self.db_path) as db:
@@ -171,8 +183,9 @@ class EvalDB:
                 INSERT INTO trials (
                     campaign_id, started_at, chaos_injected_at,
                     ticket_created_at, resolved_at, ended_at,
-                    initial_state, final_state, chaos_metadata, commands_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    initial_state, final_state, chaos_metadata, commands_json,
+                    operator_data_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trial.campaign_id,
@@ -185,6 +198,7 @@ class EvalDB:
                     trial.final_state,
                     trial.chaos_metadata,
                     trial.commands_json,
+                    trial.operator_data_json,
                 ),
             )
             await db.commit()
@@ -237,6 +251,7 @@ class EvalDB:
                     final_state=row["final_state"],
                     chaos_metadata=row["chaos_metadata"],
                     commands_json=row["commands_json"],
+                    operator_data_json=row["operator_data_json"] if "operator_data_json" in row.keys() else "{}",
                 )
                 for row in rows
             ]
@@ -291,6 +306,7 @@ class EvalDB:
             )
             row = await cursor.fetchone()
             if row:
+                keys = row.keys()
                 return Trial(
                     id=row["id"],
                     campaign_id=row["campaign_id"],
@@ -303,6 +319,7 @@ class EvalDB:
                     final_state=row["final_state"],
                     chaos_metadata=row["chaos_metadata"],
                     commands_json=row["commands_json"],
+                    operator_data_json=row["operator_data_json"] if "operator_data_json" in keys else "{}",
                 )
             return None
 

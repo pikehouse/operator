@@ -307,6 +307,7 @@ class Worker:
             ticket_created_at = None
             resolved_at = None
             commands: list[dict[str, Any]] = []
+            operator_data: dict[str, Any] = {}
 
             if remote_op:
                 # Operator mode: write variant config, wait for ticket resolution
@@ -325,15 +326,20 @@ class Worker:
                     )
                 )
 
-                # Download operator.db and extract commands
+                # Download operator.db and extract commands + operator data
                 if ticket_created_at:
                     try:
-                        from eval.runner.harness import extract_commands_from_operator_db
+                        from eval.runner.harness import (
+                            extract_commands_from_operator_db,
+                            extract_operator_data,
+                        )
 
                         local_db = Path(f"/tmp/operator-{uuid.uuid4().hex[:8]}.db")
                         await remote_op.download_operator_db(local_db)
                         commands = await extract_commands_from_operator_db(local_db)
                         console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
+                        operator_data = await extract_operator_data(local_db)
+                        console.print(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
                         # Clean up temp file
                         local_db.unlink(missing_ok=True)
                     except Exception as e:
@@ -374,6 +380,7 @@ class Worker:
             final_state=json.dumps(final_state),
             chaos_metadata=json.dumps(chaos_metadata),
             commands_json=json.dumps(commands),
+            operator_data_json=json.dumps(operator_data),
         )
 
     async def _cleanup_subject(self, subject) -> None:

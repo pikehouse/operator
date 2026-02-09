@@ -120,6 +120,7 @@ class Trial:
     final_state: str = ""  # JSON blob
     chaos_metadata: str = ""  # JSON blob
     commands_json: str = "[]"  # JSON array of commands
+    operator_data_json: str = "{}"  # JSON blob of operator monitoring data
 
 
 class VariantConfig(BaseModel):

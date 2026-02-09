@@ -185,13 +185,79 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
         except Exception:
             pass
 
-    # Fetch reasoning entries, agent conclusion, and monitor detection if operator.db path is available
+    # Fetch reasoning entries, agent conclusion, and monitor detection
+    # Priority: stored operator_data_json in trial record, then live operator.db fallback
     reasoning_entries = []
     monitor_detection = None
     agent_conclusion = None
-    operator_db_path = request.app.state.operator_db_path
 
-    if operator_db_path and operator_db_path.exists():
+    # Try stored operator data first (captures monitoring story even after operator.db is deleted)
+    stored_operator_data = {}
+    if trial.operator_data_json and trial.operator_data_json != "{}":
+        try:
+            stored_operator_data = json.loads(trial.operator_data_json)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if stored_operator_data:
+        # Use stored data - no need for operator.db
+        if "monitor_detection" in stored_operator_data:
+            det = stored_operator_data["monitor_detection"]
+            monitor_detection = {
+                "violation_type": det.get("invariant_name", ""),
+                "violation_details": det.get("message", ""),
+                "detected_at": det.get("first_seen_at", ""),
+            }
+
+        if "agent_session" in stored_operator_data:
+            sess = stored_operator_data["agent_session"]
+            if sess.get("outcome_summary"):
+                agent_conclusion = {
+                    "session_id": sess.get("session_id", ""),
+                    "status": sess.get("status", ""),
+                    "outcome_summary": sess.get("outcome_summary", ""),
+                }
+
+        if "reasoning_entries" in stored_operator_data:
+            prev_ts = None
+            for e in stored_operator_data["reasoning_entries"]:
+                # Extract reasoning from tool_params
+                reasoning = None
+                if e.get("entry_type") == "tool_call" and e.get("tool_params"):
+                    try:
+                        params = json.loads(e["tool_params"]) if isinstance(e["tool_params"], str) else e["tool_params"]
+                        reasoning = params.get("reasoning")
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                # Calculate elapsed time
+                elapsed_seconds = None
+                curr_ts = e.get("timestamp")
+                if curr_ts and prev_ts:
+                    try:
+                        from datetime import datetime, timezone
+                        curr_time = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                        prev_time = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
+                        if curr_time.tzinfo is None:
+                            curr_time = curr_time.replace(tzinfo=timezone.utc)
+                        if prev_time.tzinfo is None:
+                            prev_time = prev_time.replace(tzinfo=timezone.utc)
+                        elapsed_seconds = (curr_time - prev_time).total_seconds()
+                    except Exception:
+                        pass
+                if curr_ts:
+                    prev_ts = curr_ts
+
+                reasoning_entries.append({
+                    "entry_type": e.get("entry_type", ""),
+                    "content": e.get("content", ""),
+                    "tool_name": e.get("tool_name"),
+                    "timestamp": e.get("timestamp"),
+                    "reasoning": reasoning,
+                    "elapsed_seconds": elapsed_seconds,
+                })
+
+    elif (operator_db_path := request.app.state.operator_db_path) and operator_db_path.exists():
         import sqlite3
 
         def get_ticket_and_session():

@@ -153,6 +153,142 @@ async def extract_commands_from_operator_db(
     return await asyncio.to_thread(query_commands)
 
 
+async def extract_operator_data(
+    operator_db_path: Path,
+) -> dict[str, Any]:
+    """Extract full operator monitoring data from operator.db.
+
+    Queries tickets, agent sessions, reasoning log entries, and code snapshots
+    to produce a JSON-serializable dict that captures the full monitoring story.
+
+    Args:
+        operator_db_path: Path to operator.db
+
+    Returns:
+        Dict with keys: monitor_detection, agent_session, reasoning_entries, code_snapshots
+    """
+    if not operator_db_path.exists():
+        return {}
+
+    def query_operator_data():
+        conn = sqlite3.connect(operator_db_path)
+        conn.row_factory = sqlite3.Row
+        result: dict[str, Any] = {}
+
+        try:
+            # Get most recent ticket
+            cursor = conn.execute(
+                """
+                SELECT id, invariant_name, message, severity, first_seen_at, last_seen_at,
+                       metric_snapshot
+                FROM tickets
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            )
+            ticket_row = cursor.fetchone()
+
+            if ticket_row:
+                metric_snapshot = ticket_row["metric_snapshot"]
+                if isinstance(metric_snapshot, str):
+                    try:
+                        metric_snapshot = json.loads(metric_snapshot)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                result["monitor_detection"] = {
+                    "ticket_id": ticket_row["id"],
+                    "invariant_name": ticket_row["invariant_name"],
+                    "message": ticket_row["message"],
+                    "severity": ticket_row["severity"],
+                    "first_seen_at": ticket_row["first_seen_at"],
+                    "last_seen_at": ticket_row["last_seen_at"],
+                    "metric_snapshot": metric_snapshot,
+                }
+
+                ticket_id = ticket_row["id"]
+
+                # Get agent session linked to this ticket
+                cursor = conn.execute(
+                    """
+                    SELECT session_id, status, outcome_summary, started_at, ended_at
+                    FROM agent_sessions
+                    WHERE ticket_id = ?
+                    ORDER BY started_at DESC
+                    LIMIT 1
+                    """,
+                    (ticket_id,),
+                )
+                session_row = cursor.fetchone()
+
+                if session_row:
+                    result["agent_session"] = {
+                        "session_id": session_row["session_id"],
+                        "status": session_row["status"],
+                        "outcome_summary": session_row["outcome_summary"],
+                        "started_at": session_row["started_at"],
+                        "ended_at": session_row["ended_at"],
+                    }
+
+                    # Get all log entries for this session
+                    cursor = conn.execute(
+                        """
+                        SELECT entry_type, content, raw_content, tool_name, tool_params,
+                               exit_code, timestamp
+                        FROM agent_log_entries
+                        WHERE session_id = ?
+                        ORDER BY timestamp
+                        """,
+                        (session_row["session_id"],),
+                    )
+                    entries = cursor.fetchall()
+                    result["reasoning_entries"] = [
+                        {
+                            "entry_type": e["entry_type"],
+                            "content": e["raw_content"] or e["content"] or "",
+                            "tool_name": e["tool_name"],
+                            "tool_params": e["tool_params"],
+                            "exit_code": e["exit_code"],
+                            "timestamp": e["timestamp"],
+                        }
+                        for e in entries
+                    ]
+
+            # Get code snapshots (may not exist)
+            try:
+                cursor = conn.execute(
+                    """
+                    SELECT phase, commit_hash, diff_from_initial, files_changed, captured_at
+                    FROM code_snapshots
+                    ORDER BY captured_at
+                    """
+                )
+                snapshots = cursor.fetchall()
+                if snapshots:
+                    result["code_snapshots"] = [
+                        {
+                            "phase": s["phase"],
+                            "commit_hash": s["commit_hash"],
+                            "diff_from_initial": s["diff_from_initial"],
+                            "files_changed": s["files_changed"],
+                            "captured_at": s["captured_at"],
+                        }
+                        for s in snapshots
+                    ]
+            except sqlite3.OperationalError:
+                pass  # code_snapshots table may not exist
+
+        except sqlite3.OperationalError:
+            pass  # Tables may not exist if agent never ran
+
+        finally:
+            conn.close()
+
+        return result
+
+    return await asyncio.to_thread(query_operator_data)
+
+
 async def update_ticket_variant(
     operator_db_path: Path,
     variant_config: VariantConfig,
@@ -361,6 +497,7 @@ async def run_trial(
         ticket_created_at = None
         resolved_at = None
         commands: list[dict[str, Any]] = []
+        operator_data: dict[str, Any] = {}
 
         if baseline:
             # RUN-05: Baseline trials run without agent
@@ -377,10 +514,12 @@ async def run_trial(
                     min_ticket_id=pre_chaos_max_ticket_id,  # Filter to tickets after chaos
                 )
 
-                # Extract commands (RUN-04)
+                # Extract commands (RUN-04) and operator data
                 if ticket_created_at:
                     commands = await extract_commands_from_operator_db(operator_db_path)
                     console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
+                    operator_data = await extract_operator_data(operator_db_path)
+                    console.print(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
 
         # Capture final state (RUN-03)
         console.print("[bold blue]Capturing final state...[/bold blue]")
@@ -409,6 +548,7 @@ async def run_trial(
         final_state=json.dumps(final_state),
         chaos_metadata=json.dumps(chaos_metadata),
         commands_json=json.dumps(commands),
+        operator_data_json=json.dumps(operator_data),
     )
 
 
