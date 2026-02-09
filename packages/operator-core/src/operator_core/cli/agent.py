@@ -1,5 +1,6 @@
 """Agent CLI commands."""
 
+import asyncio
 from pathlib import Path
 
 import typer
@@ -15,4 +16,4 @@ def start_agent(
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """Run the agent loop. Polls for tickets and processes with Claude."""
-    run_agent_loop(db_path)
+    asyncio.run(run_agent_loop(db_path))

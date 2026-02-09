@@ -32,6 +32,10 @@ class MockVM:
         self._responses: dict[str, tuple[int, str, str]] = {}
         self._default_response = (0, "", "")
         self._operator_db_path: Path | None = None
+        # Default: agent container health check passes
+        self.set_response("docker inspect", 0, "true")
+        # Default: operator.db exists check passes
+        self.set_response("test -f", 0, "exists")
 
     def set_response(self, pattern: str, exit_code: int, stdout: str, stderr: str = ""):
         """Set a canned response for commands matching a pattern."""
@@ -157,7 +161,8 @@ class TestRemoteOperatorProcesses:
             anthropic_api_key="test-key",
         )
 
-        await remote_op.start()
+        with patch("eval.runner.remote_operator.asyncio.sleep", new_callable=AsyncMock):
+            await remote_op.start()
 
         # Verify commands were issued
         assert any("docker pull" in cmd for cmd in vm.commands_run)
@@ -176,7 +181,8 @@ class TestRemoteOperatorProcesses:
             anthropic_api_key="test-key",
         )
 
-        await remote_op.start()
+        with patch("eval.runner.remote_operator.asyncio.sleep", new_callable=AsyncMock):
+            await remote_op.start()
 
         # Find the docker run commands
         run_cmds = [cmd for cmd in vm.commands_run if "docker run" in cmd]
@@ -194,7 +200,8 @@ class TestRemoteOperatorProcesses:
             anthropic_api_key="test-key",
         )
 
-        await remote_op.start()
+        with patch("eval.runner.remote_operator.asyncio.sleep", new_callable=AsyncMock):
+            await remote_op.start()
         vm.commands_run.clear()
         await remote_op.stop()
 

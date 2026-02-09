@@ -3,21 +3,20 @@ End-to-end tests for v3 architecture.
 
 Tests the full flow:
   Monitor detects violation → creates ticket → agent picks up ticket →
-  agent uses shell tool → agent resolves ticket → audit trail recorded
+  agent processes with SDK → agent resolves ticket → audit trail recorded
 
 This test suite validates the core v3 components work together:
 - MonitorLoop (observe → invariant check → ticket creation)
 - TicketOpsDB (poll, hold, resolve)
 - AuditLogDB (session, entries, completion)
-- shell tool (command execution)
 
-No real Claude API calls - we mock the Anthropic client.
+No real Claude API calls - we mock the Agent SDK.
 """
 
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -31,7 +30,6 @@ from operator_core.monitor.types import TicketStatus, TicketType
 from operator_core.db.tickets import TicketDB
 from operator_core.agent_lab.ticket_ops import TicketOpsDB
 from operator_core.db.audit_log import AuditLogDB
-from operator_core.agent_lab.tools import shell, get_last_result
 
 
 # =============================================================================
@@ -282,14 +280,14 @@ class TestAuditLogDB:
             audit.log_entry(
                 session_id=session_id,
                 entry_type="tool_call",
-                content="shell: docker ps",
-                tool_name="shell",
-                tool_params={"command": "docker ps", "reasoning": "Check containers"},
+                content="Bash: docker ps",
+                tool_name="Bash",
+                tool_params={"command": "docker ps"},
             )
 
             entries = audit.get_session_entries(session_id)
             assert len(entries) == 1
-            assert entries[0]["tool_name"] == "shell"
+            assert entries[0]["tool_name"] == "Bash"
             assert "docker ps" in entries[0]["tool_params"]
 
     def test_log_tool_result_entry(self, tmp_path: Path):
@@ -303,7 +301,6 @@ class TestAuditLogDB:
                 entry_type="tool_result",
                 content="Container list retrieved",
                 raw_content="CONTAINER ID   IMAGE   ...",
-                tool_name="shell",
                 exit_code=0,
             )
 
@@ -337,49 +334,6 @@ class TestAuditLogDB:
 
 
 # =============================================================================
-# Shell Tool
-# =============================================================================
-
-
-class TestShellTool:
-    """Test shell tool execution and result capture."""
-
-    def test_shell_executes_command(self):
-        """Shell should execute command and return output."""
-        output = shell("echo hello", "Testing echo command")
-
-        assert "hello" in output
-
-    def test_shell_captures_result(self):
-        """Shell should capture result in global state."""
-        shell("echo test123", "Testing capture")
-        result = get_last_result()
-
-        assert result is not None
-        assert result["exit_code"] == 0
-        assert "test123" in result["output"]
-        assert result["command"] == "echo test123"
-        assert result["reasoning"] == "Testing capture"
-
-    def test_shell_handles_nonzero_exit(self):
-        """Shell should capture stderr and exit code on failure."""
-        output = shell("exit 1", "Testing failure")
-        result = get_last_result()
-
-        assert result is not None
-        assert result["exit_code"] == 1
-        assert "Exit code: 1" in output
-
-    def test_get_last_result_clears(self):
-        """get_last_result should clear after retrieval."""
-        shell("echo a", "first")
-        get_last_result()
-        result = get_last_result()
-
-        assert result is None
-
-
-# =============================================================================
 # Full E2E Flow
 # =============================================================================
 
@@ -394,10 +348,9 @@ class TestE2EFlow:
         1. Monitor detects violation → creates ticket
         2. Agent polls for ticket → holds it
         3. Agent creates audit session
-        4. Agent executes shell command
-        5. Agent logs reasoning and tool usage
-        6. Agent resolves ticket
-        7. Audit trail is complete
+        4. Agent logs reasoning and tool usage
+        5. Agent resolves ticket
+        6. Audit trail is complete
         """
         db_path = tmp_path / "test.db"
 
@@ -420,7 +373,7 @@ class TestE2EFlow:
             # Hold ticket
             ops.hold_ticket(ticket.id)
 
-        # Step 3-6: Agent processes ticket (simulated, no Claude)
+        # Step 3-5: Agent processes ticket (simulated, no Claude)
         with AuditLogDB(db_path) as audit:
             session_id = audit.create_session(ticket_id=ticket.id)
 
@@ -432,17 +385,13 @@ class TestE2EFlow:
                 raw_content="The ticket indicates node-1 is down. I will check...",
             )
 
-            # Execute shell command
-            output = shell("echo 'docker restart node-1'", "Restart the node")
-            result = get_last_result()
-
-            # Log tool call
+            # Log tool call (Bash instead of shell)
             audit.log_entry(
                 session_id,
                 "tool_call",
-                "shell: docker restart node-1",
-                tool_name="shell",
-                tool_params={"command": "echo 'docker restart node-1'"},
+                "Bash: docker restart node-1",
+                tool_name="Bash",
+                tool_params={"command": "docker restart node-1"},
             )
 
             # Log tool result
@@ -450,9 +399,8 @@ class TestE2EFlow:
                 session_id,
                 "tool_result",
                 "Node restarted",
-                raw_content=result["output"],
-                tool_name="shell",
-                exit_code=result["exit_code"],
+                raw_content="node-1\n",
+                exit_code=0,
             )
 
             # Complete session
@@ -462,7 +410,7 @@ class TestE2EFlow:
             with TicketOpsDB(db_path) as ops:
                 ops.update_ticket_resolved(ticket.id, "Restarted node-1")
 
-        # Step 7: Verify audit trail
+        # Step 6: Verify audit trail
         with AuditLogDB(db_path) as audit:
             entries = audit.get_session_entries(session_id)
             assert len(entries) == 3

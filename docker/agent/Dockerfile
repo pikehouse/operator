@@ -30,9 +30,14 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js 22 LTS (required by Claude Code CLI bundled with claude-agent-sdk)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install Python packages
 RUN pip install --no-cache-dir \
-    anthropic \
+    claude-agent-sdk \
     httpx \
     redis \
     pyyaml \

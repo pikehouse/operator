@@ -107,6 +107,20 @@ class RemoteOperatorProcesses:
         # Create shared data volume
         await self.vm.run_command(f"docker volume create {DATA_VOLUME}")
 
+        # Ensure workspace and extra volume dirs are writable by container user (uid 1000)
+        if self.workspace_volume_mount:
+            host_path = self.workspace_volume_mount.split(":")[0]
+            await self.vm.run_command(
+                f"chmod -R a+rw {host_path} 2>/dev/null || true",
+                timeout_sec=15.0,
+            )
+        for mount in self.extra_volume_mounts:
+            host_path = mount.split(":")[0]
+            await self.vm.run_command(
+                f"chmod -R a+rw {host_path} 2>/dev/null || true",
+                timeout_sec=15.0,
+            )
+
         # Build extra env flags for docker run
         extra_env_flags = "".join(
             f"-e {k}={v} " for k, v in self.extra_env.items()
@@ -127,10 +141,11 @@ class RemoteOperatorProcesses:
             escaped_context = self.subject_context_extra.replace("'", "'\\''")
             context_extra_flag = f" --subject-context-extra '{escaped_context}'"
 
-        # Start monitor container
+        # Start monitor container (runs as root — doesn't use Agent SDK)
         console.print(f"[blue]Starting operator monitor ({self.subject_name}, 5s interval)...[/blue]")
         exit_code, _, stderr = await self.vm.run_command(
             f"docker run -d --name {MONITOR_CONTAINER} --network=host "
+            f"--user root "
             f"-v /var/run/docker.sock:/var/run/docker.sock "
             f"-v {DATA_VOLUME}:/data "
             f"{workspace_mount_flag}"
@@ -144,7 +159,32 @@ class RemoteOperatorProcesses:
         if exit_code != 0:
             raise RuntimeError(f"Failed to start monitor: {stderr}")
 
-        # Start agent container
+        # Wait for monitor to create operator.db, then make it writable
+        # by the agent's non-root user. The monitor creates the DB
+        # asynchronously after startup, so we poll until it exists.
+        for _ in range(15):
+            exit_code, stdout, _ = await self.vm.run_command(
+                f"docker exec {MONITOR_CONTAINER} test -f {OPERATOR_DB_PATH} && echo exists",
+                timeout_sec=5.0,
+            )
+            if exit_code == 0 and "exists" in stdout:
+                break
+            await asyncio.sleep(1)
+        await self.vm.run_command(
+            f"docker exec {MONITOR_CONTAINER} chmod -R 777 /data",
+            timeout_sec=10.0,
+        )
+
+        # Make Docker socket accessible to non-root agent user.
+        # COS uses GID 412 for the socket, which doesn't match the container's
+        # docker group (999). Making it world-accessible is safe since the VM
+        # is single-purpose and ephemeral.
+        await self.vm.run_command(
+            "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+            timeout_sec=5.0,
+        )
+
+        # Start agent container (runs as non-root appuser for bypassPermissions)
         console.print("[blue]Starting operator agent...[/blue]")
         exit_code, _, stderr = await self.vm.run_command(
             f"docker run -d --name {AGENT_CONTAINER} --network=host "
@@ -153,6 +193,7 @@ class RemoteOperatorProcesses:
             f"{workspace_mount_flag}"
             f"{extra_mounts_flag}"
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
+            f"-e HOME=/home/appuser "
             f"{extra_env_flags}"
             f"{self.operator_image} "
             f"uv run operator agent start --db {OPERATOR_DB_PATH}",
@@ -165,6 +206,27 @@ class RemoteOperatorProcesses:
             )
             raise RuntimeError(f"Failed to start agent: {stderr}")
 
+        # Health check: wait a few seconds then verify agent is still running
+        await asyncio.sleep(3)
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"docker inspect -f '{{{{.State.Running}}}}' {AGENT_CONTAINER} 2>/dev/null",
+            timeout_sec=10.0,
+        )
+        if exit_code != 0 or "true" not in stdout.lower():
+            # Agent crashed on startup - capture logs
+            _, agent_logs, _ = await self.vm.run_command(
+                f"docker logs {AGENT_CONTAINER} 2>&1 | tail -50",
+                timeout_sec=10.0,
+            )
+            console.print(f"[red]Agent container crashed on startup![/red]")
+            console.print(f"[red]Agent logs:\n{agent_logs}[/red]")
+            # Clean up
+            await self.vm.run_command(
+                f"docker rm -f {AGENT_CONTAINER} {MONITOR_CONTAINER}",
+                timeout_sec=10.0,
+            )
+            raise RuntimeError(f"Agent container crashed on startup: {agent_logs}")
+
         self._started = True
         console.print("[green]Remote operator started[/green]")
 
@@ -174,6 +236,15 @@ class RemoteOperatorProcesses:
             return
 
         console.print("[blue]Stopping remote operator...[/blue]")
+
+        # Capture container logs before removal for debugging
+        for container in [AGENT_CONTAINER, MONITOR_CONTAINER]:
+            _, logs, _ = await self.vm.run_command(
+                f"docker logs {container} 2>&1 | tail -30",
+                timeout_sec=10.0,
+            )
+            if logs.strip():
+                console.print(f"[dim]{container} logs (last 30 lines):\n{logs}[/dim]")
 
         # Stop agent first, then monitor
         for container in [AGENT_CONTAINER, MONITOR_CONTAINER]:

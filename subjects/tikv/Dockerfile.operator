@@ -10,6 +10,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends docker-ce-cli && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js 22 LTS (required by Claude Code CLI bundled with claude-agent-sdk)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Install uv for dependency management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -22,6 +27,17 @@ COPY subjects/ ./subjects/
 
 # Install dependencies using uv
 RUN uv sync --frozen
+
+# Create non-root user for the agent (bypassPermissions requires non-root).
+# Add to docker group so it can access /var/run/docker.sock.
+# Pre-create /data for the shared volume mount.
+RUN groupadd -g 999 docker 2>/dev/null || true && \
+    useradd -m -s /bin/bash -u 1000 appuser && \
+    usermod -aG docker appuser && \
+    chown -R appuser:appuser /app && \
+    mkdir -p /data && chown appuser:appuser /data
+
+USER appuser
 
 # Set default command
 CMD ["uv", "run", "python", "-c", "print('Operator ready')"]

@@ -1,35 +1,38 @@
-"""Core agent loop with tool_runner and database integration."""
+"""Core agent loop with Claude Agent SDK and database integration."""
 
+import asyncio
 import json
 import signal
-import threading
-import time
 from pathlib import Path
 
-import anthropic
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    TextBlock,
+    ToolResultBlock,
+    ToolUseBlock,
+    query,
+)
 
 from operator_core.db.audit_log import AuditLogDB
 from operator_core.monitor.types import Ticket
 
 from .prompts import SYSTEM_PROMPT
-from .summarize import summarize_with_haiku
 from .ticket_ops import TicketOpsDB
-from .tools import get_last_result, shell
 
 
-def process_ticket(
-    client: anthropic.Anthropic,
+async def process_ticket(
     ticket: Ticket,
     audit_db: AuditLogDB,
     session_id: str,
 ) -> tuple[str, str]:
-    """Process ticket with Claude using tool_runner.
+    """Process ticket with Claude using the Agent SDK.
 
     Variant config is read from ticket.variant_model and ticket.variant_system_prompt
     if set by the eval harness. Otherwise uses defaults.
 
     Args:
-        client: Anthropic client
         ticket: Ticket to process
         audit_db: Audit database for logging
         session_id: Current session ID
@@ -43,7 +46,7 @@ def process_ticket(
         ticket_text += f"\n\nMetrics:\n{json.dumps(ticket.metric_snapshot, indent=2)}"
 
     # Use variant model if set, otherwise default
-    effective_model = ticket.variant_model or "claude-sonnet-4-20250514"
+    effective_model = ticket.variant_model or "claude-sonnet-4-5-20250929"
 
     # Build system prompt: variant override > default, then append subject context
     base_prompt = ticket.variant_system_prompt or SYSTEM_PROMPT
@@ -51,78 +54,72 @@ def process_ticket(
     if ticket.subject_context:
         effective_system_prompt += "\n\n" + ticket.subject_context
 
-    # Run Claude with tool_runner
-    runner = client.beta.messages.tool_runner(
+    options = ClaudeAgentOptions(
         model=effective_model,
-        max_tokens=8192,
-        tools=[shell],
-        system=effective_system_prompt,
-        messages=[{"role": "user", "content": ticket_text}],
+        system_prompt=effective_system_prompt,
+        allowed_tools=["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+        permission_mode="bypassPermissions",
+        max_turns=50,
     )
 
-    final_message = None
-    for message in runner:
-        if message.content:
+    final_text = ""
+    async for message in query(prompt=ticket_text, options=options):
+        if isinstance(message, AssistantMessage):
             for block in message.content:
-                if block.type == "text" and hasattr(block, "text"):
-                    summary = summarize_with_haiku(client, block.text)  # type: ignore
+                if isinstance(block, TextBlock):
+                    summary = block.text[:200]
                     audit_db.log_entry(
-                        session_id, "reasoning", summary, block.text, None, None, None  # type: ignore
+                        session_id, "reasoning", summary, block.text,
                     )
+                    final_text = block.text
                     print(f"[Claude] {summary}")
-                elif block.type == "tool_use" and hasattr(block, "input"):
-                    tool_params = block.input if isinstance(block.input, dict) else {}  # type: ignore
-                    cmd = str(tool_params.get("command", ""))
-                    cmd_preview = cmd[:60] + "..." if len(cmd) > 60 else cmd
+                elif isinstance(block, ToolUseBlock):
+                    input_str = json.dumps(block.input)
+                    preview = f"{block.name}: {input_str[:60]}"
                     audit_db.log_entry(
-                        session_id, "tool_call", f"shell: {cmd_preview}",
-                        None, block.name, tool_params, None,  # type: ignore
+                        session_id, "tool_call", preview,
+                        tool_name=block.name,
+                        tool_params=block.input,
                     )
-                    print(f"[Tool Call] {block.name}: {cmd_preview}")  # type: ignore
+                    print(f"[Tool Call] {preview}")
+                elif isinstance(block, ToolResultBlock):
+                    content_str = block.content if isinstance(block.content, str) else json.dumps(block.content)
+                    audit_db.log_entry(
+                        session_id, "tool_result", content_str[:200],
+                        raw_content=content_str,
+                        tool_name=None,
+                        exit_code=1 if block.is_error else 0,
+                    )
+                    print(f"[Tool Result] {'ERROR' if block.is_error else 'OK'}: {content_str[:100]}")
+        elif isinstance(message, ResultMessage):
+            if message.result:
+                final_text = message.result
 
-        # After each message, check if a tool was executed
-        result = get_last_result()
-        if result:
-            summary = summarize_with_haiku(client, result["output"])
-            audit_db.log_entry(
-                session_id, "tool_result", summary,
-                result["output"], "shell", None, result["exit_code"],
-            )
-            print(f"[Tool Result] Exit {result['exit_code']}: {summary}")
-
-        final_message = message
-
-    # Determine outcome - keep full text, don't summarize (Claude already writes a summary)
-    if final_message and final_message.stop_reason == "end_turn":
-        summary_text = "Completed"
-        if final_message.content and len(final_message.content) > 0:
-            first_block = final_message.content[0]
-            if hasattr(first_block, "text"):
-                summary_text = first_block.text  # type: ignore
-        return "resolved", summary_text
-    return "escalated", f"Session ended: {final_message.stop_reason if final_message else 'unknown'}"
+    status = "resolved" if final_text else "escalated"
+    return (status, final_text)
 
 
-def run_agent_loop(db_path: Path) -> None:
+async def run_agent_loop(db_path: Path) -> None:
     """Run agent polling loop. Blocks until Ctrl+C.
 
     Args:
         db_path: Path to tickets database
     """
-    client = anthropic.Anthropic()
     print(f"Agent loop starting. Database: {db_path}\nPress Ctrl+C to stop.\n")
 
     # Shutdown coordination
-    shutdown = threading.Event()
+    shutdown = asyncio.Event()
     current_session: tuple[AuditLogDB, str, int] | None = None  # (audit_db, session_id, ticket_id)
 
-    def handle_shutdown(signum: int, frame) -> None:
+    loop = asyncio.get_running_loop()
+
+    def handle_shutdown(signum: int) -> None:
         """Signal handler for graceful shutdown."""
         sig_name = signal.Signals(signum).name
         print(f"\nReceived {sig_name}, shutting down gracefully...")
         shutdown.set()
 
-        # Mark current session as escalated (DEMO-07)
+        # Mark current session as escalated
         if current_session is not None:
             audit_db, session_id, ticket_id = current_session
             try:
@@ -132,9 +129,9 @@ def run_agent_loop(db_path: Path) -> None:
             except Exception as e:
                 print(f"Error during shutdown cleanup: {e}")
 
-    # Register signal handlers
-    signal.signal(signal.SIGINT, handle_shutdown)
-    signal.signal(signal.SIGTERM, handle_shutdown)
+    # Register signal handlers (asyncio-native)
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, handle_shutdown, sig)
 
     while not shutdown.is_set():
         try:
@@ -155,8 +152,8 @@ def run_agent_loop(db_path: Path) -> None:
                     current_session = (audit_db, session_id, ticket.id)
 
                     try:
-                        status, summary = process_ticket(
-                            client, ticket, audit_db, session_id
+                        status, summary = await process_ticket(
+                            ticket, audit_db, session_id
                         )
                         audit_db.complete_session(session_id, status, summary)
 
@@ -180,10 +177,16 @@ def run_agent_loop(db_path: Path) -> None:
                         current_session = None
 
             # Interruptible sleep
-            if shutdown.wait(timeout=1.0):
+            try:
+                await asyncio.wait_for(shutdown.wait(), timeout=1.0)
                 break
+            except asyncio.TimeoutError:
+                pass
 
         except Exception as e:
             print(f"\nERROR in main loop: {e}\n")
-            if shutdown.wait(timeout=1.0):
+            try:
+                await asyncio.wait_for(shutdown.wait(), timeout=1.0)
                 break
+            except asyncio.TimeoutError:
+                pass
