@@ -320,7 +320,7 @@ Other useful commands:
         except Exception as e:
             state["error"] = str(e)
 
-        # Workspace git snapshot
+        # Workspace git snapshot — capture full history of agent changes
         try:
             exit_code, commit_hash, _ = await self.vm.run_command(
                 f"git -C {self.workspace_dir} rev-parse HEAD"
@@ -329,13 +329,24 @@ Other useful commands:
                 _, dirty_output, _ = await self.vm.run_command(
                     f"git -C {self.workspace_dir} status --porcelain"
                 )
-                _, diff_output, _ = await self.vm.run_command(
+                # Uncommitted changes
+                _, diff_head, _ = await self.vm.run_command(
                     f"git -C {self.workspace_dir} diff HEAD"
+                )
+                # All changes since initial commit (includes committed fixes)
+                _, diff_full, _ = await self.vm.run_command(
+                    f"git -C {self.workspace_dir} diff $(git -C {self.workspace_dir} rev-list --max-parents=0 HEAD)..HEAD"
+                )
+                # Commit log (shows agent's commit messages)
+                _, log_output, _ = await self.vm.run_command(
+                    f"git -C {self.workspace_dir} log --oneline --no-decorate"
                 )
                 state["code_workspace"] = {
                     "commit": commit_hash.strip(),
                     "dirty": bool(dirty_output.strip()),
-                    "diff": diff_output.strip(),
+                    "diff": diff_head.strip(),
+                    "diff_full": diff_full.strip(),
+                    "log": log_output.strip(),
                 }
         except Exception as e:
             state["code_workspace"] = {"error": str(e)}
