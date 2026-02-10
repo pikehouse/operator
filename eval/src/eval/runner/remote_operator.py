@@ -185,6 +185,20 @@ class RemoteOperatorProcesses:
         )
 
         # Start agent container (runs as non-root appuser for bypassPermissions)
+        # Git env vars ensure the agent can commit in cross-user workspaces:
+        # - GIT_CONFIG_* sets safe.directory (bypasses ownership check)
+        # - GIT_AUTHOR/COMMITTER_* sets identity (no .gitconfig needed)
+        git_env = (
+            "-e GIT_CONFIG_COUNT=2 "
+            "-e GIT_CONFIG_KEY_0=safe.directory "
+            "-e GIT_CONFIG_VALUE_0=/ "
+            "-e GIT_CONFIG_KEY_1=safe.directory "
+            "-e GIT_CONFIG_VALUE_1=/var/lib/workspace "
+            "-e GIT_AUTHOR_NAME=eval "
+            "-e GIT_AUTHOR_EMAIL=eval@operator "
+            "-e GIT_COMMITTER_NAME=eval "
+            "-e GIT_COMMITTER_EMAIL=eval@operator "
+        )
         console.print("[blue]Starting operator agent...[/blue]")
         exit_code, _, stderr = await self.vm.run_command(
             f"docker run -d --name {AGENT_CONTAINER} --network=host "
@@ -194,6 +208,7 @@ class RemoteOperatorProcesses:
             f"{extra_mounts_flag}"
             f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
             f"-e HOME=/home/appuser "
+            f"{git_env}"
             f"{extra_env_flags}"
             f"{self.operator_image} "
             f"uv run operator agent start --db {OPERATOR_DB_PATH}",

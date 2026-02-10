@@ -53,6 +53,8 @@ class CodeWorkspace:
 
         # Initialise git repo
         ws._run_git("init")
+        ws._run_git("config", "user.email", "eval@operator")
+        ws._run_git("config", "user.name", "eval")
         ws._run_git("add", ".")
         ws._run_git("commit", "-m", "initial")
 

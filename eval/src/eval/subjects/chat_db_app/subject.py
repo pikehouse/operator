@@ -321,7 +321,8 @@ Directory layout:
 - Editable source code is at: {workspace_path}/app/
   (main.py, pool.py, models.py, streaming.py, Dockerfile)
 
-Rebuild after editing code:
+After editing code, commit your changes then rebuild:
+    git -C {workspace_path} add -A && git -C {workspace_path} commit -m "describe your changes"
     {ws.compose_command} build app
     {ws.compose_command} up -d app
 

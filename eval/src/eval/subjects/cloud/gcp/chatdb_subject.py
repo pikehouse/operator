@@ -169,7 +169,8 @@ Directory layout:
   (main.py, pool.py, models.py, streaming.py, Dockerfile)
 - These are separate directories — compose files are in {self.compose_dir}/, source is in {self.workspace_dir}/
 
-Rebuild after editing code:
+After editing code, commit your changes then rebuild:
+    git -C {self.workspace_dir} add -A && git -C {self.workspace_dir} commit -m "describe your changes"
     {compose_cmd} build app
     {compose_cmd} up -d app
 
@@ -209,11 +210,13 @@ Other useful commands:
         # Init git repo in workspace for code tracking
         await self.vm.run_command(
             f"cd {self.workspace_dir} && "
-            "git init && git add -A && "
-            'git -c user.email="eval@operator" -c user.name="eval" '
-            'commit -m "initial"',
+            "git init && "
+            'git config user.email "eval@operator" && '
+            'git config user.name "eval" && '
+            'git add -A && git commit -m "initial"',
             timeout_sec=30.0,
         )
+
 
         # Write .env file with Cloud SQL connection and image URLs
         env_content = (
