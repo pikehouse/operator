@@ -422,7 +422,7 @@ class Worker:
                 console.log("[cyan]Waiting for agent resolution...[/cyan]")
                 ticket_created_at, resolved_at = (
                     await remote_op.wait_for_ticket_resolution(
-                        timeout_sec=300.0,
+                        timeout_sec=600.0,
                         min_ticket_id=pre_chaos_max_ticket_id,
                     )
                 )
