@@ -301,9 +301,12 @@ Other useful commands:
             f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} down -v --remove-orphans"
         )
 
-        # Reset workspace code to initial state
+        # Reset workspace code to initial commit (not HEAD — previous trials
+        # may have added commits that would persist across VM reuse)
         await self.vm.run_command(
-            f"cd {self.workspace_dir} && git reset --hard HEAD && git clean -fd",
+            f"cd {self.workspace_dir} && "
+            "git reset --hard $(git rev-list --max-parents=0 HEAD) && "
+            "git clean -fd",
             timeout_sec=30.0,
         )
 
