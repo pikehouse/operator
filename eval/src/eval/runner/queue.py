@@ -290,17 +290,25 @@ class WorkQueue:
             )
             return [dict(row) for row in rows]
 
-    async def get_worker_status(self) -> list[dict]:
+    async def get_worker_status(self, max_age_hours: float | None = None) -> list[dict]:
         """Get status of all known workers.
+
+        Args:
+            max_age_hours: Only show workers active within this many hours.
+                If None, show all workers.
 
         Returns a list of dicts with worker_id, current task info,
         and history stats (completed count, failed count, last active time).
         """
         pool = await self.db._get_pool()
 
+        age_filter = ""
+        if max_age_hours is not None:
+            age_filter = f"HAVING MAX(COALESCE(completed_at, claimed_at)) > NOW() - INTERVAL '{max_age_hours} hours'"
+
         async with pool.acquire() as conn:
             rows = await conn.fetch(
-                """
+                f"""
                 SELECT
                     worker_id,
                     COUNT(*) FILTER (WHERE status = 'running') as running_count,
@@ -320,6 +328,7 @@ class WorkQueue:
                 FROM work_queue
                 WHERE worker_id IS NOT NULL
                 GROUP BY worker_id
+                {age_filter}
                 ORDER BY last_active DESC
                 """
             )

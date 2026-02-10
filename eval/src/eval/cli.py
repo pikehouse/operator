@@ -1538,13 +1538,20 @@ def worker_list(
         "--remote",
         help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
     ),
+    hours: Optional[float] = typer.Option(
+        24.0,
+        "--hours",
+        help="Only show workers active within this many hours (0 = all)",
+    ),
 ) -> None:
     """Show status of all workers.
 
     Displays each worker's current task, completed/failed counts, and last activity.
+    By default only shows workers active in the last 24 hours.
 
     Examples:
         eval worker workers --remote
+        eval worker workers --remote --hours 0    # show all
     """
     if not remote:
         console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
@@ -1568,7 +1575,8 @@ def worker_list(
         await db.ensure_schema()
         queue = WorkQueue(db)
 
-        workers = await queue.get_worker_status()
+        max_age = hours if hours else None
+        workers = await queue.get_worker_status(max_age_hours=max_age)
         if not workers:
             console.print("[dim]No workers found in work queue[/dim]")
             await db.close()
