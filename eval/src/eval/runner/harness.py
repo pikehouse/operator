@@ -193,7 +193,11 @@ async def extract_operator_data(
 
             ticket_id = ticket_row["id"]
 
-            # Get agent session linked to this ticket
+            # Get agent session linked to this ticket.
+            # When multiple invariants fire (e.g., pool_exhaustion + high_error_rate),
+            # the agent may link its session to the first ticket while the most recent
+            # ticket (by id) is a different one. Fall back to the most recent session
+            # if no session is found for the most recent ticket.
             session_row = conn.execute(
                 """
                 SELECT session_id, status, outcome_summary, started_at, ended_at
@@ -202,6 +206,16 @@ async def extract_operator_data(
                 """,
                 (ticket_id,),
             ).fetchone()
+
+            if session_row is None:
+                # Fallback: get the most recent session regardless of ticket_id
+                session_row = conn.execute(
+                    """
+                    SELECT session_id, status, outcome_summary, started_at, ended_at
+                    FROM agent_sessions
+                    ORDER BY started_at DESC LIMIT 1
+                    """
+                ).fetchone()
 
             if session_row:
                 result["agent_session"] = {

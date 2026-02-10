@@ -358,6 +358,16 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                     """, (ticket_id,))
                     session_row = cursor.fetchone()
 
+                    # Fallback: if no session linked to this ticket, get most recent session
+                    if session_row is None:
+                        cursor.execute("""
+                            SELECT session_id, status, outcome_summary, started_at, ended_at
+                            FROM agent_sessions
+                            ORDER BY started_at DESC
+                            LIMIT 1
+                        """)
+                        session_row = cursor.fetchone()
+
                     if session_row and session_row["outcome_summary"]:
                         session_info = {
                             "session_id": session_row["session_id"],
@@ -455,12 +465,27 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
     for cmd in raw_commands:
         if isinstance(cmd, dict):
             tool_params = cmd.get("tool_params", "")
+            tool_name = cmd.get("tool_name", "")
             command_str = ""
             reasoning = ""
             try:
                 params = json.loads(tool_params) if isinstance(tool_params, str) else tool_params
                 command_str = params.get("command", "")
                 reasoning = params.get("reasoning", "")
+                # For non-Bash tools, show tool name + key parameter
+                if not command_str and tool_name:
+                    if tool_name == "Read":
+                        command_str = f"[Read] {params.get('file_path', '')}"
+                    elif tool_name == "Write":
+                        command_str = f"[Write] {params.get('file_path', '')}"
+                    elif tool_name == "Edit":
+                        command_str = f"[Edit] {params.get('file_path', '')}"
+                    elif tool_name == "Glob":
+                        command_str = f"[Glob] {params.get('pattern', '')}"
+                    elif tool_name == "Grep":
+                        command_str = f"[Grep] {params.get('pattern', '')}"
+                    else:
+                        command_str = f"[{tool_name}]"
             except:
                 command_str = str(cmd)
 
