@@ -803,6 +803,49 @@ def compare_variants_cmd(
     console.print(f"[dim]{len(result.variants)} variant(s) compared[/dim]")
 
 
+@app.command("export")
+def export_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to export"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output HTML file path (default: campaign-<id>.html)"
+    ),
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+) -> None:
+    """Export a campaign as a self-contained HTML file.
+
+    Generates a single HTML file with all campaign data, trial details,
+    reasoning timelines, code diffs, and timing — viewable in any browser
+    with no server required.
+
+    Examples:
+        eval export 1
+        eval export 1 -o results.html
+        eval export 1 --remote
+    """
+    from eval.export import export_campaign_html
+
+    out_path = output or Path(f"campaign-{campaign_id}.html")
+
+    async def run():
+        db = await _get_db_or_exit(remote, db_path)
+        try:
+            return await export_campaign_html(db, campaign_id)
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
+
+    try:
+        html = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    out_path.write_text(html)
+    size_kb = out_path.stat().st_size / 1024
+    console.print(f"[green]Exported campaign {campaign_id} to {out_path} ({size_kb:.0f} KB)[/green]")
+
+
 @app.command("show")
 def show_detail(
     id: int = typer.Argument(..., help="Campaign or trial ID"),

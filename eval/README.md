@@ -157,6 +157,25 @@ uv run eval viewer                              # http://127.0.0.1:8000
 
 For cloud results, add `--remote` to commands above.
 
+## Exporting Results
+
+Export a campaign as a self-contained HTML file that can be opened in any browser — no server needed:
+
+```bash
+cd eval
+
+# Export to default file (campaign-<id>.html)
+uv run eval export <campaign_id>
+
+# Custom output path
+uv run eval export <campaign_id> -o results.html
+
+# Export from cloud database
+uv run eval export <campaign_id> --remote
+```
+
+The exported HTML includes campaign summary, trial table, reasoning timelines, code diffs, DB config changes, and topology diagrams — all embedded with no external dependencies.
+
 ## Campaign Config Reference
 
 Campaign YAML files live in `eval/campaigns/` organized by category (`smoke-tests/`, `coding/`, `operations/`). Key fields:
