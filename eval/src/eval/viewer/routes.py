@@ -495,6 +495,17 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
         if not code_diff and isinstance(code_workspace, dict):
             code_diff = code_workspace.get("diff_full") or code_workspace.get("diff", "")
 
+    # DB config diff (initial vs final PostgreSQL state)
+    db_config_diff = None
+    initial_state = safe_json_loads(trial.initial_state)
+    if isinstance(initial_state, dict) and isinstance(final_state, dict):
+        init_db = initial_state.get("db_config")
+        final_db = final_state.get("db_config")
+        if init_db or final_db:
+            from eval.analysis.db_config_diff import diff_db_config
+
+            db_config_diff = diff_db_config(init_db, final_db)
+
     return request.app.state.templates.TemplateResponse(
         "trial.html",
         {
@@ -510,5 +521,6 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             "reasoning_entries": reasoning_entries,
             "code_workspace": code_workspace,
             "code_diff": code_diff,
+            "db_config_diff": db_config_diff,
         },
     )

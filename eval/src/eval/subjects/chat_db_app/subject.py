@@ -199,6 +199,15 @@ class ChatDBAppEvalSubject:
         except Exception as e:
             state["app"] = {"error": str(e)}
 
+        # PostgreSQL config state
+        try:
+            from eval.subjects.chat_db_app.pg_state import capture_pg_state_asyncpg
+
+            dsn = f"postgresql://chatapp:chatapp@localhost:{self.pg_port}/chatdb"
+            state["db_config"] = await capture_pg_state_asyncpg(dsn)
+        except Exception as e:
+            state["db_config"] = {"error": str(e)}
+
         # Code workspace snapshot
         if self.workspace:
             try:

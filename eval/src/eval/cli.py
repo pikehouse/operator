@@ -992,6 +992,32 @@ def show_detail(
                 if len(lines) > 20:
                     print(f"    ... ({len(lines) - 20} more lines)")
 
+            # Database config changes
+            initial_state = safe_json_loads(t.initial_state)
+            if isinstance(initial_state, dict):
+                init_db = initial_state.get("db_config")
+                final_db = final_state.get("db_config")
+                if init_db or final_db:
+                    from eval.analysis.db_config_diff import diff_db_config
+
+                    db_diff = diff_db_config(init_db, final_db)
+                    if db_diff["has_changes"]:
+                        print(f"\nDatabase Config Changes:")
+                        for s in db_diff["settings_changed"]:
+                            print(f"  Setting {s['name']}: {s['before']} -> {s['after']}")
+                        for idx in db_diff["indexes_added"]:
+                            print(f"  + Index: {idx['definition']}")
+                        for idx in db_diff["indexes_removed"]:
+                            print(f"  - Index: {idx['definition']}")
+                        for tbl in db_diff["tables_added"]:
+                            print(f"  + Table: {tbl}")
+                        for tbl in db_diff["tables_removed"]:
+                            print(f"  - Table: {tbl}")
+                        for col in db_diff["columns_added"]:
+                            print(f"  + Column: {col['table']}.{col['name']} ({col['type']})")
+                        for col in db_diff["columns_removed"]:
+                            print(f"  - Column: {col['table']}.{col['name']} ({col['type']})")
+
     else:
         # Campaign detail output
         campaign = obj

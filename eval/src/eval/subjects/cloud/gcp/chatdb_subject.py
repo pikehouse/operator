@@ -346,6 +346,16 @@ Other useful commands:
         except Exception as e:
             state["error"] = str(e)
 
+        # PostgreSQL config state (via psql in docker container)
+        try:
+            from eval.subjects.chat_db_app.pg_state import capture_pg_state_psql
+
+            state["db_config"] = await capture_pg_state_psql(
+                self.vm.run_command, self.database_url
+            )
+        except Exception as e:
+            state["db_config"] = {"error": str(e)}
+
         # Workspace git snapshot — capture full history of agent changes
         try:
             exit_code, commit_hash, _ = await self.vm.run_command(
