@@ -13,9 +13,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import yaml
 
 from eval.runner.remote_operator import (
     AGENT_CONTAINER,
+    COMPOSE_CMD,
+    COMPOSE_FILE_PATH,
+    COMPOSE_PROJECT,
     DATA_VOLUME,
     MONITOR_CONTAINER,
     OPERATOR_DB_PATH,
@@ -29,13 +33,12 @@ class MockVM:
 
     def __init__(self):
         self.commands_run: list[str] = []
+        self.uploaded_files: dict[str, str] = {}
         self._responses: dict[str, tuple[int, str, str]] = {}
         self._default_response = (0, "", "")
         self._operator_db_path: Path | None = None
         # Default: agent container health check passes
         self.set_response("docker inspect", 0, "true")
-        # Default: operator.db exists check passes
-        self.set_response("test -f", 0, "exists")
 
     def set_response(self, pattern: str, exit_code: int, stdout: str, stderr: str = ""):
         """Set a canned response for commands matching a pattern."""
@@ -63,8 +66,8 @@ class MockVM:
             shutil.copy2(self._operator_db_path, local_path)
 
     async def upload_file(self, local_path: str, remote_path: str) -> None:
-        """Simulate SCP file upload."""
-        pass
+        """Capture uploaded file content for assertions."""
+        self.uploaded_files[remote_path] = Path(local_path).read_text()
 
     @property
     def instance_id(self) -> str:
@@ -152,8 +155,8 @@ class TestRemoteOperatorProcesses:
     """Tests for RemoteOperatorProcesses lifecycle."""
 
     @pytest.mark.asyncio
-    async def test_start_pulls_image_and_runs_containers(self):
-        """Start should pull image, create volume, and run monitor + agent."""
+    async def test_start_uploads_compose_and_runs(self):
+        """Start should upload compose YAML, pull, and compose up."""
         vm = MockVM()
         remote_op = RemoteOperatorProcesses(
             vm=vm,
@@ -164,16 +167,21 @@ class TestRemoteOperatorProcesses:
         with patch("eval.runner.remote_operator.asyncio.sleep", new_callable=AsyncMock):
             await remote_op.start()
 
-        # Verify commands were issued
-        assert any("docker pull" in cmd for cmd in vm.commands_run)
+        # Compose file was uploaded
+        assert COMPOSE_FILE_PATH in vm.uploaded_files
+        config = yaml.safe_load(vm.uploaded_files[COMPOSE_FILE_PATH])
+        assert "monitor" in config["services"]
+        assert "agent" in config["services"]
+
+        # Verify compose pull and up commands issued
+        assert any("pull" in cmd and "compose" in cmd for cmd in vm.commands_run)
+        assert any("up -d --wait" in cmd and "compose" in cmd for cmd in vm.commands_run)
         assert any("docker volume create" in cmd for cmd in vm.commands_run)
-        assert any(MONITOR_CONTAINER in cmd and "docker run" in cmd for cmd in vm.commands_run)
-        assert any(AGENT_CONTAINER in cmd and "docker run" in cmd for cmd in vm.commands_run)
         assert remote_op._started is True
 
     @pytest.mark.asyncio
-    async def test_start_uses_host_network_and_docker_socket(self):
-        """Containers should use host networking and mount Docker socket."""
+    async def test_start_compose_config_has_host_network_and_docker_socket(self):
+        """Compose config should use host networking and mount Docker socket."""
         vm = MockVM()
         remote_op = RemoteOperatorProcesses(
             vm=vm,
@@ -184,15 +192,15 @@ class TestRemoteOperatorProcesses:
         with patch("eval.runner.remote_operator.asyncio.sleep", new_callable=AsyncMock):
             await remote_op.start()
 
-        # Find the docker run commands
-        run_cmds = [cmd for cmd in vm.commands_run if "docker run" in cmd]
-        for cmd in run_cmds:
-            assert "--network=host" in cmd
-            assert "/var/run/docker.sock" in cmd
+        config = yaml.safe_load(vm.uploaded_files[COMPOSE_FILE_PATH])
+        for svc_name in ["monitor", "agent"]:
+            svc = config["services"][svc_name]
+            assert svc["network_mode"] == "host"
+            assert "/var/run/docker.sock:/var/run/docker.sock" in svc["volumes"]
 
     @pytest.mark.asyncio
-    async def test_stop_removes_containers(self):
-        """Stop should remove both containers."""
+    async def test_stop_issues_compose_down(self):
+        """Stop should issue compose down."""
         vm = MockVM()
         remote_op = RemoteOperatorProcesses(
             vm=vm,
@@ -205,15 +213,14 @@ class TestRemoteOperatorProcesses:
         vm.commands_run.clear()
         await remote_op.stop()
 
-        assert any(AGENT_CONTAINER in cmd for cmd in vm.commands_run)
-        assert any(MONITOR_CONTAINER in cmd for cmd in vm.commands_run)
+        assert any("compose" in cmd and "down" in cmd for cmd in vm.commands_run)
         assert remote_op._started is False
 
     @pytest.mark.asyncio
     async def test_start_fails_on_pull_error(self):
-        """Start should raise if image pull fails."""
+        """Start should raise if compose pull fails."""
         vm = MockVM()
-        vm.set_response("docker pull", 1, "", "Error: image not found")
+        vm.set_response("pull", 1, "", "Error: image not found")
 
         remote_op = RemoteOperatorProcesses(
             vm=vm,
@@ -225,11 +232,10 @@ class TestRemoteOperatorProcesses:
             await remote_op.start()
 
     @pytest.mark.asyncio
-    async def test_start_cleans_up_monitor_if_agent_fails(self):
-        """If agent container fails to start, monitor should be cleaned up."""
+    async def test_start_cleans_up_on_compose_up_failure(self):
+        """If compose up fails, compose down should be called for cleanup."""
         vm = MockVM()
-        # Agent run command fails
-        vm.set_response(f"--name {AGENT_CONTAINER}", 1, "", "Error: agent failed")
+        vm.set_response("up -d --wait", 1, "", "Error: service failed")
 
         remote_op = RemoteOperatorProcesses(
             vm=vm,
@@ -237,11 +243,115 @@ class TestRemoteOperatorProcesses:
             anthropic_api_key="test-key",
         )
 
-        with pytest.raises(RuntimeError, match="Failed to start agent"):
+        with pytest.raises(RuntimeError, match="Failed to start operator"):
             await remote_op.start()
 
-        # Monitor should have been cleaned up
-        assert any("docker rm -f" in cmd and MONITOR_CONTAINER in cmd for cmd in vm.commands_run)
+        # compose down should have been called for cleanup
+        assert any("compose" in cmd and "down" in cmd for cmd in vm.commands_run)
+
+
+class TestBuildComposeConfig:
+    """Unit tests for _build_compose_config()."""
+
+    def _make_op(self, **kwargs) -> RemoteOperatorProcesses:
+        defaults = dict(
+            vm=MockVM(),
+            operator_image="test-registry/operator:latest",
+            anthropic_api_key="test-key",
+        )
+        defaults.update(kwargs)
+        return RemoteOperatorProcesses(**defaults)
+
+    def test_both_services_use_host_network_and_docker_socket(self):
+        """Both monitor and agent should use host networking and mount docker socket."""
+        config = self._make_op()._build_compose_config()
+        for svc_name in ["monitor", "agent"]:
+            svc = config["services"][svc_name]
+            assert svc["network_mode"] == "host"
+            assert "/var/run/docker.sock:/var/run/docker.sock" in svc["volumes"]
+
+    def test_data_volume_declared_external(self):
+        """The operator-data volume should be declared external."""
+        config = self._make_op()._build_compose_config()
+        assert config["volumes"][DATA_VOLUME] == {"external": True}
+
+    def test_monitor_has_healthcheck(self):
+        """Monitor should have a healthcheck testing for operator.db."""
+        config = self._make_op()._build_compose_config()
+        hc = config["services"]["monitor"]["healthcheck"]
+        assert hc["test"] == ["CMD", "test", "-f", OPERATOR_DB_PATH]
+        assert "interval" in hc
+        assert "retries" in hc
+
+    def test_agent_depends_on_healthy_monitor(self):
+        """Agent should depend on monitor with condition: service_healthy."""
+        config = self._make_op()._build_compose_config()
+        deps = config["services"]["agent"]["depends_on"]
+        assert deps == {"monitor": {"condition": "service_healthy"}}
+
+    def test_monitor_runs_as_root(self):
+        """Monitor should run as root."""
+        config = self._make_op()._build_compose_config()
+        assert config["services"]["monitor"]["user"] == "root"
+
+    def test_agent_does_not_set_user(self):
+        """Agent runs as default user (appuser in Dockerfile), no explicit user key."""
+        config = self._make_op()._build_compose_config()
+        assert "user" not in config["services"]["agent"]
+
+    def test_extra_env_propagated_to_both_services(self):
+        """Extra env vars should appear in both monitor and agent environment."""
+        config = self._make_op(
+            extra_env={"DATABASE_URL": "postgres://...", "APP_URL": "http://localhost:3000"}
+        )._build_compose_config()
+        for svc_name in ["monitor", "agent"]:
+            env = config["services"][svc_name]["environment"]
+            assert env["DATABASE_URL"] == "postgres://..."
+            assert env["APP_URL"] == "http://localhost:3000"
+
+    def test_workspace_mount_on_both_services(self):
+        """Workspace volume mount should appear on both monitor and agent."""
+        config = self._make_op(
+            workspace_volume_mount="/var/lib/workspace:/var/lib/workspace"
+        )._build_compose_config()
+        for svc_name in ["monitor", "agent"]:
+            assert "/var/lib/workspace:/var/lib/workspace" in config["services"][svc_name]["volumes"]
+
+    def test_extra_volume_mounts_only_on_agent(self):
+        """Extra volume mounts should appear only on agent, not monitor."""
+        config = self._make_op(
+            extra_volume_mounts=["/toolbox:/toolbox", "/compose:/compose"]
+        )._build_compose_config()
+        agent_vols = config["services"]["agent"]["volumes"]
+        monitor_vols = config["services"]["monitor"]["volumes"]
+        assert "/toolbox:/toolbox" in agent_vols
+        assert "/compose:/compose" in agent_vols
+        assert "/toolbox:/toolbox" not in monitor_vols
+        assert "/compose:/compose" not in monitor_vols
+
+    def test_subject_context_extra_in_monitor_command(self):
+        """Subject context extra should appear in monitor command string."""
+        config = self._make_op(
+            subject_context_extra="Rebuild with: make build"
+        )._build_compose_config()
+        cmd = config["services"]["monitor"]["command"]
+        assert "--subject-context-extra" in cmd
+        assert "Rebuild with: make build" in cmd
+
+    def test_container_names_match_constants(self):
+        """Container names should match the module-level constants."""
+        config = self._make_op()._build_compose_config()
+        assert config["services"]["monitor"]["container_name"] == MONITOR_CONTAINER
+        assert config["services"]["agent"]["container_name"] == AGENT_CONTAINER
+
+    def test_agent_has_git_env_vars(self):
+        """Agent should have GIT_CONFIG_* and GIT_AUTHOR/COMMITTER env vars."""
+        config = self._make_op()._build_compose_config()
+        env = config["services"]["agent"]["environment"]
+        assert env["GIT_CONFIG_COUNT"] == "2"
+        assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
+        assert env["GIT_AUTHOR_NAME"] == "eval"
+        assert env["GIT_COMMITTER_EMAIL"] == "eval@operator"
 
 
 class TestRemoteOperatorDBQueries:

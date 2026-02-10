@@ -8,14 +8,21 @@ The operator runs as Docker containers on the VM with:
 - Host networking (for PD access at localhost:2379)
 - Docker socket mount (for agent's shell tool)
 - Shared data volume (for operator.db)
+
+Container orchestration uses docker-compose (declarative YAML) rather than
+imperative `docker run` commands. The compose file is generated at runtime
+and uploaded to the VM. Startup ordering is handled via healthchecks and
+depends_on rather than polling loops.
 """
 
 import asyncio
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any
 
+import yaml
 from rich.console import Console
 
 from eval.types import VariantConfig
@@ -28,6 +35,12 @@ MONITOR_CONTAINER = "operator-monitor"
 AGENT_CONTAINER = "operator-agent"
 DATA_VOLUME = "operator-data"
 OPERATOR_DB_PATH = "/data/operator.db"
+
+# Compose config
+COMPOSE_FILE_PATH = "/tmp/operator-compose.yaml"
+COMPOSE_PROJECT = "operator"
+# COS VMs have compose installed as a CLI plugin via install_compose_plugin()
+COMPOSE_CMD = "docker --config /var/lib/toolbox/docker-config compose"
 
 
 class RemoteOperatorProcesses:
@@ -78,14 +91,128 @@ class RemoteOperatorProcesses:
         self.extra_volume_mounts = extra_volume_mounts or []
         self._started = False
 
+    def _build_compose_config(self) -> dict:
+        """Build a docker-compose config dict for monitor + agent services.
+
+        Returns a Python dict that will be serialized to YAML and uploaded
+        to the VM. Both services use host networking, mount the docker socket
+        and shared data volume. The monitor has a healthcheck that the agent
+        depends on via `depends_on: condition: service_healthy`.
+        """
+        # Shared environment for both services
+        shared_env: dict[str, str] = {
+            "ANTHROPIC_API_KEY": self.anthropic_api_key,
+            **self.extra_env,
+        }
+
+        # Shared volume mounts for both services
+        shared_volumes = [
+            "/var/run/docker.sock:/var/run/docker.sock",
+            f"{DATA_VOLUME}:/data",
+        ]
+        if self.workspace_volume_mount:
+            shared_volumes.append(self.workspace_volume_mount)
+
+        # Build monitor command
+        monitor_cmd = (
+            f"uv run operator monitor run"
+            f" --subject {self.subject_name}"
+            f" --db {OPERATOR_DB_PATH}"
+            f" --interval 5"
+        )
+        if self.subject_context_extra:
+            monitor_cmd += f" --subject-context-extra '{self.subject_context_extra}'"
+
+        # Monitor service — runs as root, has healthcheck
+        monitor_service: dict[str, Any] = {
+            "image": self.operator_image,
+            "container_name": MONITOR_CONTAINER,
+            "network_mode": "host",
+            "user": "root",
+            "volumes": list(shared_volumes),
+            "environment": shared_env,
+            "command": monitor_cmd,
+            "healthcheck": {
+                "test": ["CMD", "test", "-f", OPERATOR_DB_PATH],
+                "interval": "2s",
+                "timeout": "2s",
+                "retries": 15,
+                "start_period": "3s",
+            },
+        }
+
+        # Agent gets extra env for git config + identity
+        agent_env: dict[str, str] = {
+            **shared_env,
+            "HOME": "/home/appuser",
+            # Git safe.directory config via env vars
+            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_KEY_0": "safe.directory",
+            "GIT_CONFIG_VALUE_0": "/",
+            "GIT_CONFIG_KEY_1": "safe.directory",
+            "GIT_CONFIG_VALUE_1": "/var/lib/workspace",
+            # Git identity via env vars (no .gitconfig file needed)
+            "GIT_AUTHOR_NAME": "eval",
+            "GIT_AUTHOR_EMAIL": "eval@operator",
+            "GIT_COMMITTER_NAME": "eval",
+            "GIT_COMMITTER_EMAIL": "eval@operator",
+        }
+
+        # Agent volumes: shared + extra mounts (compose dir, toolbox, etc.)
+        agent_volumes = list(shared_volumes) + list(self.extra_volume_mounts)
+
+        # Agent service — runs as appuser, depends on healthy monitor
+        agent_service: dict[str, Any] = {
+            "image": self.operator_image,
+            "container_name": AGENT_CONTAINER,
+            "network_mode": "host",
+            "volumes": agent_volumes,
+            "environment": agent_env,
+            "command": f"uv run operator agent start --db {OPERATOR_DB_PATH}",
+            "depends_on": {
+                "monitor": {"condition": "service_healthy"},
+            },
+        }
+
+        return {
+            "services": {
+                "monitor": monitor_service,
+                "agent": agent_service,
+            },
+            "volumes": {
+                DATA_VOLUME: {"external": True},
+            },
+        }
+
+    async def _upload_compose_file(self) -> None:
+        """Generate and upload the compose YAML to the VM."""
+        config = self._build_compose_config()
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yaml", delete=False
+        ) as f:
+            yaml.dump(config, f, default_flow_style=False)
+            local_path = f.name
+        try:
+            await self.vm.upload_file(local_path, COMPOSE_FILE_PATH)
+        finally:
+            Path(local_path).unlink(missing_ok=True)
+
+    def _compose(self, subcmd: str) -> str:
+        """Build a full compose command string with project and file flags."""
+        return (
+            f"{COMPOSE_CMD}"
+            f" -p {COMPOSE_PROJECT}"
+            f" -f {COMPOSE_FILE_PATH}"
+            f" {subcmd}"
+        )
+
     async def start(self) -> None:
-        """Pull operator image and start monitor + agent containers.
+        """Pull operator image and start monitor + agent via docker-compose.
 
-        Creates a shared Docker volume for operator.db, then starts:
-        1. operator-monitor (observes TiKV via PD at localhost:2379)
-        2. operator-agent (diagnoses and resolves tickets)
-
-        Both use host networking and Docker socket mount.
+        Generates a compose YAML, uploads it to the VM, then uses
+        `compose up -d --wait` to start both services. The monitor's
+        healthcheck (test -f operator.db) gates agent startup via
+        depends_on, eliminating the need for manual polling loops.
         """
         console.print("[bold blue]Starting remote operator...[/bold blue]")
 
@@ -95,17 +222,17 @@ class RemoteOperatorProcesses:
             timeout_sec=30.0,
         )
 
-        # Pull operator image
-        console.print(f"[dim]Pulling operator image: {self.operator_image}[/dim]")
-        exit_code, stdout, stderr = await self.vm.run_command(
-            f"docker pull {self.operator_image}",
-            timeout_sec=300.0,
-        )
-        if exit_code != 0:
-            raise RuntimeError(f"Failed to pull operator image: {stderr}")
-
-        # Create shared data volume
+        # Create shared data volume (declared external in compose)
         await self.vm.run_command(f"docker volume create {DATA_VOLUME}")
+
+        # Make Docker socket accessible to non-root agent user.
+        # COS uses GID 412 for the socket, which doesn't match the container's
+        # docker group (999). Making it world-accessible is safe since the VM
+        # is single-purpose and ephemeral.
+        await self.vm.run_command(
+            "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
+            timeout_sec=5.0,
+        )
 
         # Ensure workspace and extra volume dirs are writable by container user (uid 1000)
         if self.workspace_volume_mount:
@@ -121,124 +248,56 @@ class RemoteOperatorProcesses:
                 timeout_sec=15.0,
             )
 
-        # Build extra env flags for docker run
-        extra_env_flags = "".join(
-            f"-e {k}={v} " for k, v in self.extra_env.items()
-        )
+        # Upload compose file
+        await self._upload_compose_file()
 
-        # Build optional volume mounts for workspace and extras
-        workspace_mount_flag = ""
-        if self.workspace_volume_mount:
-            workspace_mount_flag = f"-v {self.workspace_volume_mount} "
-        extra_mounts_flag = "".join(
-            f"-v {m} " for m in self.extra_volume_mounts
-        )
-
-        # Build optional subject-context-extra flag for monitor
-        context_extra_flag = ""
-        if self.subject_context_extra:
-            # Escape single quotes in the context string for shell
-            escaped_context = self.subject_context_extra.replace("'", "'\\''")
-            context_extra_flag = f" --subject-context-extra '{escaped_context}'"
-
-        # Start monitor container (runs as root — doesn't use Agent SDK)
-        console.print(f"[blue]Starting operator monitor ({self.subject_name}, 5s interval)...[/blue]")
-        exit_code, _, stderr = await self.vm.run_command(
-            f"docker run -d --name {MONITOR_CONTAINER} --network=host "
-            f"--user root "
-            f"-v /var/run/docker.sock:/var/run/docker.sock "
-            f"-v {DATA_VOLUME}:/data "
-            f"{workspace_mount_flag}"
-            f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
-            f"{extra_env_flags}"
-            f"{self.operator_image} "
-            f"uv run operator monitor run --subject {self.subject_name} --db {OPERATOR_DB_PATH} --interval 5"
-            f"{context_extra_flag}",
-            timeout_sec=30.0,
+        # Pull image via compose
+        console.print(f"[dim]Pulling operator image: {self.operator_image}[/dim]")
+        exit_code, stdout, stderr = await self.vm.run_command(
+            self._compose("pull"),
+            timeout_sec=300.0,
         )
         if exit_code != 0:
-            raise RuntimeError(f"Failed to start monitor: {stderr}")
+            raise RuntimeError(f"Failed to pull operator image: {stderr}")
 
-        # Wait for monitor to create operator.db, then make it writable
-        # by the agent's non-root user. The monitor creates the DB
-        # asynchronously after startup, so we poll until it exists.
-        for _ in range(15):
-            exit_code, stdout, _ = await self.vm.run_command(
-                f"docker exec {MONITOR_CONTAINER} test -f {OPERATOR_DB_PATH} && echo exists",
-                timeout_sec=5.0,
+        # Start services — --wait blocks until all healthchecks pass.
+        # The monitor's healthcheck confirms operator.db exists, and the
+        # agent's depends_on ensures it starts only after the monitor is healthy.
+        console.print(f"[blue]Starting operator monitor ({self.subject_name}, 5s interval) + agent...[/blue]")
+        exit_code, stdout, stderr = await self.vm.run_command(
+            self._compose("up -d --wait"),
+            timeout_sec=120.0,
+        )
+        if exit_code != 0:
+            # Capture logs and clean up before raising
+            _, logs, _ = await self.vm.run_command(
+                self._compose("logs"), timeout_sec=15.0
             )
-            if exit_code == 0 and "exists" in stdout:
-                break
-            await asyncio.sleep(1)
+            await self.vm.run_command(
+                self._compose("down"), timeout_sec=15.0
+            )
+            raise RuntimeError(f"Failed to start operator: {stderr}\nLogs:\n{logs}")
+
+        # Make data volume writable by the non-root agent user
         await self.vm.run_command(
             f"docker exec {MONITOR_CONTAINER} chmod -R 777 /data",
             timeout_sec=10.0,
         )
 
-        # Make Docker socket accessible to non-root agent user.
-        # COS uses GID 412 for the socket, which doesn't match the container's
-        # docker group (999). Making it world-accessible is safe since the VM
-        # is single-purpose and ephemeral.
-        await self.vm.run_command(
-            "sudo chmod 666 /var/run/docker.sock 2>/dev/null || true",
-            timeout_sec=5.0,
-        )
-
-        # Start agent container (runs as non-root appuser for bypassPermissions)
-        # Git env vars ensure the agent can commit in cross-user workspaces:
-        # - GIT_CONFIG_* sets safe.directory (bypasses ownership check)
-        # - GIT_AUTHOR/COMMITTER_* sets identity (no .gitconfig needed)
-        git_env = (
-            "-e GIT_CONFIG_COUNT=2 "
-            "-e GIT_CONFIG_KEY_0=safe.directory "
-            "-e GIT_CONFIG_VALUE_0=/ "
-            "-e GIT_CONFIG_KEY_1=safe.directory "
-            "-e GIT_CONFIG_VALUE_1=/var/lib/workspace "
-            "-e GIT_AUTHOR_NAME=eval "
-            "-e GIT_AUTHOR_EMAIL=eval@operator "
-            "-e GIT_COMMITTER_NAME=eval "
-            "-e GIT_COMMITTER_EMAIL=eval@operator "
-        )
-        console.print("[blue]Starting operator agent...[/blue]")
-        exit_code, _, stderr = await self.vm.run_command(
-            f"docker run -d --name {AGENT_CONTAINER} --network=host "
-            f"-v /var/run/docker.sock:/var/run/docker.sock "
-            f"-v {DATA_VOLUME}:/data "
-            f"{workspace_mount_flag}"
-            f"{extra_mounts_flag}"
-            f"-e ANTHROPIC_API_KEY={self.anthropic_api_key} "
-            f"-e HOME=/home/appuser "
-            f"{git_env}"
-            f"{extra_env_flags}"
-            f"{self.operator_image} "
-            f"uv run operator agent start --db {OPERATOR_DB_PATH}",
-            timeout_sec=30.0,
-        )
-        if exit_code != 0:
-            # Clean up monitor before raising
-            await self.vm.run_command(
-                f"docker rm -f {MONITOR_CONTAINER}", timeout_sec=10.0
-            )
-            raise RuntimeError(f"Failed to start agent: {stderr}")
-
-        # Health check: wait a few seconds then verify agent is still running
+        # Defense-in-depth: verify agent didn't crash shortly after starting
         await asyncio.sleep(3)
         exit_code, stdout, _ = await self.vm.run_command(
             f"docker inspect -f '{{{{.State.Running}}}}' {AGENT_CONTAINER} 2>/dev/null",
             timeout_sec=10.0,
         )
         if exit_code != 0 or "true" not in stdout.lower():
-            # Agent crashed on startup - capture logs
             _, agent_logs, _ = await self.vm.run_command(
-                f"docker logs {AGENT_CONTAINER} 2>&1 | tail -50",
-                timeout_sec=10.0,
+                self._compose("logs agent"), timeout_sec=10.0
             )
-            console.print(f"[red]Agent container crashed on startup![/red]")
+            console.print("[red]Agent container crashed on startup![/red]")
             console.print(f"[red]Agent logs:\n{agent_logs}[/red]")
-            # Clean up
             await self.vm.run_command(
-                f"docker rm -f {AGENT_CONTAINER} {MONITOR_CONTAINER}",
-                timeout_sec=10.0,
+                self._compose("down"), timeout_sec=15.0
             )
             raise RuntimeError(f"Agent container crashed on startup: {agent_logs}")
 
@@ -246,27 +305,23 @@ class RemoteOperatorProcesses:
         console.print("[green]Remote operator started[/green]")
 
     async def stop(self) -> None:
-        """Stop and remove operator containers."""
+        """Stop and remove operator containers via compose down."""
         if not self._started:
             return
 
         console.print("[blue]Stopping remote operator...[/blue]")
 
-        # Capture container logs before removal for debugging
-        for container in [AGENT_CONTAINER, MONITOR_CONTAINER]:
-            _, logs, _ = await self.vm.run_command(
-                f"docker logs {container} 2>&1 | tail -30",
-                timeout_sec=10.0,
-            )
-            if logs.strip():
-                console.print(f"[dim]{container} logs (last 30 lines):\n{logs}[/dim]")
+        # Capture logs before teardown for debugging
+        _, logs, _ = await self.vm.run_command(
+            self._compose("logs --tail=30"), timeout_sec=15.0
+        )
+        if logs.strip():
+            console.print(f"[dim]operator logs (last 30 lines):\n{logs}[/dim]")
 
-        # Stop agent first, then monitor
-        for container in [AGENT_CONTAINER, MONITOR_CONTAINER]:
-            await self.vm.run_command(
-                f"docker rm -f {container} 2>/dev/null || true",
-                timeout_sec=15.0,
-            )
+        # Stops + removes containers; preserves the data volume
+        await self.vm.run_command(
+            self._compose("down"), timeout_sec=15.0
+        )
 
         self._started = False
         console.print("[green]Remote operator stopped[/green]")
