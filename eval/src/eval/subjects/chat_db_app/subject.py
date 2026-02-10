@@ -8,6 +8,7 @@ is simply increasing load intensity.
 import asyncio
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -161,8 +162,15 @@ class ChatDBAppEvalSubject:
 
         self._chaos_load_active = False
 
-        # Build and start everything
+        # Build and start everything (loadgen source needed for image build)
         await asyncio.to_thread(ws.build_and_start)
+
+        # Remove loadgen source so the agent can't read or modify it.
+        # The image is already built; inject_chaos/cleanup_chaos only
+        # --force-recreate the container (no rebuild).
+        loadgen_dir = self.workspace_dir / "loadgen"
+        if loadgen_dir.exists():
+            shutil.rmtree(loadgen_dir)
 
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
         """Wait for the app to respond to /health."""

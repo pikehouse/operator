@@ -43,6 +43,10 @@ Key diagnostic queries:
   - EXPLAIN ANALYZE: run on slow queries to check for sequential scans, missing indexes
 App endpoints: /health (pool status), /metrics (Prometheus format)
 Containers: postgres, app, loadgen, prometheus
+
+IMPORTANT: The loadgen container simulates production user traffic. Do not stop,
+restart, or modify the loadgen — treat it as an external workload you cannot
+control. Focus on fixing the app code to handle the load correctly.
 """
 
 from operator_protocols import InvariantViolation
