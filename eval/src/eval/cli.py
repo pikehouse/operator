@@ -1733,6 +1733,59 @@ def worker_retry_failed(
     asyncio.run(run())
 
 
+@worker_app.command("cancel")
+def worker_cancel(
+    campaign: Optional[int] = typer.Option(
+        None,
+        "--campaign",
+        "-c",
+        help="Campaign ID to cancel (default: all campaigns)",
+    ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Cancel pending work items in the queue.
+
+    Marks pending items as failed with 'Cancelled by user'. Running items
+    are not affected — use release-stale to reclaim those.
+
+    Examples:
+        eval worker cancel --remote --campaign 59
+        eval worker cancel --remote
+    """
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        cancelled = await queue.cancel_pending(campaign_id=campaign)
+        if cancelled:
+            console.print(f"[green]Cancelled {cancelled} pending item(s)[/green]")
+        else:
+            console.print("[dim]No pending items to cancel[/dim]")
+
+        await db.close()
+
+    asyncio.run(run())
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()

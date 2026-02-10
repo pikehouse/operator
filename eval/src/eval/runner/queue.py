@@ -325,6 +325,42 @@ class WorkQueue:
             )
             return [dict(row) for row in rows]
 
+    async def cancel_pending(self, campaign_id: int | None = None) -> int:
+        """Cancel pending work items by marking them as failed.
+
+        Args:
+            campaign_id: Optional campaign to filter by. If None, cancels all.
+
+        Returns:
+            Number of items cancelled.
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            if campaign_id:
+                result = await conn.execute(
+                    """
+                    UPDATE work_queue
+                    SET status = 'failed',
+                        completed_at = NOW(),
+                        error = 'Cancelled by user'
+                    WHERE status = 'pending'
+                      AND campaign_id = $1
+                    """,
+                    campaign_id,
+                )
+            else:
+                result = await conn.execute(
+                    """
+                    UPDATE work_queue
+                    SET status = 'failed',
+                        completed_at = NOW(),
+                        error = 'Cancelled by user'
+                    WHERE status = 'pending'
+                    """
+                )
+            return int(result.split()[1]) if result else 0
+
     async def retry_failed(self, campaign_id: int | None = None) -> int:
         """Reset failed work items back to pending for retry.
 
