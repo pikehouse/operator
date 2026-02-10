@@ -33,6 +33,11 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 | `operations/tikv-diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
 | `operations/tikv-subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
 | `coding/chatdb-code-fix.yaml` | chat-db-app | load_pressure (3 trials) |
+| `coding/chatdb-missing-index.yaml` | chat-db-app | missing_index (3 trials) |
+| `coding/chatdb-pool-exhaustion.yaml` | chat-db-app | pool_exhaustion (3 trials) |
+| `coding/chatdb-streaming-txn.yaml` | chat-db-app | streaming_txn (3 trials) |
+| `coding/chatdb-counter-race.yaml` | chat-db-app | counter_race (3 trials) |
+| `coding/chatdb-all-defects.yaml` | chat-db-app | all 4 per-defect types (3 trials each) |
 
 ### Running any local campaign
 
@@ -174,6 +179,18 @@ cloud:                           # Omit for local campaigns
     enabled: true
     image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
 ```
+
+## Chat-DB-App Chaos Types
+
+Each chaos type targets a specific defect in the app by shaping load patterns:
+
+| Type | What it triggers | Expected invariants |
+|------|-----------------|---------------------|
+| `missing_index` | Sequential scans on messages table (no index) | `high_latency` |
+| `pool_exhaustion` | Unbounded pool hits max_connections | `pool_exhaustion`, `high_error_rate` |
+| `streaming_txn` | Streaming holds transactions open 10-30s | `idle_in_transaction`, `pool_exhaustion` |
+| `counter_race` | Concurrent writes race on token counter | `lock_contention` |
+| `load_pressure` | Backward-compat alias for `pool_exhaustion` | (same as pool_exhaustion) |
 
 ## Recovering from Cloud Failures
 

@@ -18,23 +18,20 @@ Includes:
 AGENT_PROMPT = """
 Chat DB App context:
 - A FastAPI chat application backed by PostgreSQL (like a naive ChatGPT backend)
-- The app has intentional naive patterns that break under load:
-  1. No connection pool limits (pool grows until max_connections)
-  2. Read-modify-write for token counters (race condition)
-  3. Streaming responses hold transactions open for 10-30s
-  4. No index on messages.conversation_id (full table scans)
-  5. No retry on serialization failures
-  6. No statement_timeout
+- The app has naive patterns that break under load:
+  1. No connection pool limits — pool grows unbounded until PostgreSQL max_connections is hit
+  2. Read-modify-write for token counters — concurrent writes cause lost updates
+  3. Streaming responses hold transactions open for 10-30s — connections stuck idle-in-transaction
+  4. No index on messages.conversation_id — queries do full table scans as data grows
 
 File layout (relative to workspace root):
   docker-compose.yaml   ← compose file for all containers
   app/
     main.py             ← FastAPI endpoints
-    pool.py             ← asyncpg pool creation (add max_size, command_timeout)
-    models.py           ← query functions (fix read-modify-write, add index)
-    streaming.py        ← streaming logic (narrow transaction scope)
+    pool.py             ← asyncpg pool creation
+    models.py           ← query functions (token counting, message queries)
+    streaming.py        ← streaming logic (transaction scope)
     Dockerfile          ← app container image
-  loadgen/              ← load generator
   config/               ← prometheus config
 
 Key diagnostic queries:

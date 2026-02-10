@@ -30,14 +30,62 @@ LIGHT_LOAD = {
     "REQUEST_DELAY": "2.0",
     "STREAM_RATIO": "0.3",
     "RAMP_UP_SECONDS": "10",
+    "READ_RATIO": "0.3",
+    "BURST_MODE": "false",
+    "BURST_CONCURRENCY": "1",
 }
 
-HEAVY_LOAD = {
-    "NUM_USERS": "20",
-    "REQUEST_DELAY": "0.5",
-    "STREAM_RATIO": "0.5",
-    "RAMP_UP_SECONDS": "5",
+# Per-defect chaos profiles — each targets a specific app bug
+CHAOS_PROFILES: dict[str, dict[str, str]] = {
+    # Hammers sequential scans on messages table (no index on conversation_id)
+    "missing_index": {
+        "NUM_USERS": "15",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.1",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.8",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+    },
+    # Overwhelms unbounded connection pool
+    "pool_exhaustion": {
+        "NUM_USERS": "40",
+        "REQUEST_DELAY": "0.2",
+        "STREAM_RATIO": "0.2",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.3",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+    },
+    # Holds connections in long transactions via streaming responses
+    "streaming_txn": {
+        "NUM_USERS": "15",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.8",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.3",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+    },
+    # Concurrent writes to same row trigger read-modify-write race on counter
+    "counter_race": {
+        "NUM_USERS": "15",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.3",
+        "BURST_MODE": "true",
+        "BURST_CONCURRENCY": "10",
+    },
 }
+
+# Backward compatibility: load_pressure maps to pool_exhaustion
+CHAOS_PROFILE_ALIASES: dict[str, str] = {
+    "load_pressure": "pool_exhaustion",
+}
+
+# Number of messages to pre-seed for missing_index chaos
+PRESEED_MESSAGE_COUNT = 500_000
 
 
 class ChatDBAppEvalSubject:
@@ -85,6 +133,21 @@ class ChatDBAppEvalSubject:
         self.workspace: CodeWorkspace | None = None
         self._chaos_load_active = False
 
+    def _write_env(self, profile: dict[str, str]) -> None:
+        """Write .env file with port allocation and load profile."""
+        env_file = self.workspace_dir / ".env"
+        lines = [
+            f"PG_HOST_PORT={self.pg_port}",
+            f"APP_HOST_PORT={self.app_port}",
+            f"PROM_HOST_PORT={self.prom_port}",
+        ]
+        for key in (
+            "NUM_USERS", "REQUEST_DELAY", "STREAM_RATIO", "RAMP_UP_SECONDS",
+            "READ_RATIO", "BURST_MODE", "BURST_CONCURRENCY",
+        ):
+            lines.append(f"{key}={profile[key]}")
+        env_file.write_text("\n".join(lines) + "\n")
+
     async def _ensure_workspace(self) -> CodeWorkspace:
         """Create workspace if it doesn't exist yet."""
         if self.workspace is not None:
@@ -112,18 +175,8 @@ class ChatDBAppEvalSubject:
                 await asyncio.to_thread(self.workspace._run_git, "rev-parse", "HEAD")
             ).strip()
 
-        # Write instance-specific .env for port isolation
-        env_file = self.workspace_dir / ".env"
-        env_file.write_text(
-            f"PG_HOST_PORT={self.pg_port}\n"
-            f"APP_HOST_PORT={self.app_port}\n"
-            f"PROM_HOST_PORT={self.prom_port}\n"
-            # Start with light load
-            f"NUM_USERS={LIGHT_LOAD['NUM_USERS']}\n"
-            f"REQUEST_DELAY={LIGHT_LOAD['REQUEST_DELAY']}\n"
-            f"STREAM_RATIO={LIGHT_LOAD['STREAM_RATIO']}\n"
-            f"RAMP_UP_SECONDS={LIGHT_LOAD['RAMP_UP_SECONDS']}\n"
-        )
+        # Start with light load
+        self._write_env(LIGHT_LOAD)
 
         return self.workspace
 
@@ -149,16 +202,7 @@ class ChatDBAppEvalSubject:
                 logger.debug("Git reset: %s", e)
 
         # Rewrite .env with light load (reset chaos)
-        env_file = self.workspace_dir / ".env"
-        env_file.write_text(
-            f"PG_HOST_PORT={self.pg_port}\n"
-            f"APP_HOST_PORT={self.app_port}\n"
-            f"PROM_HOST_PORT={self.prom_port}\n"
-            f"NUM_USERS={LIGHT_LOAD['NUM_USERS']}\n"
-            f"REQUEST_DELAY={LIGHT_LOAD['REQUEST_DELAY']}\n"
-            f"STREAM_RATIO={LIGHT_LOAD['STREAM_RATIO']}\n"
-            f"RAMP_UP_SECONDS={LIGHT_LOAD['RAMP_UP_SECONDS']}\n"
-        )
+        self._write_env(LIGHT_LOAD)
 
         self._chaos_load_active = False
 
@@ -229,28 +273,61 @@ class ChatDBAppEvalSubject:
 
         return state
 
+    def _resolve_chaos_type(self, chaos_type: str) -> str:
+        """Resolve a chaos type name, following aliases."""
+        return CHAOS_PROFILE_ALIASES.get(chaos_type, chaos_type)
+
     def get_chaos_types(self) -> list[str]:
         """Return supported chaos types.
 
-        For chat-db-app, the bugs are already in the code. Chaos is
-        just increasing load until the naive patterns break.
+        For chat-db-app, the bugs are already in the code. Each chaos
+        type targets a specific defect by shaping load accordingly.
         """
-        return ["load_pressure"]
+        return list(CHAOS_PROFILES.keys())
+
+    async def _preseed_messages(self, count: int = PRESEED_MESSAGE_COUNT) -> None:
+        """Bulk-insert rows into the messages table to make missing-index scans expensive."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d messages for missing_index chaos...", count)
+
+        # Use a single SQL INSERT ... SELECT generate_series to bulk-insert
+        sql = f"""
+INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+SELECT
+    gen_random_uuid(),
+    -- spread across 1000 fake conversations
+    ('00000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid,
+    'seed message ' || g,
+    'user',
+    10,
+    now() - interval '1 second' * (g % 3600)
+FROM generate_series(1, {count}) AS g;
+"""
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb", "-c", sql,
+            )
+            logger.info("Pre-seeded %d messages", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed messages: %s", e)
 
     async def inject_chaos(
         self, chaos_type: str, **params: Any
     ) -> dict[str, Any]:
-        """Inject load pressure to trigger the app's latent bugs.
+        """Inject targeted load to trigger a specific app defect.
 
         Args:
-            chaos_type: Must be "load_pressure"
-            **params: Optional overrides for NUM_USERS, REQUEST_DELAY,
-                STREAM_RATIO.
+            chaos_type: One of the CHAOS_PROFILES keys or "load_pressure"
+                (backward-compat alias for pool_exhaustion).
+            **params: Optional overrides merged into the profile.
 
         Returns:
             Chaos metadata dict.
         """
-        if chaos_type != "load_pressure":
+        resolved_type = self._resolve_chaos_type(chaos_type)
+        if resolved_type not in CHAOS_PROFILES:
             raise ValueError(
                 f"Unknown chaos type: {chaos_type}. "
                 f"Supported: {self.get_chaos_types()}"
@@ -258,25 +335,20 @@ class ChatDBAppEvalSubject:
 
         ws = await self._ensure_workspace()
 
-        # Merge defaults with overrides
-        load = dict(HEAVY_LOAD)
-        for key in ("num_users", "request_delay", "stream_ratio"):
-            if key in params:
-                load[key.upper()] = str(params[key])
+        # Merge profile defaults with overrides
+        profile = dict(CHAOS_PROFILES[resolved_type])
+        for key, value in params.items():
+            upper_key = key.upper()
+            if upper_key in profile:
+                profile[upper_key] = str(value)
 
-        # Rewrite .env with heavy load settings
-        env_file = self.workspace_dir / ".env"
-        env_file.write_text(
-            f"PG_HOST_PORT={self.pg_port}\n"
-            f"APP_HOST_PORT={self.app_port}\n"
-            f"PROM_HOST_PORT={self.prom_port}\n"
-            f"NUM_USERS={load['NUM_USERS']}\n"
-            f"REQUEST_DELAY={load['REQUEST_DELAY']}\n"
-            f"STREAM_RATIO={load['STREAM_RATIO']}\n"
-            f"RAMP_UP_SECONDS={load.get('RAMP_UP_SECONDS', '5')}\n"
-        )
+        # Pre-seed data for missing_index to make sequential scans expensive
+        if resolved_type == "missing_index":
+            await self._preseed_messages()
 
-        # Restart loadgen with new env
+        # Write .env with chaos profile and restart loadgen
+        self._write_env(profile)
+
         try:
             await asyncio.to_thread(
                 ws._run_compose, "up", "-d", "--force-recreate", "loadgen"
@@ -287,29 +359,25 @@ class ChatDBAppEvalSubject:
         self._chaos_load_active = True
 
         return {
-            "chaos_type": "load_pressure",
-            "load_params": load,
+            "chaos_type": resolved_type,
+            "original_chaos_type": chaos_type,
+            "load_params": profile,
             "previous_load": LIGHT_LOAD,
         }
 
     async def cleanup_chaos(self, chaos_metadata: dict[str, Any]) -> None:
         """Revert load back to light levels."""
-        if not chaos_metadata or chaos_metadata.get("chaos_type") != "load_pressure":
+        if not chaos_metadata:
+            return
+
+        chaos_type = chaos_metadata.get("chaos_type", "")
+        if chaos_type not in CHAOS_PROFILES:
             return
 
         ws = await self._ensure_workspace()
 
         # Restore light load
-        env_file = self.workspace_dir / ".env"
-        env_file.write_text(
-            f"PG_HOST_PORT={self.pg_port}\n"
-            f"APP_HOST_PORT={self.app_port}\n"
-            f"PROM_HOST_PORT={self.prom_port}\n"
-            f"NUM_USERS={LIGHT_LOAD['NUM_USERS']}\n"
-            f"REQUEST_DELAY={LIGHT_LOAD['REQUEST_DELAY']}\n"
-            f"STREAM_RATIO={LIGHT_LOAD['STREAM_RATIO']}\n"
-            f"RAMP_UP_SECONDS={LIGHT_LOAD['RAMP_UP_SECONDS']}\n"
-        )
+        self._write_env(LIGHT_LOAD)
 
         try:
             await asyncio.to_thread(

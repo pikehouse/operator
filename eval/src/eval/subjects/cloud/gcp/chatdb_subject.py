@@ -31,11 +31,60 @@ class GCPChatDBAppSubject(CloudSubjectBase):
     so the agent can edit code and rebuild the app container.
 
     Chaos types:
-    - load_pressure: Run additional heavy loadgen container
+    - Per-defect types (targeted load profiles):
+      - missing_index: High read ratio + pre-seeded data → sequential scans
+      - pool_exhaustion: Many concurrent users → unbounded pool exhaustion
+      - streaming_txn: High stream ratio → idle-in-transaction
+      - counter_race: Burst concurrent writes → read-modify-write race
+    - load_pressure: Backward-compat alias for pool_exhaustion
     - db_disconnect: iptables block VM → Cloud SQL traffic
+    - debug_code_edit: Ticket injection (handled in worker)
     """
 
-    CLOUD_CHAOS_TYPES = ["load_pressure", "db_disconnect", "debug_code_edit"]
+    # Per-defect chaos profiles — same as local subject
+    CHAOS_PROFILES: dict[str, dict[str, str]] = {
+        "missing_index": {
+            "NUM_USERS": "15",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.1",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.8",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+        },
+        "pool_exhaustion": {
+            "NUM_USERS": "40",
+            "REQUEST_DELAY": "0.2",
+            "STREAM_RATIO": "0.2",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.3",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+        },
+        "streaming_txn": {
+            "NUM_USERS": "15",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.8",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.3",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+        },
+        "counter_race": {
+            "NUM_USERS": "15",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.3",
+            "BURST_MODE": "true",
+            "BURST_CONCURRENCY": "10",
+        },
+    }
+
+    CLOUD_CHAOS_TYPES = [
+        "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",
+        "load_pressure", "db_disconnect", "debug_code_edit",
+    ]
 
     def __init__(
         self,
@@ -400,8 +449,22 @@ Other useful commands:
                 f"Unknown chaos type: {chaos_type}. Supported: {self.CLOUD_CHAOS_TYPES}"
             )
 
-        if chaos_type == "load_pressure":
-            return await self._inject_load_pressure(**params)
+        # Per-defect types and load_pressure all route through load injection
+        if chaos_type in self.CHAOS_PROFILES:
+            resolved_type = chaos_type
+            profile = dict(self.CHAOS_PROFILES[resolved_type])
+            # Pre-seed data for missing_index
+            if resolved_type == "missing_index":
+                await self._preseed_messages()
+            return await self._inject_load_pressure(
+                chaos_type=resolved_type, profile=profile, **params
+            )
+        elif chaos_type == "load_pressure":
+            # Backward compat: load_pressure → pool_exhaustion profile
+            profile = dict(self.CHAOS_PROFILES["pool_exhaustion"])
+            return await self._inject_load_pressure(
+                chaos_type="load_pressure", profile=profile, **params
+            )
         elif chaos_type == "db_disconnect":
             return await self._inject_db_disconnect()
         elif chaos_type == "debug_code_edit":
@@ -415,7 +478,8 @@ Other useful commands:
         chaos_type = chaos_metadata.get("chaos_type")
 
         try:
-            if chaos_type == "load_pressure":
+            # All load-based chaos types clean up the same way
+            if chaos_type in self.CHAOS_PROFILES or chaos_type == "load_pressure":
                 container = chaos_metadata.get(
                     "chaos_container", self._chaos_loadgen_name
                 )
@@ -432,16 +496,36 @@ Other useful commands:
 
     # --- Chaos implementations ---
 
-    async def _inject_load_pressure(self, **params) -> dict[str, Any]:
-        """Run additional heavy loadgen container."""
-        num_users = params.get("num_users", 30)
-        request_delay = params.get("request_delay", 0.1)
-        stream_ratio = params.get("stream_ratio", 0.5)
+    async def _inject_load_pressure(
+        self, chaos_type: str = "load_pressure", profile: dict[str, str] | None = None, **params
+    ) -> dict[str, Any]:
+        """Run additional heavy loadgen container.
 
-        # Get compose network name
-        exit_code, stdout, _ = await self.vm.run_command(
-            f"{self.docker_compose_cmd} -p {self.project_name} ps --format json"
-        )
+        Args:
+            chaos_type: The chaos type name for metadata.
+            profile: Base env var profile. Falls back to legacy defaults if None.
+            **params: Overrides (lowercase keys like num_users).
+        """
+        if profile is None:
+            # Legacy call path (direct load_pressure without profile)
+            profile = {
+                "NUM_USERS": "30",
+                "REQUEST_DELAY": "0.1",
+                "STREAM_RATIO": "0.5",
+                "RAMP_UP_SECONDS": "0",
+                "READ_RATIO": "0.3",
+                "BURST_MODE": "false",
+                "BURST_CONCURRENCY": "1",
+            }
+
+        # Apply overrides from params
+        for key, value in params.items():
+            upper_key = key.upper()
+            if upper_key in profile:
+                profile[upper_key] = str(value)
+
+        # Always use instant ramp for chaos injection
+        profile["RAMP_UP_SECONDS"] = "0"
 
         # Determine network name
         compose_network = f"{self.project_name}_default"
@@ -449,26 +533,45 @@ Other useful commands:
         # Remove any existing chaos loadgen
         await self.vm.run_command(f"docker rm -f {self._chaos_loadgen_name} 2>/dev/null || true")
 
+        # Build -e flags for all profile env vars
+        env_flags = " ".join(f"-e {k}={v}" for k, v in profile.items())
+
         # Run chaos loadgen on compose network
         await self.vm.run_command(
             f"docker run -d --name {self._chaos_loadgen_name} "
             f"--network {compose_network} "
             f"-e APP_URL=http://app:8000 "
-            f"-e NUM_USERS={num_users} "
-            f"-e REQUEST_DELAY={request_delay} "
-            f"-e STREAM_RATIO={stream_ratio} "
-            f"-e RAMP_UP_SECONDS=0 "
+            f"{env_flags} "
             f"{self.loadgen_image}",
             timeout_sec=60.0,
         )
 
         return {
-            "chaos_type": "load_pressure",
+            "chaos_type": chaos_type,
             "chaos_container": self._chaos_loadgen_name,
-            "num_users": num_users,
-            "request_delay": request_delay,
-            "stream_ratio": stream_ratio,
+            "load_params": profile,
         }
+
+    async def _preseed_messages(self, count: int = 500_000) -> None:
+        """Bulk-insert rows into messages table to make missing-index scans expensive."""
+        logger.info("Pre-seeding %d messages for missing_index chaos...", count)
+        sql = (
+            "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
+            "SELECT gen_random_uuid(), "
+            "('00000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid, "
+            "'seed message ' || g, 'user', 10, "
+            "now() - interval '1 second' * (g % 3600) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+        psql_cmd = (
+            f"docker run --rm postgres:16 psql "
+            f"'{self.database_url}' -c \"{sql}\""
+        )
+        try:
+            await self.vm.run_command(psql_cmd, timeout_sec=300.0)
+            logger.info("Pre-seeded %d messages", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed messages: %s", e)
 
     async def _inject_db_disconnect(self) -> dict[str, Any]:
         """Block VM traffic to Cloud SQL using iptables.

@@ -154,7 +154,11 @@ class TrialScore(BaseModel):
 
 | Type | Implementation | Parameters |
 |------|----------------|------------|
-| `load_pressure` | Increase loadgen intensity | `NUM_USERS`, `REQUEST_DELAY`, `STREAM_RATIO` |
+| `missing_index` | High read ratio + pre-seeded data → sequential scans | None |
+| `pool_exhaustion` | Many concurrent users overwhelm unbounded pool | None |
+| `streaming_txn` | High stream ratio → connections stuck idle-in-transaction | None |
+| `counter_race` | Burst concurrent writes → read-modify-write race | None |
+| `load_pressure` | Alias for `pool_exhaustion` (backward compat) | `NUM_USERS`, `REQUEST_DELAY`, `STREAM_RATIO` |
 | `db_disconnect` | Block VM ↔ Cloud SQL traffic (cloud only) | None |
 | `debug_code_edit` | Inject subtle bugs into app code (cloud only) | None |
 

@@ -1,0 +1,14 @@
+name: chatdb-all-defects
+subjects: [chat-db-app]
+
+# Runs all 4 per-defect chaos types
+chaos_types:
+  - type: missing_index
+  - type: pool_exhaustion
+  - type: streaming_txn
+  - type: counter_race
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

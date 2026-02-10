@@ -1,0 +1,12 @@
+name: chatdb-streaming-txn
+subjects: [chat-db-app]
+
+# Targets: streaming responses holding transactions open
+# High stream ratio → connections stuck idle-in-transaction
+chaos_types:
+  - type: streaming_txn
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

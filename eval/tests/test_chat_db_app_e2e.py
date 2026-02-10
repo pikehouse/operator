@@ -133,7 +133,9 @@ class TestChaosInjection:
             stream_ratio=0.5,
         )
 
-        assert metadata["chaos_type"] == "load_pressure"
+        # load_pressure is a backward-compat alias for pool_exhaustion
+        assert metadata["chaos_type"] == "pool_exhaustion"
+        assert metadata["original_chaos_type"] == "load_pressure"
         assert metadata["load_params"]["NUM_USERS"] == "15"
         assert metadata["load_params"]["REQUEST_DELAY"] == "0.3"
 
@@ -191,7 +193,7 @@ class TestChaosInjection:
     async def test_cleanup_restores_light_load(self, subject):
         """Cleanup should restore light load settings."""
         await subject.cleanup_chaos({
-            "chaos_type": "load_pressure",
+            "chaos_type": "pool_exhaustion",
             "load_params": {"NUM_USERS": "15"},
         })
 

@@ -11,7 +11,7 @@ from eval.subjects.chat_db_app.subject import (
     BASE_APP_PORT,
     BASE_PG_PORT,
     BASE_PROM_PORT,
-    HEAVY_LOAD,
+    CHAOS_PROFILES,
     LIGHT_LOAD,
     PORT_INCREMENT,
     ChatDBAppEvalSubject,
@@ -48,9 +48,14 @@ class TestProjectNaming:
 
 
 class TestChaosTypes:
-    def test_only_load_pressure(self):
+    def test_returns_all_per_defect_types(self):
         subj = ChatDBAppEvalSubject(instance_id=0)
-        assert subj.get_chaos_types() == ["load_pressure"]
+        types = subj.get_chaos_types()
+        assert "missing_index" in types
+        assert "pool_exhaustion" in types
+        assert "streaming_txn" in types
+        assert "counter_race" in types
+        assert len(types) == 4
 
 
 class TestSourceDir:
@@ -118,7 +123,7 @@ class TestInjectChaos:
             await subj.inject_chaos("node_kill")
 
     @pytest.mark.asyncio
-    async def test_load_pressure_writes_heavy_env(self, tmp_path):
+    async def test_load_pressure_alias_resolves_to_pool_exhaustion(self, tmp_path):
         subj = ChatDBAppEvalSubject(instance_id=0, workspace_base=tmp_path)
         ws_dir = tmp_path / "chat-db-app-0"
         ws_dir.mkdir(parents=True)
@@ -128,17 +133,58 @@ class TestInjectChaos:
         mock_ws._run_compose = MagicMock()
         subj.workspace = mock_ws
 
+        pool_profile = CHAOS_PROFILES["pool_exhaustion"]
         metadata = await subj.inject_chaos("load_pressure")
 
-        assert metadata["chaos_type"] == "load_pressure"
-        assert metadata["load_params"]["NUM_USERS"] == HEAVY_LOAD["NUM_USERS"]
+        assert metadata["chaos_type"] == "pool_exhaustion"
+        assert metadata["original_chaos_type"] == "load_pressure"
+        assert metadata["load_params"]["NUM_USERS"] == pool_profile["NUM_USERS"]
 
         env_text = (ws_dir / ".env").read_text()
-        assert f"NUM_USERS={HEAVY_LOAD['NUM_USERS']}" in env_text
-        assert f"REQUEST_DELAY={HEAVY_LOAD['REQUEST_DELAY']}" in env_text
+        assert f"NUM_USERS={pool_profile['NUM_USERS']}" in env_text
 
     @pytest.mark.asyncio
-    async def test_load_pressure_accepts_overrides(self, tmp_path):
+    async def test_per_defect_chaos_type(self, tmp_path):
+        subj = ChatDBAppEvalSubject(instance_id=0, workspace_base=tmp_path)
+        ws_dir = tmp_path / "chat-db-app-0"
+        ws_dir.mkdir(parents=True)
+
+        mock_ws = MagicMock()
+        mock_ws.workspace_dir = ws_dir
+        mock_ws._run_compose = MagicMock()
+        subj.workspace = mock_ws
+
+        profile = CHAOS_PROFILES["streaming_txn"]
+        metadata = await subj.inject_chaos("streaming_txn")
+
+        assert metadata["chaos_type"] == "streaming_txn"
+        assert metadata["load_params"]["STREAM_RATIO"] == profile["STREAM_RATIO"]
+
+        env_text = (ws_dir / ".env").read_text()
+        assert f"STREAM_RATIO={profile['STREAM_RATIO']}" in env_text
+
+    @pytest.mark.asyncio
+    async def test_counter_race_enables_burst_mode(self, tmp_path):
+        subj = ChatDBAppEvalSubject(instance_id=0, workspace_base=tmp_path)
+        ws_dir = tmp_path / "chat-db-app-0"
+        ws_dir.mkdir(parents=True)
+
+        mock_ws = MagicMock()
+        mock_ws.workspace_dir = ws_dir
+        mock_ws._run_compose = MagicMock()
+        subj.workspace = mock_ws
+
+        metadata = await subj.inject_chaos("counter_race")
+
+        assert metadata["load_params"]["BURST_MODE"] == "true"
+        assert metadata["load_params"]["BURST_CONCURRENCY"] == "10"
+
+        env_text = (ws_dir / ".env").read_text()
+        assert "BURST_MODE=true" in env_text
+        assert "BURST_CONCURRENCY=10" in env_text
+
+    @pytest.mark.asyncio
+    async def test_accepts_overrides(self, tmp_path):
         subj = ChatDBAppEvalSubject(instance_id=0, workspace_base=tmp_path)
         ws_dir = tmp_path / "chat-db-app-0"
         ws_dir.mkdir(parents=True)
@@ -149,7 +195,7 @@ class TestInjectChaos:
         subj.workspace = mock_ws
 
         metadata = await subj.inject_chaos(
-            "load_pressure", num_users=50, request_delay=0.1
+            "pool_exhaustion", num_users=50, request_delay=0.1
         )
 
         assert metadata["load_params"]["NUM_USERS"] == "50"
@@ -172,11 +218,31 @@ class TestCleanupChaos:
         mock_ws._run_compose = MagicMock()
         subj.workspace = mock_ws
 
-        await subj.cleanup_chaos({"chaos_type": "load_pressure", "load_params": HEAVY_LOAD})
+        await subj.cleanup_chaos({
+            "chaos_type": "pool_exhaustion",
+            "load_params": CHAOS_PROFILES["pool_exhaustion"],
+        })
 
         env_text = (ws_dir / ".env").read_text()
         assert f"NUM_USERS={LIGHT_LOAD['NUM_USERS']}" in env_text
         assert f"REQUEST_DELAY={LIGHT_LOAD['REQUEST_DELAY']}" in env_text
+
+    @pytest.mark.asyncio
+    async def test_cleanup_works_for_all_chaos_types(self, tmp_path):
+        for chaos_type in CHAOS_PROFILES:
+            subj = ChatDBAppEvalSubject(instance_id=0, workspace_base=tmp_path)
+            ws_dir = tmp_path / "chat-db-app-0"
+            ws_dir.mkdir(parents=True, exist_ok=True)
+
+            mock_ws = MagicMock()
+            mock_ws.workspace_dir = ws_dir
+            mock_ws._run_compose = MagicMock()
+            subj.workspace = mock_ws
+
+            await subj.cleanup_chaos({"chaos_type": chaos_type})
+
+            env_text = (ws_dir / ".env").read_text()
+            assert f"NUM_USERS={LIGHT_LOAD['NUM_USERS']}" in env_text
 
     @pytest.mark.asyncio
     async def test_noop_for_empty_metadata(self, tmp_path):

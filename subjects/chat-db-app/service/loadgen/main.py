@@ -13,6 +13,9 @@ Environment variables:
     REQUEST_DELAY: Seconds between requests per user (default: 2.0)
     STREAM_RATIO: Fraction of requests that are streaming (default: 0.3)
     RAMP_UP_SECONDS: Time to ramp up to full load (default: 10)
+    READ_RATIO: Fraction of non-streaming requests that read messages (default: 0.3)
+    BURST_MODE: When true, each user fires concurrent writes to same conversation (default: false)
+    BURST_CONCURRENCY: Parallel writes per burst when BURST_MODE is true (default: 1)
 """
 
 from __future__ import annotations
@@ -36,6 +39,9 @@ NUM_USERS = int(os.environ.get("NUM_USERS", "3"))
 REQUEST_DELAY = float(os.environ.get("REQUEST_DELAY", "2.0"))
 STREAM_RATIO = float(os.environ.get("STREAM_RATIO", "0.3"))
 RAMP_UP_SECONDS = float(os.environ.get("RAMP_UP_SECONDS", "10"))
+READ_RATIO = float(os.environ.get("READ_RATIO", "0.3"))
+BURST_MODE = os.environ.get("BURST_MODE", "false").lower() in ("true", "1", "yes")
+BURST_CONCURRENCY = int(os.environ.get("BURST_CONCURRENCY", "1"))
 
 SAMPLE_MESSAGES = [
     "What is the capital of France?",
@@ -137,7 +143,7 @@ async def simulate_user(user_id: int, client: httpx.AsyncClient) -> None:
             if random.random() < 0.2:
                 await client.get(f"{APP_URL}/api/conversations", timeout=10)
 
-            if random.random() < 0.3 and conversation_id:
+            if random.random() < READ_RATIO and conversation_id:
                 await client.get(
                     f"{APP_URL}/api/conversations/{conversation_id}/messages",
                     timeout=10,
@@ -157,15 +163,82 @@ async def simulate_user(user_id: int, client: httpx.AsyncClient) -> None:
         await asyncio.sleep(REQUEST_DELAY * jitter)
 
 
+async def simulate_user_burst(user_id: int, client: httpx.AsyncClient) -> None:
+    """Simulate a user firing concurrent writes to the same conversation.
+
+    Each burst creates one conversation then fires BURST_CONCURRENCY
+    parallel add_message requests, triggering read-modify-write races
+    on the token counter.
+    """
+    delay = (user_id / max(NUM_USERS, 1)) * RAMP_UP_SECONDS
+    await asyncio.sleep(delay)
+
+    log.info(f"Burst user {user_id} starting (concurrency={BURST_CONCURRENCY})")
+
+    while True:
+        try:
+            # Create a fresh conversation for each burst
+            resp = await client.post(
+                f"{APP_URL}/api/conversations",
+                json={"title": f"Burst user {user_id} conversation"},
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                log.warning(f"Burst user {user_id}: failed to create conversation: {resp.status_code}")
+                await asyncio.sleep(REQUEST_DELAY)
+                continue
+
+            conversation_id = resp.json()["id"]
+
+            # Fire concurrent writes
+            async def _send_one(idx: int) -> None:
+                message = random.choice(SAMPLE_MESSAGES)
+                token_count = len(message.split()) * 2
+                start = time.monotonic()
+                r = await client.post(
+                    f"{APP_URL}/api/conversations/{conversation_id}/messages",
+                    json={
+                        "content": message,
+                        "role": "user",
+                        "token_count": token_count,
+                    },
+                    timeout=30,
+                )
+                elapsed = time.monotonic() - start
+                if r.status_code == 200:
+                    log.info(f"Burst user {user_id}[{idx}]: sent {elapsed:.1f}s")
+                else:
+                    log.warning(f"Burst user {user_id}[{idx}]: failed {r.status_code} ({elapsed:.1f}s)")
+
+            await asyncio.gather(*[_send_one(i) for i in range(BURST_CONCURRENCY)])
+
+        except httpx.TimeoutException:
+            log.warning(f"Burst user {user_id}: request timed out")
+        except httpx.ConnectError:
+            log.warning(f"Burst user {user_id}: connection error, retrying...")
+            await asyncio.sleep(5)
+            continue
+        except Exception as e:
+            log.error(f"Burst user {user_id}: unexpected error: {e}")
+
+        jitter = random.uniform(0.5, 1.5)
+        await asyncio.sleep(REQUEST_DELAY * jitter)
+
+
 async def main() -> None:
-    log.info(f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, {STREAM_RATIO:.0%} streaming")
+    mode = "burst" if BURST_MODE else "normal"
+    log.info(
+        f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, "
+        f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}"
+    )
 
     async with httpx.AsyncClient() as client:
         await wait_for_app(client)
 
-        # Launch simulated users
+        # Choose user simulation function based on mode
+        user_fn = simulate_user_burst if BURST_MODE else simulate_user
         tasks = [
-            asyncio.create_task(simulate_user(i, client))
+            asyncio.create_task(user_fn(i, client))
             for i in range(NUM_USERS)
         ]
 

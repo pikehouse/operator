@@ -1,0 +1,12 @@
+name: chatdb-counter-race
+subjects: [chat-db-app]
+
+# Targets: read-modify-write race on token counters
+# Burst mode fires concurrent writes to same conversation
+chaos_types:
+  - type: counter_race
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true
