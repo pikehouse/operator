@@ -212,9 +212,17 @@ class ChatDBAppEvalSubject:
         # Remove loadgen source so the agent can't read or modify it.
         # The image is already built; inject_chaos/cleanup_chaos only
         # --force-recreate the container (no rebuild).
+        # Also remove from git index so the deletion doesn't show as dirty.
+        # (git reset --hard in the next reset() will restore it for rebuilds.)
         loadgen_dir = self.workspace_dir / "loadgen"
         if loadgen_dir.exists():
             shutil.rmtree(loadgen_dir)
+            try:
+                await asyncio.to_thread(
+                    ws._run_git, "rm", "-r", "--cached", "--quiet", "loadgen"
+                )
+            except Exception:
+                pass
 
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
         """Wait for the app to respond to /health."""
