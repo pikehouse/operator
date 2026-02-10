@@ -809,6 +809,7 @@ def show_detail(
     trial: bool = typer.Option(False, "--trial", "-t", help="Treat ID as trial ID"),
     db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
+    diff: bool = typer.Option(False, "--diff", help="Output raw diff for trial (pipe-friendly)"),
     remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
 ) -> None:
     """Show details for a campaign or trial.
@@ -818,6 +819,7 @@ def show_detail(
     Examples:
         eval show 1              # Show campaign 1
         eval show --trial 5      # Show trial 5
+        eval show --trial 5 --diff  # Output raw diff
         eval show 1 --remote     # Show from cloud database
     """
     async def run():
@@ -872,6 +874,22 @@ def show_detail(
                 "commands": commands,
             }
             print(json.dumps(data, indent=2))
+            return
+
+        if diff:
+            # Raw diff output (pipe-friendly)
+            final_state = safe_json_loads(t.final_state)
+            raw_diff = ""
+            if isinstance(final_state, dict):
+                raw_diff = final_state.get("code_diff", "")
+                if not raw_diff:
+                    cw = final_state.get("code_workspace")
+                    if isinstance(cw, dict):
+                        raw_diff = cw.get("diff_full") or cw.get("diff", "")
+            if raw_diff:
+                print(raw_diff)
+            else:
+                console.print("[yellow]No diff found in trial final_state[/yellow]")
             return
 
         # Plain text trial detail
@@ -951,6 +969,28 @@ def show_detail(
         print("States (use --json for full detail):")
         print(f"  Initial: {len(t.initial_state)} bytes")
         print(f"  Final:   {len(t.final_state)} bytes")
+
+        # Code workspace summary
+        final_state = safe_json_loads(t.final_state)
+        if isinstance(final_state, dict):
+            cw = final_state.get("code_workspace")
+            if isinstance(cw, dict):
+                print()
+                print("Code Workspace:")
+                print(f"  Commit: {cw.get('commit', cw.get('commit_hash', 'N/A'))}")
+                print(f"  Dirty:  {cw.get('dirty', 'N/A')}")
+                if cw.get("log"):
+                    print("  Log:")
+                    for line in cw["log"].split("\n")[:10]:
+                        print(f"    {line}")
+            code_diff = final_state.get("code_diff") or ((cw.get("diff_full") or cw.get("diff")) if isinstance(cw, dict) else None)
+            if code_diff:
+                lines = code_diff.strip().split("\n")
+                print(f"\n  Diff ({len(lines)} lines, use --diff for full):")
+                for line in lines[:20]:
+                    print(f"    {line}")
+                if len(lines) > 20:
+                    print(f"    ... ({len(lines) - 20} more lines)")
 
     else:
         # Campaign detail output

@@ -483,6 +483,18 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                 "elapsed_seconds": None,
             })
 
+    # Extract code workspace and diff from final_state
+    code_workspace = None
+    code_diff = None
+    final_state = safe_json_loads(trial.final_state)
+    if isinstance(final_state, dict):
+        code_workspace = final_state.get("code_workspace")
+        # Local subject stores diff separately as code_diff
+        code_diff = final_state.get("code_diff")
+        # GCP subject stores diff_full (committed) and diff (uncommitted) inside code_workspace
+        if not code_diff and isinstance(code_workspace, dict):
+            code_diff = code_workspace.get("diff_full") or code_workspace.get("diff", "")
+
     return request.app.state.templates.TemplateResponse(
         "trial.html",
         {
@@ -496,5 +508,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             "monitor_detection": monitor_detection,
             "agent_conclusion": agent_conclusion,
             "reasoning_entries": reasoning_entries,
+            "code_workspace": code_workspace,
+            "code_diff": code_diff,
         },
     )

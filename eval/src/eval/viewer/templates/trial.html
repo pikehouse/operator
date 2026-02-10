@@ -207,6 +207,44 @@
     {% endif %}
 </div>
 
+{% if code_workspace or code_diff %}
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-2">Code Changes</h2>
+
+    {% if code_workspace is mapping %}
+    <dl class="grid grid-cols-2 gap-2 text-sm mb-3">
+        <dt class="text-gray-500">Commit:</dt>
+        <dd class="font-mono text-xs">{{ code_workspace.commit or code_workspace.commit_hash or "N/A" }}</dd>
+        <dt class="text-gray-500">Dirty:</dt>
+        <dd>{{ code_workspace.dirty if code_workspace.dirty is defined else "N/A" }}</dd>
+    </dl>
+    {% endif %}
+
+    {% if code_workspace is mapping and code_workspace.log %}
+    <div class="mb-3">
+        <h3 class="text-sm font-medium text-gray-700 mb-1">Git Log</h3>
+        <pre class="bg-gray-50 border border-gray-200 rounded p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">{{ code_workspace.log }}</pre>
+    </div>
+    {% endif %}
+
+    {% if code_diff %}
+    <div>
+        <h3 class="text-sm font-medium text-gray-700 mb-1">Diff</h3>
+        <details>
+            <summary class="cursor-pointer text-sm text-blue-600 hover:underline mb-1">
+                {{ code_diff.strip().split('\n') | length }} lines (click to expand)
+            </summary>
+            <div class="bg-gray-900 rounded p-3 text-xs font-mono overflow-x-auto max-h-96 overflow-y-auto">
+                {% for line in code_diff.split('\n') %}
+                <div class="{% if line.startswith('+') and not line.startswith('+++') %}text-green-400{% elif line.startswith('-') and not line.startswith('---') %}text-red-400{% elif line.startswith('@@') %}text-blue-400{% elif line.startswith('diff ') or line.startswith('index ') %}text-yellow-400{% else %}text-gray-300{% endif %} whitespace-pre">{{ line }}</div>
+                {% endfor %}
+            </div>
+        </details>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if reasoning_entries %}
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-4">Agent Reasoning Timeline ({{ reasoning_entries|length }} entries)</h2>
