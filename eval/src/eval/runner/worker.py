@@ -68,8 +68,8 @@ class Worker:
         Runs until stop() is called or SIGINT/SIGTERM received.
         """
         self._running = True
-        console.print(f"[bold green]Worker {self.worker_id} starting[/bold green]")
-        console.print(f"Mode: {self.mode}")
+        console.log(f"[bold green]Worker {self.worker_id} starting[/bold green]")
+        console.log(f"Mode: {self.mode}")
 
         # Ensure schema exists
         await self.db.ensure_schema()
@@ -85,7 +85,7 @@ class Worker:
                 work_item = await self.queue.claim_next(self.worker_id)
 
                 if work_item:
-                    console.print(
+                    console.log(
                         f"[cyan]Claimed work item {work_item.id}: "
                         f"{work_item.subject_type}/{work_item.chaos_type}[/cyan]"
                     )
@@ -98,12 +98,12 @@ class Worker:
                 logger.exception(f"Worker error: {e}")
                 await asyncio.sleep(self.poll_interval)
 
-        console.print(f"[bold yellow]Worker {self.worker_id} stopped[/bold yellow]")
+        console.log(f"[bold yellow]Worker {self.worker_id} stopped[/bold yellow]")
         await self.db.close()
 
     async def stop(self) -> None:
         """Stop the worker loop gracefully."""
-        console.print("[yellow]Shutting down worker...[/yellow]")
+        console.log("[yellow]Shutting down worker...[/yellow]")
         self._running = False
 
         # Clean up current subject if any
@@ -168,12 +168,12 @@ class Worker:
 
             # Store trial result
             trial_id = await self.db.insert_trial(trial)
-            console.print(f"[green]Work item {work_item.id} completed -> Trial {trial_id}[/green]")
+            console.log(f"[green]Work item {work_item.id} completed -> Trial {trial_id}[/green]")
 
         except Exception as e:
             error = str(e)
             logger.exception(f"Work item {work_item.id} failed: {e}")
-            console.print(f"[red]Work item {work_item.id} failed:[/red] {e!s}")
+            console.log(f"[red]Work item {work_item.id} failed:[/red] {e!s}")
 
         finally:
             # Always clean up the subject (deletes GCP VM)
@@ -233,11 +233,11 @@ class Worker:
         started_at = now()
 
         # Reset subject
-        console.print("[blue]Resetting subject...[/blue]")
+        console.log("[blue]Resetting subject...[/blue]")
         await subject.reset()
 
         # Wait for healthy
-        console.print("[blue]Waiting for healthy state...[/blue]")
+        console.log("[blue]Waiting for healthy state...[/blue]")
         healthy = await subject.wait_healthy(timeout_sec=120.0)
         if not healthy:
             raise RuntimeError("Subject failed to become healthy")
@@ -304,14 +304,14 @@ class Worker:
                 # Record baseline ticket ID
                 pre_chaos_max_ticket_id = await remote_op.get_max_ticket_id()
                 if pre_chaos_max_ticket_id > 0:
-                    console.print(
+                    console.log(
                         f"[dim]Pre-chaos max ticket ID: {pre_chaos_max_ticket_id}[/dim]"
                     )
 
             # Inject chaos (unless baseline)
             chaos_metadata = {}
             if not baseline and chaos_type != "none":
-                console.print(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
+                console.log(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
                 chaos_injected_at = now()
                 chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)
 
@@ -342,11 +342,11 @@ class Worker:
                 if variant_config:
                     updated = await remote_op.update_ticket_variant(variant_config)
                     if updated:
-                        console.print(
+                        console.log(
                             f"[dim]Variant config written: {variant_config.model}[/dim]"
                         )
 
-                console.print("[cyan]Waiting for agent resolution...[/cyan]")
+                console.log("[cyan]Waiting for agent resolution...[/cyan]")
                 ticket_created_at, resolved_at = (
                     await remote_op.wait_for_ticket_resolution(
                         timeout_sec=300.0,
@@ -365,16 +365,16 @@ class Worker:
                         local_db = Path(f"/tmp/operator-{uuid.uuid4().hex[:8]}.db")
                         await remote_op.download_operator_db(local_db)
                         commands = await extract_commands_from_operator_db(local_db)
-                        console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
+                        console.log(f"[dim]Extracted {len(commands)} commands[/dim]")
                         operator_data = await extract_operator_data(local_db)
-                        console.print(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
+                        console.log(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
                         # Clean up temp file
                         local_db.unlink(missing_ok=True)
                     except Exception as e:
                         logger.warning(f"Failed to extract commands: {e}")
             else:
                 # No operator: just wait for subject self-recovery
-                console.print("[cyan]Waiting for recovery...[/cyan]")
+                console.log("[cyan]Waiting for recovery...[/cyan]")
                 recovered = await subject.wait_healthy(timeout_sec=300.0)
                 resolved_at = now() if recovered else None
 

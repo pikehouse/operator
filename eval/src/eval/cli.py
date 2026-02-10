@@ -1269,11 +1269,11 @@ def worker_start(
         )
         raise typer.Exit(1)
 
-    console.print(f"[bold cyan]Starting worker...[/bold cyan]")
-    console.print(f"Cloud: {cloud}")
-    console.print(f"Database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
+    console.log(f"[bold cyan]Starting worker...[/bold cyan]")
+    console.log(f"Cloud: {cloud}")
+    console.log(f"Database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
     if operator_image:
-        console.print(f"Operator: {operator_image}")
+        console.log(f"Operator: {operator_image}")
 
     asyncio.run(
         run_worker(
