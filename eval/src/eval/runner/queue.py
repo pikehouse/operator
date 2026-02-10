@@ -230,6 +230,141 @@ class WorkQueue:
                 )
             return row["count"] if row else 0
 
+    async def get_campaign_detail(self, campaign_id: int) -> list[dict]:
+        """Get detailed work item info for a campaign.
+
+        Returns list of dicts with work item fields including chaos_type,
+        status, worker_id, claimed_at, completed_at, trial_id, error.
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, subject_type, chaos_type, baseline, status,
+                       worker_id, claimed_at, completed_at, trial_id, error
+                FROM work_queue
+                WHERE campaign_id = $1
+                ORDER BY id
+                """,
+                campaign_id,
+            )
+            return [dict(row) for row in rows]
+
+    async def get_active_campaigns(self, include_finished: bool = False) -> list[dict]:
+        """Get campaigns with work items.
+
+        Args:
+            include_finished: If False, only show campaigns with pending/running items
+                or completed within the last 24 hours.
+
+        Returns list of dicts with campaign_id, name, and status counts.
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            if include_finished:
+                where_clause = ""
+            else:
+                # Show campaigns that are active or recently completed
+                where_clause = """
+                HAVING COUNT(*) FILTER (WHERE w.status IN ('pending', 'running')) > 0
+                    OR (COUNT(*) FILTER (WHERE w.status = 'completed') > 0
+                        AND MAX(w.completed_at) > NOW() - INTERVAL '4 hours')
+                """
+
+            rows = await conn.fetch(
+                f"""
+                SELECT w.campaign_id, c.name,
+                       COUNT(*) FILTER (WHERE w.status = 'pending') as pending,
+                       COUNT(*) FILTER (WHERE w.status = 'running') as running,
+                       COUNT(*) FILTER (WHERE w.status = 'completed') as completed,
+                       COUNT(*) FILTER (WHERE w.status = 'failed') as failed,
+                       COUNT(*) as total
+                FROM work_queue w
+                JOIN campaigns c ON c.id = w.campaign_id
+                GROUP BY w.campaign_id, c.name
+                {where_clause}
+                ORDER BY w.campaign_id DESC
+                """
+            )
+            return [dict(row) for row in rows]
+
+    async def get_worker_status(self) -> list[dict]:
+        """Get status of all known workers.
+
+        Returns a list of dicts with worker_id, current task info,
+        and history stats (completed count, failed count, last active time).
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    worker_id,
+                    COUNT(*) FILTER (WHERE status = 'running') as running_count,
+                    COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
+                    COUNT(*) FILTER (WHERE status = 'failed') as failed_count,
+                    MAX(COALESCE(completed_at, claimed_at)) as last_active,
+                    -- Current task info (if running)
+                    (SELECT chaos_type FROM work_queue w2
+                     WHERE w2.worker_id = work_queue.worker_id AND w2.status = 'running'
+                     ORDER BY w2.claimed_at DESC LIMIT 1) as current_chaos_type,
+                    (SELECT campaign_id FROM work_queue w3
+                     WHERE w3.worker_id = work_queue.worker_id AND w3.status = 'running'
+                     ORDER BY w3.claimed_at DESC LIMIT 1) as current_campaign_id,
+                    (SELECT claimed_at FROM work_queue w4
+                     WHERE w4.worker_id = work_queue.worker_id AND w4.status = 'running'
+                     ORDER BY w4.claimed_at DESC LIMIT 1) as current_claimed_at
+                FROM work_queue
+                WHERE worker_id IS NOT NULL
+                GROUP BY worker_id
+                ORDER BY last_active DESC
+                """
+            )
+            return [dict(row) for row in rows]
+
+    async def retry_failed(self, campaign_id: int | None = None) -> int:
+        """Reset failed work items back to pending for retry.
+
+        Args:
+            campaign_id: Optional campaign to filter by. If None, retries all.
+
+        Returns:
+            Number of items reset.
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            if campaign_id:
+                result = await conn.execute(
+                    """
+                    UPDATE work_queue
+                    SET status = 'pending',
+                        worker_id = NULL,
+                        claimed_at = NULL,
+                        completed_at = NULL,
+                        error = NULL
+                    WHERE status = 'failed'
+                      AND campaign_id = $1
+                    """,
+                    campaign_id,
+                )
+            else:
+                result = await conn.execute(
+                    """
+                    UPDATE work_queue
+                    SET status = 'pending',
+                        worker_id = NULL,
+                        claimed_at = NULL,
+                        completed_at = NULL,
+                        error = NULL
+                    WHERE status = 'failed'
+                    """
+                )
+            return int(result.split()[1]) if result else 0
+
     async def release_stale(self, timeout_seconds: int = 3600) -> int:
         """Release work items that have been running too long.
 

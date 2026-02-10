@@ -353,6 +353,15 @@ class Worker:
                 extra_volume_mounts=extra_volume_mounts,
             )
 
+        # Initialize variables used in finally/return before try block
+        chaos_metadata: dict[str, Any] = {}
+        chaos_injected_at = now()
+        ticket_created_at = None
+        resolved_at = None
+        commands: list[dict[str, Any]] = []
+        operator_data: dict[str, Any] = {}
+        ended_at = now()
+
         try:
             # Capture topology before chaos (subject is healthy at this point)
             try:
@@ -381,9 +390,7 @@ class Worker:
                     console.log(
                         f"[dim]Pre-chaos max ticket ID: {pre_chaos_max_ticket_id}[/dim]"
                     )
-
             # Inject chaos (unless baseline)
-            chaos_metadata = {}
             if not baseline and chaos_type != "none":
                 console.log(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
                 chaos_injected_at = now()
@@ -402,14 +409,6 @@ class Worker:
                         ),
                         subject_context=agent_context,
                     )
-            else:
-                chaos_injected_at = now()
-
-            # Wait for resolution
-            ticket_created_at = None
-            resolved_at = None
-            commands: list[dict[str, Any]] = []
-            operator_data: dict[str, Any] = {}
 
             if remote_op:
                 # Operator mode: write variant config, wait for ticket resolution

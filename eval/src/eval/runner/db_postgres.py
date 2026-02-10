@@ -118,7 +118,9 @@ class PostgresDB:
     async def _get_pool(self) -> "asyncpg.Pool":
         """Get or create connection pool."""
         if self._pool is None:
-            self._pool = await asyncpg.create_pool(self.connection_url)
+            self._pool = await asyncpg.create_pool(
+                self.connection_url, min_size=1, max_size=3
+            )
         return self._pool
 
     async def close(self) -> None:

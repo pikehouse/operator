@@ -1360,7 +1360,7 @@ def worker_status(
         None,
         "--campaign",
         "-c",
-        help="Campaign ID to check (default: all)",
+        help="Campaign ID to check (default: show all active)",
     ),
     remote: bool = typer.Option(
         False,
@@ -1368,14 +1368,14 @@ def worker_status(
         help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
     ),
 ) -> None:
-    """Check work queue status.
+    """Check campaign and work queue status.
 
-    Shows pending, running, completed, and failed work items.
-    The work queue only exists in cloud PostgreSQL, so --remote is required.
+    Without --campaign: shows all campaigns with work items and their progress.
+    With --campaign N: shows detailed per-item status for that campaign.
 
     Examples:
         eval worker status --remote
-        eval worker status --remote --campaign 1
+        eval worker status --remote --campaign 59
     """
     if not remote:
         console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
@@ -1391,29 +1391,240 @@ def worker_status(
         raise typer.Exit(1)
 
     async def run():
+        from datetime import datetime, timezone
         from eval.runner.db_postgres import PostgresDB
+        from rich.table import Table
+
         db = PostgresDB(db_url)
         await db.ensure_schema()
         queue = WorkQueue(db)
 
         if campaign_id:
+            # Detailed view for a specific campaign
+            campaign = await db.get_campaign(campaign_id)
+            if not campaign:
+                console.print(f"[red]Campaign {campaign_id} not found[/red]")
+                return
+
+            console.print(f"\n[bold]Campaign {campaign_id}: {campaign.name}[/bold]")
+
+            # Status summary
             counts = await queue.get_campaign_status(campaign_id)
-            console.print(f"\n[bold]Campaign {campaign_id} work queue:[/bold]")
+            total = sum(counts.values())
+            completed = counts.get("completed", 0)
+            failed = counts.get("failed", 0)
+            running = counts.get("running", 0)
+            pending = counts.get("pending", 0)
+
+            pct = int(completed / total * 100) if total else 0
+            bar_filled = pct // 5
+            bar = f"[green]{'█' * bar_filled}[/green][dim]{'░' * (20 - bar_filled)}[/dim]"
+            console.print(f"  Progress: {bar} {completed}/{total} ({pct}%)")
+            if running:
+                console.print(f"  [cyan]Running: {running}[/cyan]")
+            if pending:
+                console.print(f"  [yellow]Pending: {pending}[/yellow]")
+            if failed:
+                console.print(f"  [red]Failed: {failed}[/red]")
+
+            # Per-item detail table
+            items = await queue.get_campaign_detail(campaign_id)
+            if items:
+                console.print()
+                table = Table(show_header=True, header_style="bold")
+                table.add_column("#", style="dim", width=4)
+                table.add_column("Chaos Type", min_width=16)
+                table.add_column("Status", min_width=10)
+                table.add_column("Worker", style="dim", min_width=12)
+                table.add_column("Duration", min_width=10)
+                table.add_column("Trial", style="dim", min_width=6)
+                table.add_column("Error", style="red", max_width=40)
+
+                for item in items:
+                    status = item["status"]
+                    color = {"pending": "yellow", "running": "cyan",
+                             "completed": "green", "failed": "red"}.get(status, "white")
+
+                    # Calculate duration
+                    duration = ""
+                    if item["claimed_at"]:
+                        end = item["completed_at"] or datetime.now(timezone.utc)
+                        delta = end - item["claimed_at"]
+                        mins = int(delta.total_seconds() // 60)
+                        secs = int(delta.total_seconds() % 60)
+                        duration = f"{mins}m{secs:02d}s"
+
+                    chaos_label = item["chaos_type"]
+                    if item["baseline"]:
+                        chaos_label += " [dim](baseline)[/dim]"
+
+                    worker = (item["worker_id"] or "")[:16]
+                    trial = str(item["trial_id"]) if item["trial_id"] else ""
+                    error = (item["error"] or "")[:40]
+
+                    table.add_row(
+                        str(item["id"]),
+                        chaos_label,
+                        f"[{color}]{status}[/{color}]",
+                        worker,
+                        duration,
+                        trial,
+                        error,
+                    )
+
+                console.print(table)
+
+            # Show completed trials with outcomes
+            trials = await db.get_trials(campaign_id)
+            if trials:
+                console.print(f"\n[bold]Completed Trials:[/bold]")
+                from eval.analysis.scoring import score_trial
+                subject_name = campaign.subject_name
+                for t in trials:
+                    score = score_trial(t, subject_name)
+                    outcome_color = "green" if score.resolved else "red"
+                    detect = f"{score.time_to_detect_sec:.0f}s" if score.time_to_detect_sec else "—"
+                    resolve = f"{score.time_to_resolve_sec:.0f}s" if score.time_to_resolve_sec else "—"
+                    console.print(
+                        f"  Trial {t.id}: [{outcome_color}]{score.outcome.value}[/{outcome_color}]"
+                        f"  detect={detect}  resolve={resolve}"
+                        f"  commands={score.command_count}"
+                    )
         else:
-            # Get overall pending count
-            pending = await queue.get_pending_count()
-            console.print(f"\n[bold]Work queue status:[/bold]")
-            counts = {"pending": pending}
+            # Overview of all campaigns
+            campaigns = await queue.get_active_campaigns()
+            if not campaigns:
+                console.print("[dim]No campaigns in work queue[/dim]")
+                return
 
-        for status, count in counts.items():
-            color = {
-                "pending": "yellow",
-                "running": "cyan",
-                "completed": "green",
-                "failed": "red",
-            }.get(status, "white")
-            console.print(f"  [{color}]{status.capitalize()}: {count}[/{color}]")
+            console.print(f"\n[bold]Campaign Status[/bold]\n")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("ID", style="dim", width=4)
+            table.add_column("Name", min_width=20)
+            table.add_column("Progress", min_width=24)
+            table.add_column("Pending", style="yellow", justify="right", width=7)
+            table.add_column("Running", style="cyan", justify="right", width=7)
+            table.add_column("Done", style="green", justify="right", width=7)
+            table.add_column("Failed", style="red", justify="right", width=7)
 
+            for c in campaigns:
+                total = c["total"]
+                completed = c["completed"]
+                pct = int(completed / total * 100) if total else 0
+                bar_filled = pct // 5
+                bar = f"{'█' * bar_filled}{'░' * (20 - bar_filled)} {pct}%"
+
+                table.add_row(
+                    str(c["campaign_id"]),
+                    c["name"],
+                    bar,
+                    str(c["pending"]),
+                    str(c["running"]),
+                    str(c["completed"]),
+                    str(c["failed"]),
+                )
+
+            console.print(table)
+
+        await db.close()
+
+    asyncio.run(run())
+
+
+@worker_app.command("workers")
+def worker_list(
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Show status of all workers.
+
+    Displays each worker's current task, completed/failed counts, and last activity.
+
+    Examples:
+        eval worker workers --remote
+    """
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        from datetime import datetime, timezone
+        from eval.runner.db_postgres import PostgresDB
+        from rich.table import Table
+
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        workers = await queue.get_worker_status()
+        if not workers:
+            console.print("[dim]No workers found in work queue[/dim]")
+            await db.close()
+            return
+
+        console.print(f"\n[bold]Worker Status[/bold]\n")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Worker ID", min_width=18)
+        table.add_column("State", min_width=10)
+        table.add_column("Current Task", min_width=22)
+        table.add_column("Duration", min_width=10)
+        table.add_column("Done", style="green", justify="right", width=5)
+        table.add_column("Failed", style="red", justify="right", width=6)
+        table.add_column("Last Active", style="dim", min_width=16)
+
+        now = datetime.now(timezone.utc)
+        for w in workers:
+            worker_id = w["worker_id"]
+            running = w["running_count"]
+
+            if running > 0:
+                state = "[cyan]working[/cyan]"
+                task = f"{w['current_chaos_type']} (c{w['current_campaign_id']})"
+                if w["current_claimed_at"]:
+                    delta = now - w["current_claimed_at"]
+                    mins = int(delta.total_seconds() // 60)
+                    secs = int(delta.total_seconds() % 60)
+                    duration = f"{mins}m{secs:02d}s"
+                else:
+                    duration = ""
+            else:
+                state = "[dim]idle[/dim]"
+                task = ""
+                duration = ""
+
+            last_active = ""
+            if w["last_active"]:
+                delta = now - w["last_active"]
+                if delta.total_seconds() < 60:
+                    last_active = "just now"
+                elif delta.total_seconds() < 3600:
+                    last_active = f"{int(delta.total_seconds() // 60)}m ago"
+                else:
+                    last_active = f"{delta.total_seconds() / 3600:.1f}h ago"
+
+            table.add_row(
+                worker_id,
+                state,
+                task,
+                duration,
+                str(w["completed_count"]),
+                str(w["failed_count"]),
+                last_active,
+            )
+
+        console.print(table)
         await db.close()
 
     asyncio.run(run())
@@ -1464,6 +1675,58 @@ def worker_release_stale(
 
         released = await queue.release_stale(timeout_seconds=timeout)
         console.print(f"[green]Released {released} stale work item(s)[/green]")
+
+        await db.close()
+
+    asyncio.run(run())
+
+
+@worker_app.command("retry-failed")
+def worker_retry_failed(
+    campaign: Optional[int] = typer.Option(
+        None,
+        "--campaign",
+        "-c",
+        help="Campaign ID to retry (default: all campaigns)",
+    ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Reset failed work items back to pending for retry.
+
+    Workers will automatically pick up the retried items.
+
+    Examples:
+        eval worker retry-failed --remote --campaign 59
+        eval worker retry-failed --remote
+    """
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        retried = await queue.retry_failed(campaign_id=campaign)
+        if retried:
+            console.print(f"[green]Reset {retried} failed item(s) to pending[/green]")
+        else:
+            console.print("[dim]No failed items to retry[/dim]")
 
         await db.close()
 
