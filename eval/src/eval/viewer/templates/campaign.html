@@ -20,6 +20,10 @@
         <dd>{{ campaign.trial_count }}</dd>
         <dt class="text-gray-500">Baseline:</dt>
         <dd>{% if campaign.baseline %}<span class="text-blue-600">Yes (self-healing test)</span>{% else %}No{% endif %}</dd>
+        {% if campaign.git_commit_hash %}
+        <dt class="text-gray-500">Commit:</dt>
+        <dd class="font-mono text-xs">{{ campaign.git_commit_hash }}</dd>
+        {% endif %}
         <dt class="text-gray-500">Created:</dt>
         <dd>{% if campaign.created_at %}<time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time>{% else %}N/A{% endif %}</dd>
     </dl>

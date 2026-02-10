@@ -193,6 +193,7 @@ class Campaign:
     baseline: bool = False
     variant_name: str = "default"
     topology_json: str = ""
+    git_commit_hash: str = ""
     created_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
@@ -232,6 +233,7 @@ class Campaign:
             baseline=bool(row["baseline"]),
             variant_name=(row["variant_name"] if "variant_name" in keys and row["variant_name"] else "default"),
             topology_json=topo,
+            git_commit_hash=(row["git_commit_hash"] if "git_commit_hash" in keys and row["git_commit_hash"] else ""),
             created_at=created or "",
         )
 

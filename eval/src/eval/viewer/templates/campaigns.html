@@ -15,6 +15,7 @@
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Subject</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Trials</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Baseline</th>
+                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Commit</th>
                 <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Created</th>
             </tr>
         </thead>
@@ -28,6 +29,7 @@
                 <td class="px-4 py-2">{{ campaign.subject_name }}</td>
                 <td class="px-4 py-2">{{ campaign.trial_count }}</td>
                 <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
+                <td class="px-4 py-2 text-gray-400 text-xs font-mono">{% if campaign.git_commit_hash %}{{ campaign.git_commit_hash[:8] }}{% endif %}</td>
                 <td class="px-4 py-2 text-gray-500 text-sm"><time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time></td>
             </tr>
             {% endfor %}

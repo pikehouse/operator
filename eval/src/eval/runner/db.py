@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     baseline INTEGER NOT NULL DEFAULT 0,
     variant_name TEXT DEFAULT 'default',
     topology_json TEXT DEFAULT '',
+    git_commit_hash TEXT DEFAULT '',
     created_at TEXT NOT NULL
 );
 
@@ -183,6 +184,12 @@ class EvalDB:
                 )
                 await db.commit()
 
+            if "git_commit_hash" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN git_commit_hash TEXT DEFAULT ''"
+                )
+                await db.commit()
+
             # Check if operator_data_json column exists on trials
             cursor = await db.execute("PRAGMA table_info(trials)")
             trial_columns = await cursor.fetchall()
@@ -199,8 +206,8 @@ class EvalDB:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, git_commit_hash, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     campaign.subject_name,
@@ -210,6 +217,7 @@ class EvalDB:
                     1 if campaign.baseline else 0,
                     campaign.variant_name,
                     campaign.topology_json,
+                    campaign.git_commit_hash,
                     campaign.created_at,
                 ),
             )

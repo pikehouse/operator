@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sqlite3
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,36 @@ class TrialStats:
 def now() -> str:
     """Return current UTC timestamp in ISO8601 format."""
     return datetime.now(timezone.utc).isoformat()
+
+
+def get_repo_info() -> tuple[str, bool]:
+    """Get git commit hash and whether this is the operator repo.
+
+    Returns:
+        Tuple of (commit_hash, is_operator_repo).
+        Returns ("unknown", False) if not in a git repo.
+    """
+    try:
+        commit_hash = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if commit_hash.returncode != 0:
+            return ("unknown", False)
+        sha = commit_hash.stdout.strip()
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return ("unknown", False)
+
+    try:
+        remote_url = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+        is_operator = "operator" in remote_url.stdout.lower() if remote_url.returncode == 0 else False
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        is_operator = False
+
+    return (sha, is_operator)
 
 
 async def _query_operator_db(db_path: Path, fn, default=None):
@@ -651,6 +682,7 @@ async def run_campaign(
     db: EvalDB,
     baseline: bool = False,
     operator_db_path: Path | None = None,
+    git_commit_hash: str = "",
 ) -> int:
     """Run campaign of N trials sequentially.
 
@@ -672,6 +704,7 @@ async def run_campaign(
         name=f"{subject_name}/{chaos_type}",
         trial_count=trial_count,
         baseline=baseline,
+        git_commit_hash=git_commit_hash,
         created_at=now(),
     )
     campaign_id = await db.insert_campaign(campaign)
@@ -768,6 +801,7 @@ async def run_campaign_from_config(
     db: EvalDB,
     operator_db_path: Path | None = None,
     model_override: str | None = None,
+    git_commit_hash: str = "",
 ) -> int:
     """Run campaign from YAML config with parallel execution.
 
@@ -815,6 +849,7 @@ async def run_campaign_from_config(
         trial_count=total_trials,
         baseline=config.include_baseline,
         variant_name=config.variant,
+        git_commit_hash=git_commit_hash,
         created_at=now(),
     )
     campaign_id = await db.insert_campaign(campaign)

@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from eval.runner.db import EvalDB, EvalDBProtocol, get_db
-from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config
+from eval.runner.harness import run_trial, run_campaign, run_campaign_from_config, get_repo_info
 from eval.runner.campaign import load_campaign_config, CampaignConfig
 from eval.subjects.factory import SubjectRegistry
 from eval.types import EvalSubject, get_chaos_description, safe_json_loads
@@ -167,14 +167,21 @@ def run_single(
         db = EvalDB(db_path)
         await db.ensure_schema()
 
+        # Capture git info
+        commit_hash, is_operator_repo = get_repo_info()
+
         # Display config
         console.print(f"\n[bold]Running {'single trial' if trials == 1 else f'{trials} trials'}[/bold]")
         console.print(f"Subject: {subject}")
         console.print(f"Chaos: {chaos}")
         console.print(f"Baseline: {baseline}")
         console.print(f"Database: {db_path}")
+        console.print(f"Git commit: {commit_hash[:8]}")
         managed_mode = not operator_running and not baseline
-        console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'skipped (baseline)'}\n")
+        console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'skipped (baseline)'}")
+        if not is_operator_repo:
+            console.print("[yellow]Warning: not running from operator repo — commit hash may not reflect operator code[/yellow]")
+        console.print()
 
         async def execute_trials(skip_reset: bool = False, resolved_db_path: Path | None = None):
             """Execute the actual trials."""
@@ -189,6 +196,7 @@ def run_single(
                     name=f"{subject}/{chaos}",
                     trial_count=1,
                     baseline=baseline,
+                    git_commit_hash=commit_hash,
                     created_at=now(),
                 )
                 campaign_id = await db.insert_campaign(campaign)
@@ -226,6 +234,7 @@ def run_single(
                     db=db,
                     baseline=baseline,
                     operator_db_path=db_path_to_use,
+                    git_commit_hash=commit_hash,
                 )
 
                 console.print(f"\n[bold green]Campaign {campaign_id} complete with {trials} trials[/bold green]")
@@ -350,6 +359,9 @@ def run_campaign_cmd(
     # chaos but still need the operator running for non-baseline trials
     managed_mode = not operator_running and not cloud_mode
 
+    # Capture git info
+    commit_hash, is_operator_repo = get_repo_info()
+
     # Show campaign summary
     console.print(f"\n[bold]Campaign: {config.name}[/bold]")
     console.print(f"Subjects: {config.subjects}")
@@ -363,6 +375,9 @@ def run_campaign_cmd(
         console.print(f"Model override: {model}")
     console.print(f"Mode: {execution_mode}")
     console.print(f"Operator: {'managed' if managed_mode else 'external' if operator_running else 'cloud'}")
+    console.print(f"Git commit: {commit_hash[:8]}")
+    if not is_operator_repo:
+        console.print("[yellow]Warning: not running from operator repo — commit hash may not reflect operator code[/yellow]")
 
     # Cloud mode execution
     if cloud_mode:
@@ -398,6 +413,7 @@ def run_campaign_cmd(
                 trial_count=len(trial_specs),
                 baseline=config.include_baseline,
                 variant_name=config.variant,
+                git_commit_hash=commit_hash,
                 created_at=now(),
             )
             campaign_id = await db.insert_campaign(campaign)
@@ -448,6 +464,7 @@ def run_campaign_cmd(
                 db=db,
                 operator_db_path=resolved_db_path,
                 model_override=model,
+                git_commit_hash=commit_hash,
             )
 
         if managed_mode:
@@ -1071,6 +1088,7 @@ def show_detail(
                 "name": campaign.name,
                 "trial_count": campaign.trial_count,
                 "baseline": campaign.baseline,
+                "git_commit_hash": campaign.git_commit_hash,
                 "created_at": campaign.created_at,
                 "trials": [
                     {
@@ -1098,6 +1116,8 @@ def show_detail(
         print(f"Created:  {campaign.created_at}")
         print(f"Trials:   {campaign.trial_count}")
         print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
+        if campaign.git_commit_hash:
+            print(f"Commit:   {campaign.git_commit_hash}")
         print()
 
         # Aggregate scores if available
@@ -1163,6 +1183,7 @@ def list_campaigns(
                 "trial_count": c.trial_count,
                 "baseline": c.baseline,
                 "variant_name": getattr(c, 'variant_name', 'default'),
+                "git_commit_hash": c.git_commit_hash,
                 "created_at": c.created_at,
             }
             for c in campaigns
@@ -1177,15 +1198,16 @@ def list_campaigns(
         print(f"Database: {db_path}")
         return
 
-    # Header row with fixed widths: ID(6), Date(12), Name(30), Variant(12), Trials(8), Baseline(8)
-    print(f"{'ID':<6} {'Date':<12} {'Name':<30} {'Variant':<12} {'Trials':<8} {'Baseline':<8}")
-    print("-" * 78)
+    # Header row with fixed widths: ID(6), Date(12), Name(30), Variant(12), Trials(8), Baseline(8), Commit(10)
+    print(f"{'ID':<6} {'Date':<12} {'Name':<30} {'Variant':<12} {'Trials':<8} {'Baseline':<8} {'Commit':<10}")
+    print("-" * 88)
     for c in campaigns:
         date_str = c.created_at[:10] if c.created_at else "N/A"
         baseline_str = "Yes" if c.baseline else "No"
         variant_str = getattr(c, 'variant_name', 'default')[:10]
         name_str = c.name[:28] if c.name else "N/A"
-        print(f"{c.id:<6} {date_str:<12} {name_str:<30} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8}")
+        commit_str = c.git_commit_hash[:8] if c.git_commit_hash else ""
+        print(f"{c.id:<6} {date_str:<12} {name_str:<30} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8} {commit_str:<10}")
 
     # Show pagination info
     showing_end = min(offset + limit, total)

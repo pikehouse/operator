@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     baseline BOOLEAN DEFAULT FALSE,
     variant_name TEXT DEFAULT 'default',
     topology_json JSONB,
+    git_commit_hash TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -168,6 +169,17 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE campaigns ADD COLUMN topology_json JSONB"
                 )
+            # Migration: add git_commit_hash column if missing
+            git_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'git_commit_hash'
+                )
+            """)
+            if not git_col_exists:
+                await conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN git_commit_hash TEXT DEFAULT ''"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
@@ -175,8 +187,8 @@ class PostgresDB:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, git_commit_hash, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
                 RETURNING id
                 """,
                 campaign.subject_name,
@@ -186,6 +198,7 @@ class PostgresDB:
                 campaign.baseline,
                 campaign.variant_name,
                 campaign.topology_json or None,
+                campaign.git_commit_hash,
                 parse_iso_datetime(campaign.created_at),
             )
             return row["id"]
