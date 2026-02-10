@@ -40,6 +40,7 @@ File layout (relative to workspace root):
 Key diagnostic queries:
   - pg_stat_activity: connection states, idle-in-transaction, lock waiters
   - pg_stat_database: deadlock counts
+  - EXPLAIN ANALYZE: run on slow queries to check for sequential scans, missing indexes
 App endpoints: /health (pool status), /metrics (Prometheus format)
 Containers: postgres, app, loadgen, prometheus
 """
