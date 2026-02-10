@@ -251,6 +251,10 @@ class CloudSubjectBase(ABC):
                         role = "tikv"
                     elif "prometheus" in service or "grafana" in service:
                         role = "observability"
+                    elif "postgres" in service or "mysql" in service or "redis" in service:
+                        role = "database"
+                    elif service == "app":
+                        role = "app"
                     else:
                         role = "other"
                     compose_containers.append({

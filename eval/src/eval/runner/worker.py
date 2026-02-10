@@ -363,20 +363,6 @@ class Worker:
         ended_at = now()
 
         try:
-            # Capture topology before chaos (subject is healthy at this point)
-            try:
-                from eval.runner.harness import capture_deployment_topology_async
-                topology_json = await capture_deployment_topology_async(subject, mode=self.mode)
-                if topology_json:
-                    pool = await self.db._get_pool()
-                    async with pool.acquire() as conn:
-                        await conn.execute(
-                            "UPDATE campaigns SET topology_json = $1::jsonb WHERE id = $2 AND (topology_json IS NULL)",
-                            topology_json, campaign_id,
-                        )
-            except Exception as e:
-                logger.debug(f"Topology capture skipped: {e}")
-
             # Start operator on VM (if enabled)
             if remote_op:
                 await remote_op.start()
@@ -390,6 +376,20 @@ class Worker:
                     console.log(
                         f"[dim]Pre-chaos max ticket ID: {pre_chaos_max_ticket_id}[/dim]"
                     )
+
+            # Capture topology after operator start so operator containers are visible
+            try:
+                from eval.runner.harness import capture_deployment_topology_async
+                topology_json = await capture_deployment_topology_async(subject, mode=self.mode)
+                if topology_json:
+                    pool = await self.db._get_pool()
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            "UPDATE campaigns SET topology_json = $1::jsonb WHERE id = $2 AND (topology_json IS NULL)",
+                            topology_json, campaign_id,
+                        )
+            except Exception as e:
+                logger.debug(f"Topology capture skipped: {e}")
             # Inject chaos (unless baseline)
             if not baseline and chaos_type != "none":
                 console.log(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")

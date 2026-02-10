@@ -13,6 +13,8 @@ COLOR_TIKV = "#10B981"     # green
 COLOR_OBS = "#8B5CF6"      # purple
 COLOR_OPERATOR = "#F59E0B" # orange
 COLOR_EVAL = "#6B7280"     # gray
+COLOR_DATABASE = "#6366F1" # indigo
+COLOR_APP = "#EC4899"      # pink
 COLOR_OTHER = "#9CA3AF"    # light gray
 COLOR_BORDER = "#D1D5DB"   # gray-300
 COLOR_TEXT = "#374151"      # gray-700
@@ -25,6 +27,8 @@ ROLE_COLORS = {
     "observability": COLOR_OBS,
     "operator": COLOR_OPERATOR,
     "eval": COLOR_EVAL,
+    "database": COLOR_DATABASE,
+    "app": COLOR_APP,
     "other": COLOR_OTHER,
 }
 
@@ -139,10 +143,15 @@ def _render_local_topology(topology: dict[str, Any]) -> str:
     processes = host_entry.get("processes", []) if host_entry else []
     containers = docker_entry.get("containers", [])
 
-    # Classify containers by role
-    pd_nodes = [c for c in containers if c.get("role") == "pd"]
-    tikv_nodes = [c for c in containers if c.get("role") == "tikv"]
-    obs_nodes = [c for c in containers if c.get("role") == "observability"]
+    # Group containers by role, preserving order of first appearance
+    container_groups: list[tuple[str, list[dict]]] = []
+    seen_roles: dict[str, int] = {}
+    for c in containers:
+        role = c.get("role", "other")
+        if role not in seen_roles:
+            seen_roles[role] = len(container_groups)
+            container_groups.append((role, []))
+        container_groups[seen_roles[role]][1].append(c)
 
     # Layout calculations
     # Left side: host processes
@@ -158,13 +167,13 @@ def _render_local_topology(topology: dict[str, Any]) -> str:
     docker_x = host_box_w + GROUP_PAD * 3
     docker_y = GROUP_PAD
 
-    # Rows: PD, TiKV, observability
-    row_counts = [len(pd_nodes), len(tikv_nodes), len(obs_nodes)]
+    # Rows: one per role group
+    row_counts = [len(g) for _, g in container_groups]
     max_cols = max(row_counts) if row_counts else 3
     docker_inner_w = max_cols * (NODE_W + NODE_GAP_X) - NODE_GAP_X + GROUP_PAD * 2
     docker_inner_w = max(docker_inner_w, 240)  # minimum width
 
-    num_rows = sum(1 for r in row_counts if r > 0)
+    num_rows = len(container_groups)
     docker_inner_h = num_rows * (NODE_H + NODE_GAP_Y) + GROUP_PAD
     docker_box_h = docker_inner_h + LABEL_H
 
@@ -209,7 +218,7 @@ def _render_local_topology(topology: dict[str, Any]) -> str:
     container_positions: dict[str, tuple[int, int]] = {}
     docker_mid_x = docker_x + (docker_inner_w + GROUP_PAD) // 2
 
-    for group_nodes, group_label in [(pd_nodes, "PD"), (tikv_nodes, "TiKV"), (obs_nodes, "Observability")]:
+    for _role, group_nodes in container_groups:
         if not group_nodes:
             continue
         row_w = len(group_nodes) * (NODE_W + NODE_GAP_X) - NODE_GAP_X
@@ -254,10 +263,15 @@ def _render_cloud_topology(topology: dict[str, Any]) -> str:
     compose_containers = vm_host.get("compose_containers", [])
     operator_containers = vm_host.get("operator_containers", [])
 
-    # Classify compose containers
-    pd_nodes = [c for c in compose_containers if c.get("role") == "pd"]
-    tikv_nodes = [c for c in compose_containers if c.get("role") == "tikv"]
-    obs_nodes = [c for c in compose_containers if c.get("role") == "observability"]
+    # Group compose containers by role, preserving order of first appearance
+    compose_groups: list[tuple[str, list[dict]]] = []
+    seen_roles: dict[str, int] = {}
+    for c in compose_containers:
+        role = c.get("role", "other")
+        if role not in seen_roles:
+            seen_roles[role] = len(compose_groups)
+            compose_groups.append((role, []))
+        compose_groups[seen_roles[role]][1].append(c)
 
     # Layout: eval worker box on left, VM box on right
     eval_box_x = GROUP_PAD
@@ -268,20 +282,23 @@ def _render_cloud_topology(topology: dict[str, Any]) -> str:
     vm_box_x = eval_box_w + GROUP_PAD * 4
     vm_box_y = GROUP_PAD
 
-    # VM box sizing
-    max_row = max(len(pd_nodes), len(tikv_nodes), len(obs_nodes), 1)
-    vm_inner_w = max_row * (NODE_W + NODE_GAP_X) - NODE_GAP_X + GROUP_PAD * 2
+    # VM box sizing — use wider nodes for readability
+    node_w = 100
+    max_row = max((len(g) for _, g in compose_groups), default=1)
+    # Operator row: monitor + agent + DB = 3 nodes
+    if operator_containers:
+        op_row_count = len(operator_containers) + 1  # +1 for data volume
+        max_row = max(max_row, op_row_count)
+    vm_inner_w = max_row * (node_w + NODE_GAP_X) - NODE_GAP_X + GROUP_PAD * 2
     vm_inner_w = max(vm_inner_w, 300)  # minimum
 
-    # Sections: compose label + PD row + TiKV row + (obs row) + operator section
-    compose_rows = sum(1 for g in [pd_nodes, tikv_nodes, obs_nodes] if g)
-    operator_rows = 1 if operator_containers else 0
-    total_sections = compose_rows + operator_rows
+    # Sections: compose label + compose rows + operator section
+    compose_rows = len(compose_groups)
     vm_inner_h = (
         LABEL_H  # VM label
         + LABEL_H  # "Docker Compose" sublabel
         + compose_rows * (NODE_H + NODE_GAP_Y)
-        + (LABEL_H + NODE_H + NODE_GAP_Y if operator_containers else 0)  # Operator section
+        + (LABEL_H + NODE_H + NODE_GAP_Y if operator_containers else 0)
         + GROUP_PAD * 2
     )
     vm_box_h = max(vm_inner_h, eval_box_h)
@@ -324,18 +341,18 @@ def _render_cloud_topology(topology: dict[str, Any]) -> str:
     )
     cy += LABEL_H
 
-    # Compose container rows
-    for group_nodes in [pd_nodes, tikv_nodes, obs_nodes]:
+    # Compose container rows (all roles)
+    for _role, group_nodes in compose_groups:
         if not group_nodes:
             continue
-        row_w = len(group_nodes) * (NODE_W + NODE_GAP_X) - NODE_GAP_X
+        row_w = len(group_nodes) * (node_w + NODE_GAP_X) - NODE_GAP_X
         start_x = vm_box_x + GROUP_PAD + (vm_inner_w - row_w) // 2
         cx = start_x
         for node in group_nodes:
             node_id = node.get("id", "")
             label = _short_container_label(node_id)
-            svg_parts.append(_node_svg(cx, cy, label, node.get("role", "")))
-            cx += NODE_W + NODE_GAP_X
+            svg_parts.append(_node_svg(cx, cy, label, node.get("role", ""), w=node_w))
+            cx += node_w + NODE_GAP_X
         cy += NODE_H + NODE_GAP_Y
 
     # Operator section
@@ -343,18 +360,21 @@ def _render_cloud_topology(topology: dict[str, Any]) -> str:
         cy += 4
         svg_parts.append(
             f'<text x="{vm_box_x + GROUP_PAD}" y="{cy + 12}" font-size="10" '
-            f'fill="{COLOR_LABEL}" font-style="italic">Operator (standalone docker run, --network=host)</text>\n'
+            f'fill="{COLOR_LABEL}" font-style="italic">Operator (docker compose, --network=host)</text>\n'
         )
         cy += LABEL_H
         cx = vm_box_x + GROUP_PAD
+
+        # Map container IDs to friendly labels
+        _OP_LABELS = {"operator-monitor": "Monitor", "operator-agent": "Agent"}
         for oc in operator_containers:
             oc_id = oc.get("id", "")
-            label = oc_id.replace("operator-", "")
-            svg_parts.append(_node_svg(cx, cy, label, "operator"))
-            cx += NODE_W + NODE_GAP_X
+            label = _OP_LABELS.get(oc_id, oc_id.replace("operator-", ""))
+            svg_parts.append(_node_svg(cx, cy, label, "operator", w=node_w))
+            cx += node_w + NODE_GAP_X
 
         # Data volume node
-        svg_parts.append(_node_svg(cx, cy, "operator-data", "other", w=100))
+        svg_parts.append(_node_svg(cx, cy, "DB", "operator", w=node_w))
 
     # SSH connection arrow
     if eval_host:
