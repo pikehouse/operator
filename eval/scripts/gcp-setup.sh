@@ -118,6 +118,12 @@ else
         --region="${REGION}" \
         --root-password="${DB_PASSWORD}" \
         --authorized-networks=0.0.0.0/0 \
+        --database-flags=\
+idle_in_transaction_session_timeout=300000,\
+tcp_keepalives_idle=60,\
+tcp_keepalives_interval=10,\
+tcp_keepalives_count=3,\
+max_connections=100 \
         --quiet
 
     echo "    Instance created"
