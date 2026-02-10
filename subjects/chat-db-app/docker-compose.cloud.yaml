@@ -1,17 +1,38 @@
-# Chat DB App for Cloud Eval (GCP + Cloud SQL)
+# Chat DB App for Cloud Eval (GCP with local PostgreSQL)
 #
-# No postgres service — app connects to Cloud SQL via DATABASE_URL env var.
+# Each VM runs its own PostgreSQL container — no shared Cloud SQL.
 # App builds from workspace source (agent can edit and rebuild).
 # Loadgen uses pre-built image from Artifact Registry.
 
 services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: chatapp
+      POSTGRES_PASSWORD: chatapp
+      POSTGRES_DB: chatdb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatapp -d chatdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
   app:
     build:
       context: /var/lib/workspace/app
     ports:
       - "${APP_HOST_PORT:-8000}:8000"
     environment:
-      DATABASE_URL: "${DATABASE_URL}"
+      DATABASE_URL: "postgresql://chatapp:chatapp@postgres:5432/chatdb"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 10s
@@ -32,3 +53,6 @@ services:
       app:
         condition: service_healthy
     restart: on-failure
+
+volumes:
+  postgres-data:

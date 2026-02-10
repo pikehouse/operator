@@ -72,8 +72,6 @@ Ensure `.env` at repo root has:
 | `ANTHROPIC_API_KEY` | Agent LLM calls |
 | `EVAL_DATABASE_URL` | Cloud PostgreSQL for distributed execution |
 | `GCP_PROJECT` | GCP project ID |
-| `CHATDB_CLOUD_SQL_IP` | Chat DB App: Cloud SQL IP |
-| `CHATDB_CLOUD_SQL_PASSWORD` | Chat DB App: Cloud SQL password |
 | `CHATDB_APP_IMAGE` | Chat DB App: pre-built app image |
 | `CHATDB_LOADGEN_IMAGE` | Chat DB App: pre-built loadgen image |
 
@@ -109,7 +107,7 @@ The worker claims items from the queue, provisions VMs, runs trials, and records
 |----------|---------|---------------|
 | `smoke-tests/tikv-cloud-smoke.yaml` | tikv | node_kill (1 trial) |
 | `coding/chatdb-cloud-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
-| `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure, db_disconnect (1 trial each) |
+| `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure (1 trial) |
 | `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
 | `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
 

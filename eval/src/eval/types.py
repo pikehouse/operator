@@ -73,7 +73,6 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
         "pd_leader_kill": "PD leader node killed",
         "leader_concentration": "Region leaders concentrated on one store",
         "load_pressure": "Load pressure test",
-        "db_disconnect": "Database connection blocked",
         "debug_code_edit": "Bugs injected into app code",
         "none": "Baseline (no chaos)",
     }

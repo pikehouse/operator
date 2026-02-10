@@ -22,7 +22,7 @@ class ChaosSpec(BaseModel):
             "memory_exhaustion", "cpu_starvation",  # Cloud-only
             "process_pause", "packet_loss", "asymmetric_partition",
             "pd_leader_kill", "leader_concentration",
-            "load_pressure", "db_kill", "db_disconnect", "debug_code_edit",  # Chat DB App
+            "load_pressure", "db_kill", "debug_code_edit",  # Chat DB App
             "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",  # Chat DB App per-defect
         ]
         if v not in valid_types:

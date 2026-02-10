@@ -22,10 +22,10 @@ WORKSPACE_DIR = "/var/lib/workspace"
 
 
 class GCPChatDBAppSubject(CloudSubjectBase):
-    """Chat DB App running on GCP Compute Engine with Cloud SQL.
+    """Chat DB App running on GCP Compute Engine with local PostgreSQL.
 
-    The app + loadgen run in Docker on a GCP VM, connecting to a shared
-    Cloud SQL instance. Each trial gets an isolated database on Cloud SQL.
+    Each VM runs its own PostgreSQL container via Docker Compose, giving
+    full isolation between parallel trials. No shared Cloud SQL.
 
     The service source is uploaded to a git-tracked workspace on the VM
     so the agent can edit code and rebuild the app container.
@@ -37,7 +37,6 @@ class GCPChatDBAppSubject(CloudSubjectBase):
       - streaming_txn: High stream ratio → idle-in-transaction
       - counter_race: Burst concurrent writes → read-modify-write race
     - load_pressure: Backward-compat alias for pool_exhaustion
-    - db_disconnect: iptables block VM → Cloud SQL traffic
     - debug_code_edit: Ticket injection (handled in worker)
     """
 
@@ -83,7 +82,7 @@ class GCPChatDBAppSubject(CloudSubjectBase):
 
     CLOUD_CHAOS_TYPES = [
         "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",
-        "load_pressure", "db_disconnect", "debug_code_edit",
+        "load_pressure", "debug_code_edit",
     ]
 
     def __init__(
@@ -92,20 +91,18 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         project: str | None = None,
         zone: str = "us-central1-a",
         machine_type: str = "e2-standard-2",
-        cloud_sql_ip: str | None = None,
-        cloud_sql_password: str | None = None,
         compose_dir: str = "/tmp/chatdb",
+        **kwargs: Any,
     ):
         """Initialize GCP Chat DB App subject.
 
         Args:
-            instance_id: Instance number (used for VM naming + trial DB)
+            instance_id: Instance number (used for VM naming)
             project: GCP project ID
             zone: GCP zone
             machine_type: VM machine type
-            cloud_sql_ip: Cloud SQL IP (from .env.gcp or env var)
-            cloud_sql_password: Cloud SQL password (from .env.gcp or env var)
             compose_dir: Directory on VM for compose files
+            **kwargs: Ignored (absorbs legacy cloud_sql_ip/cloud_sql_password)
         """
         vm = GCPVM(
             project=project,
@@ -123,15 +120,6 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         self.instance_id = instance_id
         self.compose_dir = compose_dir
         self.workspace_dir = WORKSPACE_DIR
-
-        # Cloud SQL connection details (from env vars or constructor)
-        self.cloud_sql_ip = cloud_sql_ip or os.environ.get("CHATDB_CLOUD_SQL_IP", "")
-        self.cloud_sql_password = cloud_sql_password or os.environ.get(
-            "CHATDB_CLOUD_SQL_PASSWORD", ""
-        )
-
-        # Per-trial database name for isolation
-        self.trial_db_name = f"chatdb_trial_{instance_id}"
 
         # Image URLs from env
         self.app_image = os.environ.get("CHATDB_APP_IMAGE", "")
@@ -163,24 +151,22 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         self._chaos_loadgen_name = f"{self.project_name}-chaos-loadgen"
 
     def set_trial_id(self, trial_instance_id: int) -> None:
-        """Update the trial database name for VM reuse across trials.
+        """Update trial ID for VM reuse across trials.
 
         Called by the worker when reusing a pooled subject for a new trial.
-        The .env file is rewritten during reset() so the new database_url
-        takes effect.
-
-        Args:
-            trial_instance_id: New trial/work-item ID for database isolation.
+        With local postgres, compose down -v gives a clean slate so no
+        per-trial database name is needed.
         """
-        self.trial_db_name = f"chatdb_trial_{trial_instance_id}"
+        pass
 
     @property
     def database_url(self) -> str:
-        """Construct DATABASE_URL for this trial's isolated database."""
-        return (
-            f"postgresql://chatapp:{self.cloud_sql_password}"
-            f"@{self.cloud_sql_ip}:5432/{self.trial_db_name}"
-        )
+        """DATABASE_URL for local postgres on the VM.
+
+        The operator runs with host networking, so localhost:5432 reaches
+        the compose postgres service (which exposes port 5432 on the host).
+        """
+        return "postgresql://chatapp:chatapp@localhost:5432/chatdb"
 
     @property
     def workspace_volume_mount(self) -> str:
@@ -246,7 +232,7 @@ Other useful commands:
 
         Uploads the entire service directory to the workspace, overlays
         the cloud compose file, initialises a git repo for code tracking,
-        and writes the .env with Cloud SQL connection details.
+        and writes the .env with image URLs.
         """
         await install_compose_plugin(self.vm)
 
@@ -282,38 +268,35 @@ Other useful commands:
 
         await configure_artifact_registry(self.vm)
 
-        # Pull loadgen image + postgres:16 for DB admin via psql
+        # Pull loadgen image (postgres:16 is pulled by compose automatically)
         await self.vm.run_command(
             f"docker pull {self.loadgen_image}",
             timeout_sec=300.0,
         )
-        await self.vm.run_command("docker pull postgres:16", timeout_sec=120.0)
 
     async def _write_env_file(self) -> None:
-        """Write .env file with Cloud SQL connection and image URLs.
+        """Write .env file with image URLs.
 
-        Called during initial setup and at the start of each reset() so the
-        .env reflects the current trial_db_name / database_url (important
-        when a pooled subject is reused across trials).
+        DATABASE_URL is baked into docker-compose.cloud.yaml, so the .env
+        only needs the loadgen image reference.
         """
-        env_content = (
-            f"LOADGEN_IMAGE={self.loadgen_image}\n"
-            f"DATABASE_URL={self.database_url}\n"
-        )
+        env_content = f"LOADGEN_IMAGE={self.loadgen_image}\n"
         await self.vm.run_command(
             f"cat > {self.compose_dir}/.env << 'ENVEOF'\n{env_content}ENVEOF"
         )
 
     async def reset(self) -> None:
-        """Reset subject: tear down containers, reset code, recreate trial database, start fresh."""
+        """Reset subject: tear down containers, reset code, start fresh.
+
+        With local postgres, compose down -v destroys the data volume,
+        giving a clean database on the next compose up.
+        """
         if not self._created:
             await self.setup()
 
-        # Rewrite .env so DATABASE_URL reflects the current trial_db_name
-        # (important when a pooled subject is reused for a different trial)
         await self._write_env_file()
 
-        # Compose down
+        # Compose down — -v removes postgres data volume for clean slate
         await self.vm.run_command(
             f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} down -v --remove-orphans"
         )
@@ -324,26 +307,33 @@ Other useful commands:
             timeout_sec=30.0,
         )
 
-        # Drop and recreate trial database on Cloud SQL
-        # Use a temporary postgres container to run psql against Cloud SQL
-        psql_cmd = (
-            f"docker run --rm postgres:16 psql "
-            f"'postgresql://chatapp:{self.cloud_sql_password}@{self.cloud_sql_ip}:5432/postgres'"
-        )
-        await self.vm.run_command(
-            f'{psql_cmd} -c "DROP DATABASE IF EXISTS {self.trial_db_name};"',
-            timeout_sec=60.0,
-        )
-        await self.vm.run_command(
-            f'{psql_cmd} -c "CREATE DATABASE {self.trial_db_name};"',
-            timeout_sec=60.0,
-        )
-
         # Compose up (app builds from workspace source, auto-creates tables on startup)
-        await self.vm.run_command(
+        exit_code, stdout, stderr = await self.vm.run_command(
             f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} --env-file .env up -d --build --wait",
             timeout_sec=180.0,
         )
+        if exit_code != 0:
+            logger.error("compose up failed (exit %d): %s", exit_code, stderr.strip())
+            raise RuntimeError(
+                f"compose up failed (exit {exit_code}): {stderr.strip()[:200]}"
+            )
+
+        # Verify postgres is accepting connections before proceeding
+        await self._wait_for_postgres()
+
+    async def _wait_for_postgres(self, timeout_sec: float = 30.0) -> None:
+        """Wait for postgres to be ready via pg_isready."""
+        start = asyncio.get_running_loop().time()
+        while (asyncio.get_running_loop().time() - start) < timeout_sec:
+            exit_code, _, _ = await self.vm.run_command(
+                "docker run --rm --network=host postgres:16 "
+                "pg_isready -h localhost -U chatapp -d chatdb",
+                timeout_sec=10.0,
+            )
+            if exit_code == 0:
+                return
+            await asyncio.sleep(2.0)
+        logger.warning("pg_isready did not succeed within %.0fs", timeout_sec)
 
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
         """Wait for app to be healthy via SSH curl."""
@@ -351,24 +341,47 @@ Other useful commands:
             return False
 
         start = asyncio.get_running_loop().time()
+        last_response = "(no response yet)"
         while (asyncio.get_running_loop().time() - start) < timeout_sec:
             try:
-                exit_code, stdout, _ = await self.vm.run_command(
-                    "curl -s http://localhost:8000/health"
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    "curl -s -w '\\n%{http_code}' http://localhost:8000/health"
                 )
+                last_response = f"exit={exit_code} body={stdout.strip()[:200]}"
                 if exit_code == 0:
                     try:
-                        data = json.loads(stdout)
+                        # curl -w appends HTTP status code on last line
+                        lines = stdout.strip().rsplit("\n", 1)
+                        body = lines[0] if len(lines) > 1 else stdout.strip()
+                        data = json.loads(body)
                         if data.get("status") == "healthy":
                             return True
                     except json.JSONDecodeError:
-                        # Non-JSON 200 response is also OK
                         if "healthy" in stdout.lower():
                             return True
             except Exception as e:
-                logger.debug(f"Health check error: {e}")
+                last_response = f"error: {e}"
+                logger.debug("Health check error: %s", e)
 
             await asyncio.sleep(2.0)
+
+        # Log container state for post-mortem
+        try:
+            _, ps_out, _ = await self.vm.run_command(
+                f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} ps -a"
+            )
+            _, logs_out, _ = await self.vm.run_command(
+                f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} logs app --tail 30"
+            )
+            logger.error(
+                "Health check timeout after %.0fs. Last response: %s\nContainers:\n%s\nApp logs:\n%s",
+                timeout_sec, last_response, ps_out.strip(), logs_out.strip(),
+            )
+        except Exception:
+            logger.error(
+                "Health check timeout after %.0fs. Last response: %s",
+                timeout_sec, last_response,
+            )
 
         return False
 
@@ -465,8 +478,6 @@ Other useful commands:
             return await self._inject_load_pressure(
                 chaos_type="load_pressure", profile=profile, **params
             )
-        elif chaos_type == "db_disconnect":
-            return await self._inject_db_disconnect()
         elif chaos_type == "debug_code_edit":
             # No system-level chaos — ticket injection happens in the worker
             return {"chaos_type": "debug_code_edit"}
@@ -484,11 +495,6 @@ Other useful commands:
                     "chaos_container", self._chaos_loadgen_name
                 )
                 await self.vm.run_command(f"docker rm -f {container}")
-            elif chaos_type == "db_disconnect":
-                cloud_sql_ip = chaos_metadata.get("cloud_sql_ip", self.cloud_sql_ip)
-                await self.vm.run_command(
-                    f"sudo iptables -D OUTPUT -d {cloud_sql_ip} -p tcp --dport 5432 -j DROP"
-                )
             elif chaos_type == "debug_code_edit":
                 pass  # No system-level chaos to clean up
         except Exception as e:
@@ -563,26 +569,31 @@ Other useful commands:
             "now() - interval '1 second' * (g % 3600) "
             f"FROM generate_series(1, {count}) AS g;"
         )
+        # Use compose network so psql can reach postgres by service name
+        compose_network = f"{self.project_name}_default"
         psql_cmd = (
-            f"docker run --rm postgres:16 psql "
-            f"'{self.database_url}' -c \"{sql}\""
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' -c \"{sql}\""
         )
-        try:
-            await self.vm.run_command(psql_cmd, timeout_sec=300.0)
-            logger.info("Pre-seeded %d messages", count)
-        except Exception as e:
-            logger.warning("Failed to pre-seed messages: %s", e)
-
-    async def _inject_db_disconnect(self) -> dict[str, Any]:
-        """Block VM traffic to Cloud SQL using iptables.
-
-        Simulates a network partition between the app and the database.
-        """
-        await self.vm.run_command(
-            f"sudo iptables -I OUTPUT -d {self.cloud_sql_ip} -p tcp --dport 5432 -j DROP"
-        )
-
-        return {
-            "chaos_type": "db_disconnect",
-            "cloud_sql_ip": self.cloud_sql_ip,
-        }
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=300.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d messages", count)
+                    return
+                last_err = RuntimeError(
+                    f"preseed psql exited {exit_code}: {stderr.strip()[:200]}"
+                )
+                logger.warning(
+                    "Preseed attempt %d/%d failed (exit %d): %s",
+                    attempt + 1, 3, exit_code, stderr.strip()[:200],
+                )
+            except TimeoutError:
+                last_err = TimeoutError(f"Preseed timed out after 300s (attempt {attempt + 1})")
+                logger.warning("Preseed attempt %d/%d timed out", attempt + 1, 3)
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]

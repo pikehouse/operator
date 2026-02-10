@@ -171,7 +171,7 @@ SELECT json_build_object(
     # Use psql -t -A to get raw JSON without headers/formatting
     # Escape single quotes in the SQL for the shell command
     psql_cmd = (
-        f"docker run --rm postgres:16 psql '{database_url}' -t -A "
+        f"docker run --rm --network=host postgres:16 psql '{database_url}' -t -A "
         f"-c \"SET LOCAL statement_timeout = '10000'\" "
         f"-c \"{compound_sql.strip()}\""
     )
