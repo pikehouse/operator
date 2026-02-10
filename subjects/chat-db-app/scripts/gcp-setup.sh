@@ -54,6 +54,38 @@ gcloud services enable \
     --project="${GCP_PROJECT}" \
     --quiet
 
+# ---------- Authorized Networks ----------
+
+echo ""
+echo "--- Resolving authorized networks ---"
+
+# Get NAT IP from root .env or query GCP
+ROOT_ENV="${REPO_ROOT}/.env"
+NAT_IP=""
+if [ -f "${ROOT_ENV}" ]; then
+    NAT_IP=$(grep "^GCP_NAT_IP=" "${ROOT_ENV}" 2>/dev/null | cut -d'=' -f2- | tr -d '"' || true)
+fi
+if [ -z "$NAT_IP" ]; then
+    NAT_IP=$(gcloud compute addresses describe eval-nat-ip \
+        --region="${GCP_REGION}" \
+        --project="${GCP_PROJECT}" \
+        --format='value(address)' 2>/dev/null || true)
+fi
+if [ -z "$NAT_IP" ]; then
+    echo "WARNING: Could not find NAT IP. Run eval/scripts/gcp-setup.sh first."
+    echo "Falling back to 0.0.0.0/0 (open to all)."
+    AUTHORIZED_NETWORKS="0.0.0.0/0"
+else
+    MY_IP=$(curl -s --max-time 5 https://ifconfig.me || true)
+    if [ -z "$MY_IP" ]; then
+        echo "WARNING: Could not detect public IP, using NAT IP only"
+        AUTHORIZED_NETWORKS="${NAT_IP}/32"
+    else
+        echo "NAT IP: ${NAT_IP}, Caller IP: ${MY_IP}"
+        AUTHORIZED_NETWORKS="${NAT_IP}/32,${MY_IP}/32"
+    fi
+fi
+
 # ---------- Cloud SQL Instance ----------
 
 echo ""
@@ -68,11 +100,19 @@ else
         --tier=db-f1-micro \
         --region="${GCP_REGION}" \
         --root-password="${CLOUD_SQL_PASSWORD}" \
-        --authorized-networks=0.0.0.0/0 \
+        --authorized-networks="${AUTHORIZED_NETWORKS}" \
         --project="${GCP_PROJECT}" \
         --quiet
     echo "Instance '${CLOUD_SQL_INSTANCE}' created."
 fi
+
+# Keep authorized networks in sync (for existing instances)
+echo "Syncing authorized networks for ${CLOUD_SQL_INSTANCE}..."
+echo "  Authorized: ${AUTHORIZED_NETWORKS}"
+gcloud sql instances patch "${CLOUD_SQL_INSTANCE}" \
+    --authorized-networks="${AUTHORIZED_NETWORKS}" \
+    --project="${GCP_PROJECT}" \
+    --quiet
 
 # Get Cloud SQL IP
 CLOUD_SQL_IP=$(gcloud sql instances describe "${CLOUD_SQL_INSTANCE}" \

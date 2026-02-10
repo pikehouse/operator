@@ -91,13 +91,28 @@ echo ">>> Granting IAM roles to default compute service account..."
 PROJECT_NUM=$(gcloud projects describe "${PROJECT}" --format="value(projectNumber)")
 COMPUTE_SA="${PROJECT_NUM}-compute@developer.gserviceaccount.com"
 
-for role in roles/artifactregistry.reader roles/cloudsql.client roles/compute.admin roles/iam.serviceAccountUser; do
+for role in roles/artifactregistry.reader roles/cloudsql.client roles/compute.admin roles/iam.serviceAccountUser roles/iap.tunnelResourceAccessor; do
     echo "    Granting ${role}..."
     gcloud projects add-iam-policy-binding "${PROJECT}" \
         --member="serviceAccount:${COMPUTE_SA}" \
         --role="${role}" \
         --quiet &>/dev/null
 done
+
+# --- Static IP for Cloud NAT ---
+echo ""
+echo ">>> Static NAT IP..."
+if gcloud compute addresses describe eval-nat-ip --region="${REGION}" &>/dev/null; then
+    echo "    Static IP eval-nat-ip already exists"
+else
+    echo "    Reserving static IP eval-nat-ip..."
+    gcloud compute addresses create eval-nat-ip \
+        --region="${REGION}" \
+        --quiet
+fi
+NAT_IP=$(gcloud compute addresses describe eval-nat-ip --region="${REGION}" --format='value(address)')
+echo "    NAT IP: ${NAT_IP}"
+update_env "GCP_NAT_IP" "${NAT_IP}"
 
 # --- Cloud NAT (outbound internet for VMs without public IPs) ---
 echo ""
@@ -115,11 +130,11 @@ fi
 if gcloud compute routers nats describe eval-nat --router=eval-router --region="${REGION}" &>/dev/null; then
     echo "    Cloud NAT eval-nat already exists"
 else
-    echo "    Creating Cloud NAT..."
+    echo "    Creating Cloud NAT with static IP..."
     gcloud compute routers nats create eval-nat \
         --router=eval-router \
         --region="${REGION}" \
-        --auto-allocate-nat-external-ips \
+        --nat-external-ip-pool=eval-nat-ip \
         --nat-all-subnet-ip-ranges \
         --quiet
 fi
@@ -136,6 +151,18 @@ else
         --allow=tcp:22 \
         --description="Allow SSH via IAP tunneling" \
         --quiet
+fi
+
+# --- Caller's public IP (for local CLI access to Cloud SQL) ---
+echo ""
+echo ">>> Detecting caller's public IP..."
+MY_IP=$(curl -s --max-time 5 https://ifconfig.me || true)
+if [ -z "$MY_IP" ]; then
+    echo "    WARNING: Could not detect public IP, using NAT IP only"
+    AUTHORIZED_NETWORKS="${NAT_IP}/32"
+else
+    echo "    Caller IP: ${MY_IP}"
+    AUTHORIZED_NETWORKS="${NAT_IP}/32,${MY_IP}/32"
 fi
 
 # --- Cloud SQL Instance ---
@@ -157,7 +184,7 @@ else
         --tier="${DB_TIER}" \
         --region="${REGION}" \
         --root-password="${DB_PASSWORD}" \
-        --authorized-networks=0.0.0.0/0 \
+        --authorized-networks="${AUTHORIZED_NETWORKS}" \
         --database-flags=\
 idle_in_transaction_session_timeout=300000,\
 tcp_keepalives_idle=60,\
@@ -168,6 +195,13 @@ max_connections=100 \
 
     echo "    Instance created"
 fi
+
+# Keep authorized networks in sync (for existing instances)
+echo ">>> Syncing authorized networks for ${DB_INSTANCE}..."
+echo "    Authorized: ${AUTHORIZED_NETWORKS}"
+gcloud sql instances patch "${DB_INSTANCE}" \
+    --authorized-networks="${AUTHORIZED_NETWORKS}" \
+    --quiet
 
 # Get instance details
 echo ">>> Getting instance details..."
@@ -307,6 +341,10 @@ docker run -d --name eval-worker --restart=always --network=host \
     -e EVAL_DATABASE_URL="postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${DB_NAME}" \
     -e GOOGLE_CLOUD_PROJECT="${PROJECT}" \
     -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+    -e CHATDB_CLOUD_SQL_IP="${CHATDB_CLOUD_SQL_IP}" \
+    -e CHATDB_CLOUD_SQL_PASSWORD="${CHATDB_CLOUD_SQL_PASSWORD}" \
+    -e CHATDB_APP_IMAGE="${CHATDB_APP_IMAGE}" \
+    -e CHATDB_LOADGEN_IMAGE="${CHATDB_LOADGEN_IMAGE}" \
     ${IMAGE}
 STARTUP_EOF
 )
