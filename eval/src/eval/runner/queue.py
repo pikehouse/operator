@@ -370,6 +370,48 @@ class WorkQueue:
                 )
             return int(result.split()[1]) if result else 0
 
+    async def kill_campaign(self, campaign_id: int) -> dict[str, int]:
+        """Kill a campaign: cancel pending and running items in one shot.
+
+        Args:
+            campaign_id: Campaign ID to kill
+
+        Returns:
+            Dict with counts: pending_cancelled, running_cancelled
+        """
+        pool = await self.db._get_pool()
+
+        async with pool.acquire() as conn:
+            # Cancel pending items
+            r1 = await conn.execute(
+                """
+                UPDATE work_queue
+                SET status = 'failed',
+                    completed_at = NOW(),
+                    error = 'Killed by user'
+                WHERE status = 'pending'
+                  AND campaign_id = $1
+                """,
+                campaign_id,
+            )
+            pending = int(r1.split()[1]) if r1 else 0
+
+            # Cancel running items
+            r2 = await conn.execute(
+                """
+                UPDATE work_queue
+                SET status = 'failed',
+                    completed_at = NOW(),
+                    error = 'Killed by user'
+                WHERE status = 'running'
+                  AND campaign_id = $1
+                """,
+                campaign_id,
+            )
+            running = int(r2.split()[1]) if r2 else 0
+
+        return {"pending_cancelled": pending, "running_cancelled": running}
+
     async def retry_failed(self, campaign_id: int | None = None) -> int:
         """Reset failed work items back to pending for retry.
 

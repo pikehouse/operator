@@ -1816,6 +1816,58 @@ def worker_cancel(
     asyncio.run(run())
 
 
+@worker_app.command("kill")
+def worker_kill(
+    campaign: int = typer.Argument(..., help="Campaign ID to kill"),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Kill a campaign: cancel all pending and running work items.
+
+    Marks both pending and running items as failed. Running workers will
+    see their item was killed and move on to the next one.
+
+    Examples:
+        eval worker kill 62 --remote
+    """
+    if not remote:
+        console.print("[red]Error: work queue requires --remote (cloud PostgreSQL)[/red]")
+        raise typer.Exit(1)
+
+    from eval.runner.queue import WorkQueue
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print(
+            "[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]"
+        )
+        raise typer.Exit(1)
+
+    async def run():
+        from eval.runner.db_postgres import PostgresDB
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        result = await queue.kill_campaign(campaign)
+        total = result["pending_cancelled"] + result["running_cancelled"]
+        if total:
+            console.print(
+                f"[green]Killed campaign {campaign}: "
+                f"{result['pending_cancelled']} pending + "
+                f"{result['running_cancelled']} running items cancelled[/green]"
+            )
+        else:
+            console.print(f"[dim]No active items for campaign {campaign}[/dim]")
+
+        await db.close()
+
+    asyncio.run(run())
+
+
 def main() -> None:
     """Entry point for the CLI."""
     app()
