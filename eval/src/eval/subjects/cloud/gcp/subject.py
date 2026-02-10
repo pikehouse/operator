@@ -82,13 +82,8 @@ class GCPTiKVSubject(CloudSubjectBase):
         repo_path = Path(__file__).parents[6] / "subjects" / "tikv" / "docker-compose.cloud.yaml"
         self._local_compose = docker_path if docker_path.exists() else repo_path
 
-        # PD endpoint (via SSH port forward or external IP)
+        # PD port (accessed via SSH commands to localhost)
         self._pd_port = 2379
-
-    @property
-    def pd_endpoint(self) -> str:
-        """Return PD API endpoint."""
-        return f"http://{self.vm.external_ip}:{self._pd_port}"
 
     async def _upload_compose_files(self) -> None:
         """Upload TiKV docker-compose files to the VM.

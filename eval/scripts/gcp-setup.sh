@@ -82,6 +82,7 @@ gcloud services enable \
     compute.googleapis.com \
     sqladmin.googleapis.com \
     artifactregistry.googleapis.com \
+    iap.googleapis.com \
     --quiet
 
 # --- IAM for Default Compute Service Account ---
@@ -97,6 +98,45 @@ for role in roles/artifactregistry.reader roles/cloudsql.client roles/compute.ad
         --role="${role}" \
         --quiet &>/dev/null
 done
+
+# --- Cloud NAT (outbound internet for VMs without public IPs) ---
+echo ""
+echo ">>> Cloud NAT..."
+if gcloud compute routers describe eval-router --region="${REGION}" &>/dev/null; then
+    echo "    Cloud Router eval-router already exists"
+else
+    echo "    Creating Cloud Router..."
+    gcloud compute routers create eval-router \
+        --region="${REGION}" \
+        --network=default \
+        --quiet
+fi
+
+if gcloud compute routers nats describe eval-nat --router=eval-router --region="${REGION}" &>/dev/null; then
+    echo "    Cloud NAT eval-nat already exists"
+else
+    echo "    Creating Cloud NAT..."
+    gcloud compute routers nats create eval-nat \
+        --router=eval-router \
+        --region="${REGION}" \
+        --auto-allocate-nat-external-ips \
+        --nat-all-subnet-ip-ranges \
+        --quiet
+fi
+
+# --- IAP Firewall Rule (for SSH without public IPs) ---
+echo ""
+echo ">>> IAP SSH firewall rule..."
+if gcloud compute firewall-rules describe allow-ssh-iap &>/dev/null; then
+    echo "    Firewall rule allow-ssh-iap already exists"
+else
+    echo "    Creating allow-ssh-iap..."
+    gcloud compute firewall-rules create allow-ssh-iap \
+        --source-ranges=35.235.240.0/20 \
+        --allow=tcp:22 \
+        --description="Allow SSH via IAP tunneling" \
+        --quiet
+fi
 
 # --- Cloud SQL Instance ---
 echo ""
@@ -278,6 +318,7 @@ gcloud compute instance-templates create eval-worker-template \
     --image-project=cos-cloud \
     --boot-disk-size=50GB \
     --scopes=cloud-platform \
+    --no-address \
     --metadata=startup-script="${STARTUP_SCRIPT}" \
     --quiet
 

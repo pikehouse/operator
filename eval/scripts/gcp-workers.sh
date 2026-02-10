@@ -53,18 +53,18 @@ case "$cmd" in
         echo "Running workers:"
         gcloud compute instances list \
             --filter="name~'^eval-worker-'" \
-            --format="table(name,zone,status,networkInterfaces[0].accessConfigs[0].natIP)"
+            --format="table(name,zone,status)"
         ;;
 
     logs)
         instance="${1:?Usage: $0 logs <instance-name>}"
         echo "Fetching logs from ${instance}..."
-        gcloud compute ssh "$instance" --zone="$ZONE" --command="docker logs eval-worker --tail 100"
+        gcloud compute ssh "$instance" --zone="$ZONE" --tunnel-through-iap --command="docker logs eval-worker --tail 100"
         ;;
 
     ssh)
         instance="${1:?Usage: $0 ssh <instance-name>}"
-        gcloud compute ssh "$instance" --zone="$ZONE"
+        gcloud compute ssh "$instance" --zone="$ZONE" --tunnel-through-iap
         ;;
 
     help|*)

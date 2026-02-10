@@ -48,11 +48,6 @@ class CloudVM(Protocol):
         """Return the cloud instance ID."""
         ...
 
-    @property
-    def external_ip(self) -> str:
-        """Return the external IP address of the VM."""
-        ...
-
     async def create(self) -> str:
         """Create the VM instance.
 
@@ -288,10 +283,6 @@ class CloudSubjectBase(ABC):
             vm_meta["machine_type"] = self.vm.machine_type
         if hasattr(self.vm, "name"):
             vm_meta["vm_name"] = self.vm.name
-        try:
-            vm_meta["vm_ip"] = self.vm.external_ip
-        except RuntimeError:
-            pass
 
         if vm_meta.get("machine_type") and vm_meta.get("zone"):
             vm_label = f"GCP VM ({vm_meta['machine_type']}, {vm_meta['zone']})"

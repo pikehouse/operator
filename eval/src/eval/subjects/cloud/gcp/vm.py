@@ -61,7 +61,6 @@ class GCPVM:
         self.name = f"{name_prefix}-{uuid.uuid4().hex[:8]}"
         self.disk_size_gb = disk_size_gb
         self._instance_id: str | None = None
-        self._external_ip: str | None = None
 
     @property
     def instance_id(self) -> str:
@@ -69,13 +68,6 @@ class GCPVM:
         if not self._instance_id:
             raise RuntimeError("VM not created yet")
         return self._instance_id
-
-    @property
-    def external_ip(self) -> str:
-        """Return the external IP address."""
-        if not self._external_ip:
-            raise RuntimeError("VM not created yet or has no external IP")
-        return self._external_ip
 
     async def create(self) -> str:
         """Create the VM instance.
@@ -108,6 +100,7 @@ class GCPVM:
             "--image-project=cos-cloud",
             f"--boot-disk-size={self.disk_size_gb}GB",
             "--scopes=cloud-platform",
+            "--no-address",
             f"--metadata=ssh-keys={ssh_metadata}",
             "--format=json",
         ]
@@ -130,17 +123,11 @@ class GCPVM:
         result = json.loads(stdout.decode())
         if result:
             self._instance_id = self.name
-            # Extract external IP from network interfaces
-            network_interfaces = result[0].get("networkInterfaces", [])
-            if network_interfaces:
-                access_configs = network_interfaces[0].get("accessConfigs", [])
-                if access_configs:
-                    self._external_ip = access_configs[0].get("natIP")
 
-        # Wait for SSH to be ready
+        # Wait for SSH to be ready (via IAP tunnel)
         await self._wait_for_ssh()
 
-        logger.info(f"VM created: {self.name} ({self._external_ip})")
+        logger.info(f"VM created: {self.name} (no public IP, IAP tunnel)")
         return self.name
 
     async def delete(self) -> None:
@@ -166,7 +153,6 @@ class GCPVM:
         await proc.communicate()
 
         self._instance_id = None
-        self._external_ip = None
 
     async def run_command(
         self,
@@ -195,6 +181,7 @@ class GCPVM:
         ssh_cmd = [
             "gcloud", "compute", "ssh", ssh_target,
             f"--zone={self.zone}",
+            "--tunnel-through-iap",
             "--command", cmd,
             "--strict-host-key-checking=no",
         ]
@@ -231,6 +218,7 @@ class GCPVM:
             local_path,
             f"{scp_target}:{remote_path}",
             f"--zone={self.zone}",
+            "--tunnel-through-iap",
             "--strict-host-key-checking=no",
         ]
         if self.project:
@@ -260,6 +248,7 @@ class GCPVM:
             f"{scp_target}:{remote_path}",
             local_path,
             f"--zone={self.zone}",
+            "--tunnel-through-iap",
             "--strict-host-key-checking=no",
         ]
         if self.project:
