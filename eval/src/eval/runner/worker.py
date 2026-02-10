@@ -61,6 +61,10 @@ class Worker:
         self._current_subject = None
         self._operator_image = operator_image
 
+        # VM pooling: reuse a single subject (and its VM) across trials
+        self._pooled_subject = None
+        self._pooled_subject_type: str | None = None
+
     async def start(self) -> None:
         """Start the worker loop.
 
@@ -79,24 +83,28 @@ class Worker:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, lambda: asyncio.create_task(self.stop()))
 
-        while self._running:
-            try:
-                # Try to claim work
-                work_item = await self.queue.claim_next(self.worker_id)
+        try:
+            while self._running:
+                try:
+                    # Try to claim work
+                    work_item = await self.queue.claim_next(self.worker_id)
 
-                if work_item:
-                    console.log(
-                        f"[cyan]Claimed work item {work_item.id}: "
-                        f"{work_item.subject_type}/{work_item.chaos_type}[/cyan]"
-                    )
-                    await self._execute_work(work_item)
-                else:
-                    # No work available, wait before polling again
+                    if work_item:
+                        console.log(
+                            f"[cyan]Claimed work item {work_item.id}: "
+                            f"{work_item.subject_type}/{work_item.chaos_type}[/cyan]"
+                        )
+                        await self._execute_work(work_item)
+                    else:
+                        # No work available, wait before polling again
+                        await asyncio.sleep(self.poll_interval)
+
+                except Exception as e:
+                    logger.exception(f"Worker error: {e}")
                     await asyncio.sleep(self.poll_interval)
-
-            except Exception as e:
-                logger.exception(f"Worker error: {e}")
-                await asyncio.sleep(self.poll_interval)
+        finally:
+            # Ensure the pooled VM is destroyed on exit
+            await self._cleanup_pooled_subject()
 
         console.log(f"[bold yellow]Worker {self.worker_id} stopped[/bold yellow]")
         await self.db.close()
@@ -106,15 +114,15 @@ class Worker:
         console.log("[yellow]Shutting down worker...[/yellow]")
         self._running = False
 
-        # Clean up current subject if any
-        if self._current_subject:
-            try:
-                await self._cleanup_subject(self._current_subject)
-            except Exception as e:
-                logger.warning(f"Error cleaning up subject: {e}")
+        # Clean up pooled subject (deletes the VM)
+        await self._cleanup_pooled_subject()
 
     async def _execute_work(self, work_item: WorkItem) -> None:
         """Execute a single work item.
+
+        Reuses a pooled subject (and its VM) across trials of the same
+        subject type. The VM is only created for the first trial and
+        destroyed when the worker shuts down or the subject type changes.
 
         Args:
             work_item: Work item to execute
@@ -123,15 +131,7 @@ class Worker:
         error = None
 
         try:
-            # Create subject for this work item
-            # Use work_item.id as instance_id so parallel workers get
-            # isolated Cloud SQL databases (chatdb_trial_{id}) and
-            # non-colliding VM name prefixes.
-            subject = SubjectRegistry.create(
-                work_item.subject_type,
-                instance_id=work_item.id,
-                mode=self.mode,
-            )
+            subject = await self._get_or_create_subject(work_item)
             self._current_subject = subject
 
             # Get campaign for variant info
@@ -175,13 +175,13 @@ class Worker:
             logger.exception(f"Work item {work_item.id} failed: {e}")
             console.log(f"[red]Work item {work_item.id} failed:[/red] {e!s}")
 
+            # If the error looks like a VM-level failure, destroy the
+            # pooled subject so the next trial gets a fresh VM.
+            if self._is_vm_failure(e):
+                console.log("[yellow]VM failure detected, destroying pooled subject[/yellow]")
+                await self._cleanup_pooled_subject()
+
         finally:
-            # Always clean up the subject (deletes GCP VM)
-            if self._current_subject:
-                try:
-                    await self._cleanup_subject(self._current_subject)
-                except Exception as e:
-                    logger.warning(f"Error cleaning up subject: {e}")
             self._current_subject = None
 
             # Mark work item complete (or failed)
@@ -190,6 +190,80 @@ class Worker:
                 trial_id=trial_id,
                 error=error,
             )
+
+    async def _get_or_create_subject(self, work_item: WorkItem):
+        """Return a pooled subject, creating one if needed.
+
+        Reuses the existing VM when the subject type hasn't changed.
+        For ChatDB subjects, updates the trial database name so each
+        trial gets an isolated Cloud SQL database.
+
+        Args:
+            work_item: Current work item (provides subject_type and id).
+
+        Returns:
+            EvalSubject instance (pooled or freshly created).
+        """
+        # If subject type changed, tear down the old one first
+        if (
+            self._pooled_subject is not None
+            and self._pooled_subject_type != work_item.subject_type
+        ):
+            console.log(
+                f"[yellow]Subject type changed "
+                f"({self._pooled_subject_type} -> {work_item.subject_type}), "
+                f"recreating VM[/yellow]"
+            )
+            await self._cleanup_pooled_subject()
+
+        # Create a new subject if we don't have one
+        if self._pooled_subject is None:
+            # Use instance_id=0 — the VM name already has a UUID suffix
+            # from the worker_id, so there's no collision risk.
+            self._pooled_subject = SubjectRegistry.create(
+                work_item.subject_type,
+                instance_id=0,
+                mode=self.mode,
+            )
+            self._pooled_subject_type = work_item.subject_type
+            console.log(
+                f"[blue]Created pooled {work_item.subject_type} subject[/blue]"
+            )
+
+        # For ChatDB subjects, point the subject at this trial's database
+        if hasattr(self._pooled_subject, "set_trial_id"):
+            self._pooled_subject.set_trial_id(work_item.id)
+
+        return self._pooled_subject
+
+    async def _cleanup_pooled_subject(self) -> None:
+        """Destroy the pooled subject (deletes the VM) and clear state."""
+        if self._pooled_subject is not None:
+            try:
+                await self._cleanup_subject(self._pooled_subject)
+            except Exception as e:
+                logger.warning(f"Error cleaning up pooled subject: {e}")
+            self._pooled_subject = None
+            self._pooled_subject_type = None
+
+    @staticmethod
+    def _is_vm_failure(exc: Exception) -> bool:
+        """Check if an exception looks like a VM-level failure.
+
+        These errors indicate the VM itself is unreachable, so the pooled
+        subject should be destroyed and a fresh VM created for the next trial.
+        """
+        msg = str(exc).lower()
+        vm_failure_signals = [
+            "ssh",
+            "connection refused",
+            "connection reset",
+            "timed out",
+            "timeout",
+            "unreachable",
+            "no route to host",
+        ]
+        return any(signal in msg for signal in vm_failure_signals)
 
     async def _run_trial(
         self,

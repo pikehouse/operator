@@ -113,6 +113,18 @@ class GCPChatDBAppSubject(CloudSubjectBase):
         # Chaos loadgen container name
         self._chaos_loadgen_name = f"{self.project_name}-chaos-loadgen"
 
+    def set_trial_id(self, trial_instance_id: int) -> None:
+        """Update the trial database name for VM reuse across trials.
+
+        Called by the worker when reusing a pooled subject for a new trial.
+        The .env file is rewritten during reset() so the new database_url
+        takes effect.
+
+        Args:
+            trial_instance_id: New trial/work-item ID for database isolation.
+        """
+        self.trial_db_name = f"chatdb_trial_{trial_instance_id}"
+
     @property
     def database_url(self) -> str:
         """Construct DATABASE_URL for this trial's isolated database."""
@@ -217,15 +229,7 @@ Other useful commands:
             timeout_sec=30.0,
         )
 
-
-        # Write .env file with Cloud SQL connection and image URLs
-        env_content = (
-            f"LOADGEN_IMAGE={self.loadgen_image}\n"
-            f"DATABASE_URL={self.database_url}\n"
-        )
-        await self.vm.run_command(
-            f"cat > {self.compose_dir}/.env << 'ENVEOF'\n{env_content}ENVEOF"
-        )
+        await self._write_env_file()
 
         await configure_artifact_registry(self.vm)
 
@@ -236,10 +240,29 @@ Other useful commands:
         )
         await self.vm.run_command("docker pull postgres:16", timeout_sec=120.0)
 
+    async def _write_env_file(self) -> None:
+        """Write .env file with Cloud SQL connection and image URLs.
+
+        Called during initial setup and at the start of each reset() so the
+        .env reflects the current trial_db_name / database_url (important
+        when a pooled subject is reused across trials).
+        """
+        env_content = (
+            f"LOADGEN_IMAGE={self.loadgen_image}\n"
+            f"DATABASE_URL={self.database_url}\n"
+        )
+        await self.vm.run_command(
+            f"cat > {self.compose_dir}/.env << 'ENVEOF'\n{env_content}ENVEOF"
+        )
+
     async def reset(self) -> None:
         """Reset subject: tear down containers, reset code, recreate trial database, start fresh."""
         if not self._created:
             await self.setup()
+
+        # Rewrite .env so DATABASE_URL reflects the current trial_db_name
+        # (important when a pooled subject is reused for a different trial)
+        await self._write_env_file()
 
         # Compose down
         await self.vm.run_command(
