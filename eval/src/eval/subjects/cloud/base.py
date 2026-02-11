@@ -175,6 +175,12 @@ class CloudSubjectBase(ABC):
             f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} down -v --remove-orphans"
         )
 
+        # Clean up Docker networks that the agent may have modified
+        # (e.g., manual docker network connect calls). Compose down
+        # doesn't remove manually-added network connections, which can
+        # leave the network in a conflicted state on the next up.
+        await self.vm.run_command("docker network prune -f")
+
         # Up and wait
         await self.vm.run_command(
             f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} up -d --wait"

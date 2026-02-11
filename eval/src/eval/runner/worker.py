@@ -262,6 +262,7 @@ class Worker:
             "timeout",
             "unreachable",
             "no route to host",
+            "failed to become healthy",
         ]
         return any(signal in msg for signal in vm_failure_signals)
 

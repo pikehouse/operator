@@ -1,0 +1,47 @@
+name: tikv-all-chaos-local
+subjects: [tikv]
+
+# All local-safe chaos types for comprehensive coverage
+chaos_types:
+  # Sudden node failure (SIGKILL)
+  - type: node_kill
+
+  # Network latency injection (tc netem) - moderate
+  - type: latency
+    params:
+      min_ms: 50
+      max_ms: 150
+
+  # Network latency - higher severity
+  - type: latency
+    params:
+      min_ms: 200
+      max_ms: 500
+
+  # Network partition (iptables blocking TiKV <-> peers and TiKV <-> PD)
+  - type: network_partition
+
+  # Freeze process (SIGSTOP) - container stays running but process halted
+  - type: process_pause
+
+  # Intermittent packet loss (tc netem)
+  - type: packet_loss
+    params:
+      percent: 30
+
+  # One-directional network partition to a single peer
+  - type: asymmetric_partition
+
+  # Kill a PD control plane node
+  - type: pd_leader_kill
+
+  # Move all region leaders onto one store
+  - type: leader_concentration
+
+# Note: disk_pressure, memory_exhaustion, cpu_starvation excluded -
+# these require cloud mode (--cloud=gcp) for safe execution.
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

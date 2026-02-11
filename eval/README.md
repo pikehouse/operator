@@ -28,7 +28,7 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 |----------|---------|---------------|
 | `smoke-tests/tikv-smoke.yaml` | tikv | node_kill, latency, network_partition (1 trial each) |
 | `operations/tikv-node-kill.yaml` | tikv | node_kill only (1 trial) |
-| `operations/tikv-full-chaos.yaml` | tikv | node_kill, latency, network_partition (3 trials each) |
+| `operations/tikv-all-chaos-local.yaml` | tikv | All 8 local-safe chaos types (3 trials each, + baseline) |
 | `operations/tikv-cascading-failures.yaml` | tikv | pd_leader_kill, node_kill (3 trials each) |
 | `operations/tikv-diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
 | `operations/tikv-subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
@@ -109,6 +109,7 @@ The worker claims items from the queue, provisions VMs, runs trials, and records
 | `coding/chatdb-cloud-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
 | `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure (1 trial) |
 | `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
+| `operations/tikv-all-chaos-cloud.yaml` | tikv | All 10 chaos types incl. disk_pressure (3 trials each, + baseline) |
 | `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
 
 ### Monitor cloud progress
