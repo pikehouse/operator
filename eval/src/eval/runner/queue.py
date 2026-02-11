@@ -31,6 +31,7 @@ class WorkItem:
     completed_at: datetime | None = None
     trial_id: int | None = None
     error: str | None = None
+    sequence_number: int | None = None
 
 
 class WorkQueue:
@@ -62,6 +63,7 @@ class WorkQueue:
                 - chaos_type: Chaos type to inject
                 - chaos_params: Optional params for chaos injection
                 - baseline: Whether this is a baseline trial
+                - sequence_number: Optional ordering for continuous mode
 
         Returns:
             List of work item IDs
@@ -78,9 +80,9 @@ class WorkQueue:
                     """
                     INSERT INTO work_queue (
                         campaign_id, subject_type, chaos_type,
-                        chaos_params, baseline, status
+                        chaos_params, baseline, status, sequence_number
                     )
-                    VALUES ($1, $2, $3, $4::jsonb, $5, 'pending')
+                    VALUES ($1, $2, $3, $4::jsonb, $5, 'pending', $6)
                     RETURNING id
                     """,
                     campaign_id,
@@ -88,6 +90,7 @@ class WorkQueue:
                     item.get("chaos_type", "node_kill"),
                     json.dumps(chaos_params),
                     item.get("baseline", False),
+                    item.get("sequence_number"),
                 )
                 work_ids.append(row["id"])
 
@@ -98,6 +101,12 @@ class WorkQueue:
 
         Uses FOR UPDATE SKIP LOCKED to prevent multiple workers from
         claiming the same item. This is the key to safe distributed execution.
+
+        For continuous campaigns (sequence_number is not NULL):
+        - sequence_number=0: any worker can claim (first in sequence)
+        - sequence_number>0: only claimable if the previous item (same campaign,
+          sequence_number-1) was completed by the same worker. This enforces
+          both ordering and same-worker affinity so state persists across trials.
 
         Args:
             worker_id: Unique identifier for this worker
@@ -115,9 +124,20 @@ class WorkQueue:
                     worker_id = $1,
                     claimed_at = NOW()
                 WHERE id = (
-                    SELECT id FROM work_queue
-                    WHERE status = 'pending'
-                    ORDER BY id
+                    SELECT w.id FROM work_queue w
+                    WHERE w.status = 'pending'
+                      AND (
+                        w.sequence_number IS NULL
+                        OR w.sequence_number = 0
+                        OR (w.sequence_number > 0 AND EXISTS (
+                          SELECT 1 FROM work_queue prev
+                          WHERE prev.campaign_id = w.campaign_id
+                            AND prev.sequence_number = w.sequence_number - 1
+                            AND prev.status = 'completed'
+                            AND prev.worker_id = $1
+                        ))
+                      )
+                    ORDER BY w.id
                     FOR UPDATE SKIP LOCKED
                     LIMIT 1
                 )
@@ -145,6 +165,7 @@ class WorkQueue:
                     worker_id=row["worker_id"],
                     claimed_at=row["claimed_at"],
                     trial_id=row["trial_id"],
+                    sequence_number=row["sequence_number"],
                 )
             return None
 

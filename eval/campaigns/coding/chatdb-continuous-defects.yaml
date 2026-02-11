@@ -1,0 +1,16 @@
+name: chatdb-continuous-defects
+subjects: [chat-db-app]
+
+# Continuous mode: trials run sequentially without resetting between them.
+# Each trial inherits the agent's accumulated code changes from prior trials,
+# testing the agent's ability to handle stacking defects.
+continuous: true
+
+chaos_types:
+  - type: missing_index
+  - type: pool_exhaustion
+  - type: streaming_txn
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 10

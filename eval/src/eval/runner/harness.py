@@ -848,6 +848,7 @@ async def run_campaign_from_config(
         name=config.name,
         trial_count=total_trials,
         baseline=config.include_baseline,
+        continuous=config.continuous,
         variant_name=config.variant,
         git_commit_hash=git_commit_hash,
         created_at=now(),
@@ -919,18 +920,56 @@ async def run_campaign_from_config(
             # Always release instance back to pool
             pool.release(instance_id)
 
-    # Run all trials - pool manages parallelism
-    tasks = [
-        run_single_trial(spec, i + 1)
-        for i, spec in enumerate(trial_specs)
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Continuous mode: sequential execution on a single instance, skipping reset
+    # after the first trial so each trial inherits the agent's accumulated changes.
+    if config.continuous:
+        console.print("[bold cyan]Continuous mode: trials run sequentially, state persists[/bold cyan]")
+        instance_id, subject = await pool.acquire()
+        try:
+            for i, spec in enumerate(trial_specs):
+                skip_reset = i > 0  # First trial resets; subsequent trials inherit state
+                console.print(
+                    f"\n[bold]Trial {i + 1}/{total_trials}: "
+                    f"{spec['subject']}/{spec['chaos_type']} "
+                    f"(seq {i}, skip_reset={skip_reset})[/bold]"
+                )
+                try:
+                    trial = await run_trial(
+                        subject=subject,
+                        chaos_type=spec["chaos_type"] if not spec["baseline"] else "none",
+                        campaign_id=campaign_id,
+                        baseline=spec["baseline"],
+                        operator_db_path=operator_db_path,
+                        chaos_params=spec["chaos_params"],
+                        variant_config=variant_config,
+                        skip_reset=skip_reset,
+                    )
+                    trial_id = await db.insert_trial(trial)
+                    console.print(f"[green]Trial {trial_id} completed (instance {instance_id})[/green]")
+                    await stats.record_complete()
 
-    # Check for unexpected exceptions (not caught in run_single_trial)
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            console.print(f"[red]Unexpected error in trial {i + 1}: {result}[/red]")
-            await stats.record_failure()
+                    if config.cooldown_seconds > 0:
+                        await asyncio.sleep(config.cooldown_seconds)
+
+                except Exception as e:
+                    console.print(f"[red]Trial {i + 1} failed: {e}[/red]")
+                    await stats.record_failure()
+                    # Continue to next trial — dirty state is the point of continuous mode
+        finally:
+            pool.release(instance_id)
+    else:
+        # Normal mode: parallel execution via asyncio.gather with pool
+        tasks = [
+            run_single_trial(spec, i + 1)
+            for i, spec in enumerate(trial_specs)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Check for unexpected exceptions (not caught in run_single_trial)
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                console.print(f"[red]Unexpected error in trial {i + 1}: {result}[/red]")
+                await stats.record_failure()
 
     # Shutdown pool (optional - leaves clusters running for inspection)
     # await pool.shutdown()

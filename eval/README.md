@@ -38,6 +38,7 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 | `coding/chatdb-streaming-txn.yaml` | chat-db-app | streaming_txn (3 trials) |
 | `coding/chatdb-counter-race.yaml` | chat-db-app | counter_race (3 trials) |
 | `coding/chatdb-all-defects.yaml` | chat-db-app | all 4 per-defect types (3 trials each) |
+| `coding/chatdb-continuous-defects.yaml` | chat-db-app | missing_index, pool_exhaustion, streaming_txn — continuous mode (no reset between trials) |
 
 ### Running any local campaign
 
@@ -190,6 +191,7 @@ trials_per_combination: 3        # Repetitions per subject/chaos combo
 parallel: 1                      # Parallel instances (isolated Docker projects)
 cooldown_seconds: 10             # Wait between trials
 include_baseline: false          # Run no-chaos baseline trials
+continuous: false                # Skip reset between trials (stacking defects)
 variant: default                 # Agent config variant (see eval/variants/)
 cloud:                           # Omit for local campaigns
   provider: gcp

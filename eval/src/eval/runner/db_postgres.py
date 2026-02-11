@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     name TEXT DEFAULT '',
     trial_count INTEGER NOT NULL,
     baseline BOOLEAN DEFAULT FALSE,
+    continuous BOOLEAN DEFAULT FALSE,
     variant_name TEXT DEFAULT 'default',
     topology_json JSONB,
     git_commit_hash TEXT DEFAULT '',
@@ -80,7 +81,8 @@ CREATE TABLE IF NOT EXISTS work_queue (
     claimed_at TIMESTAMPTZ,
     completed_at TIMESTAMPTZ,
     trial_id INTEGER REFERENCES trials(id),
-    error TEXT
+    error TEXT,
+    sequence_number INTEGER
 );
 
 -- Indexes
@@ -88,6 +90,7 @@ CREATE INDEX IF NOT EXISTS idx_trials_campaign ON trials(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_variant ON campaigns(variant_name);
 CREATE INDEX IF NOT EXISTS idx_work_queue_status ON work_queue(status);
 CREATE INDEX IF NOT EXISTS idx_work_queue_campaign ON work_queue(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_work_queue_sequence ON work_queue(campaign_id, sequence_number);
 """
 
 
@@ -191,6 +194,31 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE trials ADD COLUMN behavior_json TEXT DEFAULT ''"
                 )
+            # Migration: add continuous column to campaigns if missing
+            continuous_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'continuous'
+                )
+            """)
+            if not continuous_col_exists:
+                await conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN continuous BOOLEAN DEFAULT FALSE"
+                )
+            # Migration: add sequence_number column to work_queue if missing
+            seq_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'work_queue' AND column_name = 'sequence_number'
+                )
+            """)
+            if not seq_col_exists:
+                await conn.execute(
+                    "ALTER TABLE work_queue ADD COLUMN sequence_number INTEGER"
+                )
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_work_queue_sequence ON work_queue(campaign_id, sequence_number)"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
@@ -198,8 +226,8 @@ class PostgresDB:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, variant_name, topology_json, git_commit_hash, created_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)
+                INSERT INTO campaigns (subject_name, chaos_type, name, trial_count, baseline, continuous, variant_name, topology_json, git_commit_hash, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
                 RETURNING id
                 """,
                 campaign.subject_name,
@@ -207,6 +235,7 @@ class PostgresDB:
                 campaign.name,
                 campaign.trial_count,
                 campaign.baseline,
+                campaign.continuous,
                 campaign.variant_name,
                 campaign.topology_json or None,
                 campaign.git_commit_hash,

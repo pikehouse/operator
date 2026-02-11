@@ -370,6 +370,8 @@ def run_campaign_cmd(
     console.print(f"Parallel: {parallel_workers if cloud_mode else config.parallel}")
     console.print(f"Cooldown: {config.cooldown_seconds}s")
     console.print(f"Include baseline: {config.include_baseline}")
+    if config.continuous:
+        console.print(f"Continuous: [bold cyan]true[/bold cyan] (state persists between trials)")
     console.print(f"Variant: {config.variant}")
     if model:
         console.print(f"Model override: {model}")
@@ -412,6 +414,7 @@ def run_campaign_cmd(
                 name=config.name,
                 trial_count=len(trial_specs),
                 baseline=config.include_baseline,
+                continuous=config.continuous,
                 variant_name=config.variant,
                 git_commit_hash=commit_hash,
                 created_at=now(),
@@ -426,6 +429,7 @@ def run_campaign_cmd(
                     "chaos_type": spec["chaos_type"],
                     "chaos_params": spec["chaos_params"],
                     "baseline": spec["baseline"],
+                    "sequence_number": spec["sequence_number"],
                 }
                 for spec in trial_specs
             ]

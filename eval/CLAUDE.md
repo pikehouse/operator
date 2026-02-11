@@ -39,6 +39,7 @@ A structured test execution that runs multiple trials. Defined via YAML with:
 - `trials_per_combination` - Repetitions per subject/chaos combo
 - `variant` - Agent configuration to use
 - `include_baseline` - Whether to run baseline (no-chaos) trials
+- `continuous` - Skip reset between trials (stacking defects). Requires `parallel: 1`, incompatible with `include_baseline`
 
 ### Trial
 A single execution cycle:
@@ -192,6 +193,7 @@ trials_per_combination: 3
 parallel: 1
 cooldown_seconds: 10
 include_baseline: true
+continuous: false               # true = skip reset between trials (stacking defects)
 variant: "default"
 ```
 

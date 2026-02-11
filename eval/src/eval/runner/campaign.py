@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ChaosSpec(BaseModel):
@@ -70,10 +70,23 @@ class CampaignConfig(BaseModel):
     cooldown_seconds: int = Field(default=0, ge=0)
     include_baseline: bool = False
     variant: str = Field(default="default", description="Variant name to use for agent configuration")
+    continuous: bool = Field(
+        default=False,
+        description="Run trials sequentially without resetting between them (stacking defects)"
+    )
     cloud: CloudConfig | None = Field(
         default=None,
         description="Cloud execution configuration (optional)"
     )
+
+    @model_validator(mode="after")
+    def validate_continuous_constraints(self) -> "CampaignConfig":
+        if self.continuous:
+            if self.parallel > 1:
+                raise ValueError("continuous=true requires parallel=1 (trials must run on the same instance)")
+            if self.include_baseline:
+                raise ValueError("continuous=true is incompatible with include_baseline=true")
+        return self
 
     @field_validator("subjects")
     @classmethod
@@ -93,7 +106,11 @@ def load_campaign_config(path: Path) -> CampaignConfig:
 
 
 def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
-    """Generate trial specifications from matrix (subjects x chaos_types x trials_per_combination)."""
+    """Generate trial specifications from matrix (subjects x chaos_types x trials_per_combination).
+
+    When config.continuous is True, each trial spec gets a sequence_number (0, 1, 2, ...)
+    indicating execution order. Non-continuous trials get sequence_number=None.
+    """
     trials = []
 
     # Cartesian product: subjects x chaos_types
@@ -119,5 +136,13 @@ def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
                 "baseline": True,
                 "variant": config.variant,
             })
+
+    # Assign sequence numbers for continuous mode
+    if config.continuous:
+        for i, trial in enumerate(trials):
+            trial["sequence_number"] = i
+    else:
+        for trial in trials:
+            trial["sequence_number"] = None
 
     return trials

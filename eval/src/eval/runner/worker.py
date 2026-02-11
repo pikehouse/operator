@@ -152,6 +152,12 @@ class Worker:
                 enable_operator = True
                 operator_image = self._operator_image
 
+            # Continuous mode: skip reset for sequence_number > 0
+            skip_reset = (
+                work_item.sequence_number is not None
+                and work_item.sequence_number > 0
+            )
+
             # Run the trial
             trial = await self._run_trial(
                 subject=subject,
@@ -164,6 +170,7 @@ class Worker:
                 operator_image=operator_image,
                 anthropic_api_key=anthropic_api_key,
                 subject_name=work_item.subject_type,
+                skip_reset=skip_reset,
             )
 
             # Store trial result
@@ -278,6 +285,7 @@ class Worker:
         operator_image: str = "",
         anthropic_api_key: str = "",
         subject_name: str = "tikv",
+        skip_reset: bool = False,
     ) -> Trial:
         """Run a single trial.
 
@@ -295,6 +303,7 @@ class Worker:
             enable_operator: Whether to run operator on the VM
             operator_image: Docker image URL for operator
             anthropic_api_key: API key for operator agent
+            skip_reset: If True, skip reset (continuous mode, state persists)
 
         Returns:
             Trial record with populated metrics
@@ -325,15 +334,18 @@ class Worker:
 
         started_at = now()
 
-        # Reset subject
-        console.log("[blue]Resetting subject...[/blue]")
-        await subject.reset()
+        if skip_reset:
+            console.log("[dim]Skipping reset (continuous mode)[/dim]")
+        else:
+            # Reset subject
+            console.log("[blue]Resetting subject...[/blue]")
+            await subject.reset()
 
-        # Wait for healthy
-        console.log("[blue]Waiting for healthy state...[/blue]")
-        healthy = await subject.wait_healthy(timeout_sec=120.0)
-        if not healthy:
-            raise RuntimeError("Subject failed to become healthy")
+            # Wait for healthy
+            console.log("[blue]Waiting for healthy state...[/blue]")
+            healthy = await subject.wait_healthy(timeout_sec=120.0)
+            if not healthy:
+                raise RuntimeError("Subject failed to become healthy")
 
         # Capture initial state
         initial_state = await subject.capture_state()
