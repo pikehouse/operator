@@ -190,19 +190,23 @@ class TestClassifyTrialBehavior:
     def test_empty_timeline_returns_empty(self):
         result = classify_trial_behavior([], [], "tikv")
         assert result.phases == []
+        assert result.reasoning_summary == ""
         assert result.model_used == "claude-haiku-4-5-20241022"
 
     @patch("anthropic.Anthropic")
     def test_successful_classification(self, mock_anthropic_cls):
         """Test that valid Haiku response is parsed correctly."""
-        # Mock the API response
+        # Mock the API response with new {phases, summary} format
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
-        mock_response.content[0].text = json.dumps([
-            {"label": "check logs", "action_type": "investigate"},
-            {"label": "+index", "action_type": "change_db"},
-            {"label": "restart", "action_type": "deploy"},
-        ])
+        mock_response.content[0].text = json.dumps({
+            "phases": [
+                {"label": "check logs", "action_type": "investigate"},
+                {"label": "+index", "action_type": "change_db"},
+                {"label": "restart", "action_type": "deploy"},
+            ],
+            "summary": "The agent investigated TiKV logs, added a database index, then restarted the service.",
+        })
         mock_client = MagicMock()
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_cls.return_value = mock_client
@@ -223,13 +227,14 @@ class TestClassifyTrialBehavior:
         assert result.phases[1].action_type == ActionType.CHANGE_DB
         assert result.phases[2].label == "restart"
         assert result.phases[2].action_type == ActionType.DEPLOY
+        assert result.reasoning_summary == "The agent investigated TiKV logs, added a database index, then restarted the service."
 
     @patch("anthropic.Anthropic")
     def test_markdown_wrapped_response(self, mock_anthropic_cls):
         """Test parsing when Haiku wraps response in markdown code block."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
-        mock_response.content[0].text = '```json\n[{"label": "fix", "action_type": "change_code"}]\n```'
+        mock_response.content[0].text = '```json\n{"phases": [{"label": "fix", "action_type": "change_code"}], "summary": "Fixed the code."}\n```'
         mock_client = MagicMock()
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_cls.return_value = mock_client
@@ -243,15 +248,40 @@ class TestClassifyTrialBehavior:
 
         assert len(result.phases) == 1
         assert result.phases[0].action_type == ActionType.CHANGE_CODE
+        assert result.reasoning_summary == "Fixed the code."
+
+    @patch("anthropic.Anthropic")
+    def test_backward_compat_bare_array(self, mock_anthropic_cls):
+        """Old-format bare array response should still work (no summary)."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock()]
+        mock_response.content[0].text = json.dumps([
+            {"label": "check logs", "action_type": "investigate"},
+        ])
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = mock_response
+        mock_anthropic_cls.return_value = mock_client
+
+        reasoning = [{"entry_type": "tool_call", "tool_name": "Bash",
+                       "tool_params": json.dumps({"command": "docker ps"}),
+                       "content": ""}]
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "test-key"}):
+            result = classify_trial_behavior(reasoning, [], "tikv")
+
+        assert len(result.phases) == 1
+        assert result.phases[0].label == "check logs"
+        assert result.reasoning_summary == ""
 
     @patch("anthropic.Anthropic")
     def test_invalid_action_type_defaults(self, mock_anthropic_cls):
         """Unknown action_type should default to INVESTIGATE."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
-        mock_response.content[0].text = json.dumps([
-            {"label": "something", "action_type": "unknown_type"},
-        ])
+        mock_response.content[0].text = json.dumps({
+            "phases": [{"label": "something", "action_type": "unknown_type"}],
+            "summary": "",
+        })
         mock_client = MagicMock()
         mock_client.messages.create.return_value = mock_response
         mock_anthropic_cls.return_value = mock_client
@@ -281,6 +311,7 @@ class TestClassifyTrialBehavior:
             result = classify_trial_behavior(reasoning, [], "tikv")
 
         assert result.phases == []
+        assert result.reasoning_summary == ""
 
     def test_no_api_key_raises(self):
         """Should raise ValueError when ANTHROPIC_API_KEY is not set."""

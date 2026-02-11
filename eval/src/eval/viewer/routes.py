@@ -529,6 +529,16 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                 "elapsed_seconds": None,
             })
 
+    # Extract reasoning summary from behavior classification
+    reasoning_summary = ""
+    if trial.behavior_json:
+        try:
+            bdata = json.loads(trial.behavior_json)
+            if isinstance(bdata, dict):
+                reasoning_summary = bdata.get("reasoning_summary", "")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # Extract code workspace and diff from final_state
     code_workspace = None
     code_diff = None
@@ -565,6 +575,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             "monitor_detection": monitor_detection,
             "agent_conclusion": agent_conclusion,
             "reasoning_entries": reasoning_entries,
+            "reasoning_summary": reasoning_summary,
             "code_workspace": code_workspace,
             "code_diff": code_diff,
             "db_config_diff": db_config_diff,

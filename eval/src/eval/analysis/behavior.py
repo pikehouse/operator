@@ -52,6 +52,7 @@ class BehaviorTimeline(BaseModel):
 
     trial_id: int
     phases: list[BehaviorPhase]
+    reasoning_summary: str = ""  # 2-3 sentence Haiku summary of what the agent did
     model_used: str         # e.g. "claude-haiku-4-5-20241022"
     classified_at: str      # ISO8601
 
@@ -170,10 +171,12 @@ Timeline:
 
 Segment into phases. Each phase groups consecutive actions with the same strategic intent. Use short 1-3 word labels (e.g., "+index", "fix streaming", "check logs", "restart app", "verify fix").
 
-Return JSON array of phases:
-[{{"label": "check logs", "action_type": "investigate"}}, {{"label": "+index", "action_type": "change_db"}}, ...]
+Also write a 2-3 sentence summary of what the agent did strategically.
 
-Return ONLY the JSON array, no other text."""
+Return JSON object:
+{{"phases": [{{"label": "check logs", "action_type": "investigate"}}, ...], "summary": "The agent investigated... then fixed... and verified..."}}
+
+Return ONLY the JSON object, no other text."""
 
     try:
         response = client.messages.create(
@@ -191,8 +194,16 @@ Return ONLY the JSON array, no other text."""
         elif "```" in content:
             content = content.split("```")[1].split("```")[0]
 
-        phases_data = json.loads(content.strip())
-        if not isinstance(phases_data, list):
+        parsed = json.loads(content.strip())
+
+        # Support both old format (bare array) and new format ({phases, summary})
+        summary = ""
+        if isinstance(parsed, dict):
+            phases_data = parsed.get("phases", [])
+            summary = parsed.get("summary", "")
+        elif isinstance(parsed, list):
+            phases_data = parsed
+        else:
             phases_data = []
 
         phases = []
@@ -211,6 +222,7 @@ Return ONLY the JSON array, no other text."""
         return BehaviorTimeline(
             trial_id=0,
             phases=phases,
+            reasoning_summary=summary if isinstance(summary, str) else "",
             model_used=CLASSIFICATION_MODEL,
             classified_at=datetime.now(timezone.utc).isoformat(),
         )

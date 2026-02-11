@@ -159,6 +159,49 @@
     </dl>
 </div>
 
+{% if reasoning_entries %}
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-4">Agent Reasoning Timeline ({{ reasoning_entries|length }} entries)</h2>
+    {% if reasoning_summary %}
+    <div class="bg-indigo-50 border border-indigo-300 rounded p-4 mb-4">
+        <h3 class="text-sm font-semibold text-indigo-800 mb-1">Strategy Summary</h3>
+        <p class="text-sm text-indigo-900">{{ reasoning_summary }}</p>
+    </div>
+    {% endif %}
+    <div class="space-y-2">
+        {% for entry in reasoning_entries %}
+        <div class="{% if entry.entry_type == 'reasoning' %}bg-blue-50 border-l-4 border-blue-400{% elif entry.entry_type == 'tool_call' %}bg-yellow-50 border-l-4 border-yellow-400{% else %}bg-gray-50 border-l-4 border-gray-400{% endif %} p-3 rounded-r">
+            <div class="flex justify-between items-start mb-1">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs font-medium uppercase tracking-wide {% if entry.entry_type == 'reasoning' %}text-blue-600{% elif entry.entry_type == 'tool_call' %}text-yellow-600{% else %}text-gray-600{% endif %}">
+                        {% if entry.entry_type == 'reasoning' %}💭 reasoning{% elif entry.entry_type == 'tool_call' %}🔧 tool_call{% else %}📤 {{ entry.entry_type }}{% endif %}
+                    </span>
+                    {% if entry.tool_name %}
+                    <span class="font-mono text-xs text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{{ entry.tool_name }}</span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-3">
+                    {% if entry.elapsed_seconds is not none %}
+                    {{ elapsed_indicator(entry.elapsed_seconds) }}
+                    {% elif loop.index == 1 %}
+                    <span class="text-gray-400 text-xs">—</span>
+                    {% endif %}
+                    <span class="text-xs text-gray-500 font-mono">{% if entry.timestamp %}<time datetime="{{ entry.timestamp }}" data-format="time">{{ entry.timestamp[11:19] }}</time>{% endif %}</span>
+                </div>
+            </div>
+            {% if entry.reasoning %}
+            <div class="text-sm text-blue-700 italic mb-1">💭 {{ entry.reasoning }}</div>
+            {% endif %}
+            <details class="text-sm text-gray-800">
+                <summary class="cursor-pointer hover:text-blue-600">{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</summary>
+                <pre class="mt-2 p-2 bg-white rounded text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
+            </details>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="bg-white shadow rounded p-4 mb-4">
     <h2 class="text-lg font-semibold mb-2">Commands ({{ commands|length }})</h2>
     {% if commands_with_reasoning %}
@@ -333,40 +376,4 @@
 </div>
 {% endif %}
 
-{% if reasoning_entries %}
-<div class="bg-white shadow rounded p-4 mb-4">
-    <h2 class="text-lg font-semibold mb-4">Agent Reasoning Timeline ({{ reasoning_entries|length }} entries)</h2>
-    <div class="space-y-2">
-        {% for entry in reasoning_entries %}
-        <div class="{% if entry.entry_type == 'reasoning' %}bg-blue-50 border-l-4 border-blue-400{% elif entry.entry_type == 'tool_call' %}bg-yellow-50 border-l-4 border-yellow-400{% else %}bg-gray-50 border-l-4 border-gray-400{% endif %} p-3 rounded-r">
-            <div class="flex justify-between items-start mb-1">
-                <div class="flex items-center gap-3">
-                    <span class="text-xs font-medium uppercase tracking-wide {% if entry.entry_type == 'reasoning' %}text-blue-600{% elif entry.entry_type == 'tool_call' %}text-yellow-600{% else %}text-gray-600{% endif %}">
-                        {% if entry.entry_type == 'reasoning' %}💭 reasoning{% elif entry.entry_type == 'tool_call' %}🔧 tool_call{% else %}📤 {{ entry.entry_type }}{% endif %}
-                    </span>
-                    {% if entry.tool_name %}
-                    <span class="font-mono text-xs text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{{ entry.tool_name }}</span>
-                    {% endif %}
-                </div>
-                <div class="flex items-center gap-3">
-                    {% if entry.elapsed_seconds is not none %}
-                    {{ elapsed_indicator(entry.elapsed_seconds) }}
-                    {% elif loop.index == 1 %}
-                    <span class="text-gray-400 text-xs">—</span>
-                    {% endif %}
-                    <span class="text-xs text-gray-500 font-mono">{% if entry.timestamp %}<time datetime="{{ entry.timestamp }}" data-format="time">{{ entry.timestamp[11:19] }}</time>{% endif %}</span>
-                </div>
-            </div>
-            {% if entry.reasoning %}
-            <div class="text-sm text-blue-700 italic mb-1">💭 {{ entry.reasoning }}</div>
-            {% endif %}
-            <details class="text-sm text-gray-800">
-                <summary class="cursor-pointer hover:text-blue-600">{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</summary>
-                <pre class="mt-2 p-2 bg-white rounded text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
-            </details>
-        </div>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 {% endblock %}
