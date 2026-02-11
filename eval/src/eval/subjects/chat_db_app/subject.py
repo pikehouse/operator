@@ -298,12 +298,24 @@ class ChatDBAppEvalSubject:
         ws = await self._ensure_workspace()
         logger.info("Pre-seeding %d messages for missing_index chaos...", count)
 
-        # Use a single SQL INSERT ... SELECT generate_series to bulk-insert
-        sql = f"""
+        # Create seed user and conversations to satisfy FK constraints,
+        # then bulk-insert messages spread across those conversations.
+        setup_sql = (
+            "INSERT INTO users (id, username) "
+            "VALUES ('00000000-0000-0000-0000-000000000000', 'seed-user') "
+            "ON CONFLICT DO NOTHING; "
+            "INSERT INTO conversations (id, user_id, title) "
+            "SELECT "
+            "('00000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            "'00000000-0000-0000-0000-000000000000', "
+            "'seed conversation ' || g "
+            "FROM generate_series(0, 999) AS g "
+            "ON CONFLICT DO NOTHING;"
+        )
+        insert_sql = f"""
 INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
 SELECT
     gen_random_uuid(),
-    -- spread across 1000 fake conversations
     ('00000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid,
     'seed message ' || g,
     'user',
@@ -315,7 +327,8 @@ FROM generate_series(1, {count}) AS g;
             await asyncio.to_thread(
                 ws._run_compose,
                 "exec", "-T", "postgres",
-                "psql", "-U", "chatapp", "-d", "chatdb", "-c", sql,
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, "-c", insert_sql,
             )
             logger.info("Pre-seeded %d messages", count)
         except Exception as e:

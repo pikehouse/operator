@@ -561,10 +561,24 @@ Other useful commands:
             "load_params": profile,
         }
 
-    async def _preseed_messages(self, count: int = 500_000) -> None:
+    async def _preseed_messages(self, count: int = 200_000) -> None:
         """Bulk-insert rows into messages table to make missing-index scans expensive."""
         logger.info("Pre-seeding %d messages for missing_index chaos...", count)
-        sql = (
+        # Create a seed user and 1000 fake conversations to satisfy FK constraints,
+        # then bulk-insert messages spread across those conversations.
+        setup_sql = (
+            "INSERT INTO users (id, username) "
+            "VALUES ('00000000-0000-0000-0000-000000000000', 'seed-user') "
+            "ON CONFLICT DO NOTHING; "
+            "INSERT INTO conversations (id, user_id, title) "
+            "SELECT "
+            "('00000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            "'00000000-0000-0000-0000-000000000000', "
+            "'seed conversation ' || g "
+            "FROM generate_series(0, 999) AS g "
+            "ON CONFLICT DO NOTHING;"
+        )
+        insert_sql = (
             "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
             "SELECT gen_random_uuid(), "
             "('00000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid, "
@@ -576,7 +590,8 @@ Other useful commands:
         compose_network = f"{self.project_name}_default"
         psql_cmd = (
             f"docker run --rm --network {compose_network} postgres:16 psql "
-            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' -c \"{sql}\""
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\" -c \"{insert_sql}\""
         )
         last_err: Exception | None = None
         for attempt in range(3):
@@ -587,12 +602,13 @@ Other useful commands:
                 if exit_code == 0:
                     logger.info("Pre-seeded %d messages", count)
                     return
+                output = stdout.strip() or stderr.strip()
                 last_err = RuntimeError(
-                    f"preseed psql exited {exit_code}: {stderr.strip()[:200]}"
+                    f"preseed psql exited {exit_code}: {output[:200]}"
                 )
                 logger.warning(
                     "Preseed attempt %d/%d failed (exit %d): %s",
-                    attempt + 1, 3, exit_code, stderr.strip()[:200],
+                    attempt + 1, 3, exit_code, output[:200],
                 )
             except TimeoutError:
                 last_err = TimeoutError(f"Preseed timed out after 300s (attempt {attempt + 1})")
