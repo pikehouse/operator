@@ -1220,6 +1220,7 @@ def show_detail(
                 "name": campaign.name,
                 "trial_count": campaign.trial_count,
                 "baseline": campaign.baseline,
+                "notable": campaign.notable,
                 "git_commit_hash": campaign.git_commit_hash,
                 "created_at": campaign.created_at,
                 "trials": [
@@ -1248,6 +1249,8 @@ def show_detail(
         print(f"Created:  {campaign.created_at}")
         print(f"Trials:   {campaign.trial_count}")
         print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
+        if campaign.notable:
+            print(f"Notable:  Yes")
         if campaign.git_commit_hash:
             print(f"Commit:   {campaign.git_commit_hash}")
         print()

@@ -83,8 +83,13 @@ eval compare-variants tikv node_kill    # All variants for subject/chaos
 
 # List and view
 eval list                   # List all campaigns
+eval list --notable         # List only notable campaigns
 eval show 1                 # Campaign details
 eval show --trial 5         # Trial details
+
+# Mark campaigns as notable
+eval notable 42             # Mark campaign 42 as notable
+eval notable 42 --clear     # Unmark
 
 # Web UI
 eval viewer                 # http://127.0.0.1:8000
@@ -101,6 +106,7 @@ class Campaign:
     name: str              # Campaign suite name (e.g., "my-chaos-suite" or "tikv/node_kill")
     trial_count: int
     baseline: bool = False
+    notable: bool = False  # User-set flag for significant campaigns
     variant_name: str = "default"
     created_at: str        # ISO8601
 ```
@@ -200,7 +206,7 @@ variant: "default"
 ## Database Schema
 
 **campaigns table:**
-- `id`, `subject_name`, `chaos_type` (deprecated), `name`, `trial_count`, `baseline`, `variant_name`, `created_at`
+- `id`, `subject_name`, `chaos_type` (deprecated), `name`, `trial_count`, `baseline`, `notable`, `variant_name`, `created_at`
 
 **trials table:**
 - `id`, `campaign_id`, `started_at`, `chaos_injected_at`, `ticket_created_at`, `resolved_at`, `ended_at`

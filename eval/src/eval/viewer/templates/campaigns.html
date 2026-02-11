@@ -25,7 +25,7 @@
                 <td class="px-4 py-2">
                     <a href="/campaign/{{ campaign.id }}" class="text-blue-600 hover:underline">{{ campaign.id }}</a>
                 </td>
-                <td class="px-4 py-2">{{ campaign.name }}</td>
+                <td class="px-4 py-2">{% if campaign.notable %}<span class="text-amber-500 font-bold" title="Notable">&#9670;</span> {% endif %}{{ campaign.name }}</td>
                 <td class="px-4 py-2">{{ campaign.subject_name }}</td>
                 <td class="px-4 py-2">{{ campaign.trial_count }}</td>
                 <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>

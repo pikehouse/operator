@@ -140,6 +140,11 @@ cd eval
 
 # List all campaigns
 uv run eval list
+uv run eval list --notable                      # Only notable campaigns
+
+# Mark campaigns as notable (significant results worth revisiting)
+uv run eval notable <campaign_id>
+uv run eval notable <campaign_id> --clear       # Unmark
 
 # Score a campaign
 uv run eval analyze <campaign_id>
