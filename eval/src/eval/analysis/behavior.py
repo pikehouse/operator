@@ -57,7 +57,7 @@ class BehaviorTimeline(BaseModel):
     classified_at: str      # ISO8601
 
 
-CLASSIFICATION_MODEL = "claude-haiku-4-5-20241022"
+CLASSIFICATION_MODEL = "claude-haiku-4-5-20251001"
 
 
 def _compress_timeline(

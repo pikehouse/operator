@@ -163,7 +163,7 @@ class TestBehaviorTimeline:
                 BehaviorPhase(label="check logs", action_type=ActionType.INVESTIGATE),
                 BehaviorPhase(label="+index", action_type=ActionType.CHANGE_DB),
             ],
-            model_used="claude-haiku-4-5-20241022",
+            model_used="claude-haiku-4-5-20251001",
             classified_at="2025-01-01T00:00:00+00:00",
         )
         data = json.loads(tl.model_dump_json())
@@ -191,7 +191,7 @@ class TestClassifyTrialBehavior:
         result = classify_trial_behavior([], [], "tikv")
         assert result.phases == []
         assert result.reasoning_summary == ""
-        assert result.model_used == "claude-haiku-4-5-20241022"
+        assert result.model_used == "claude-haiku-4-5-20251001"
 
     @patch("anthropic.Anthropic")
     def test_successful_classification(self, mock_anthropic_cls):
