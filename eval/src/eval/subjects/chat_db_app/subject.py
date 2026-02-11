@@ -301,8 +301,8 @@ class ChatDBAppEvalSubject:
         # Create seed user and conversations to satisfy FK constraints,
         # then bulk-insert messages spread across those conversations.
         setup_sql = (
-            "INSERT INTO users (id, username) "
-            "VALUES ('00000000-0000-0000-0000-000000000000', 'seed-user') "
+            "INSERT INTO users (id, email) "
+            "VALUES ('00000000-0000-0000-0000-000000000000', 'seed@eval.test') "
             "ON CONFLICT DO NOTHING; "
             "INSERT INTO conversations (id, user_id, title) "
             "SELECT "
