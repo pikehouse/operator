@@ -1285,6 +1285,43 @@ def show_detail(
             print("No trials recorded.")
 
 
+@app.command("notable")
+def notable_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to mark/unmark"),
+    clear: bool = typer.Option(False, "--clear", help="Remove notable mark"),
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+) -> None:
+    """Mark or unmark a campaign as notable.
+
+    Notable campaigns are significant results worth revisiting — reference
+    baselines, interesting agent behavior, etc.
+
+    Examples:
+        eval notable 42
+        eval notable 42 --clear
+        eval notable 42 --remote
+    """
+    async def run():
+        db = await _get_db_or_exit(remote, db_path)
+        try:
+            campaign = await db.get_campaign(campaign_id)
+            if campaign is None:
+                console.print(f"[red]Error: Campaign {campaign_id} not found[/red]")
+                raise typer.Exit(1)
+            notable = not clear
+            await db.update_campaign_notable(campaign_id, notable)
+            if notable:
+                console.print(f"Campaign {campaign_id} marked as notable")
+            else:
+                console.print(f"Campaign {campaign_id} unmarked")
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
+
+    asyncio.run(run())
+
+
 @app.command("list")
 def list_campaigns(
     db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
@@ -1292,6 +1329,7 @@ def list_campaigns(
     offset: int = typer.Option(0, "--offset", help="Skip first N campaigns"),
     json_output: bool = typer.Option(False, "--json", help="Output as JSON"),
     remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+    notable: bool = typer.Option(False, "--notable", help="Show only notable campaigns"),
 ) -> None:
     """List all campaigns in the database."""
     async def run():
@@ -1306,6 +1344,10 @@ def list_campaigns(
 
     campaigns, total = asyncio.run(run())
 
+    # Filter to notable only if requested
+    if notable:
+        campaigns = [c for c in campaigns if c.notable]
+
     if json_output:
         data = [
             {
@@ -1314,6 +1356,7 @@ def list_campaigns(
                 "name": c.name,
                 "trial_count": c.trial_count,
                 "baseline": c.baseline,
+                "notable": c.notable,
                 "variant_name": getattr(c, 'variant_name', 'default'),
                 "git_commit_hash": c.git_commit_hash,
                 "created_at": c.created_at,
@@ -1326,8 +1369,11 @@ def list_campaigns(
     # Plain text table with fixed column widths (no Rich tables)
     # Handle empty database case
     if not campaigns:
-        print("No campaigns found.")
-        print(f"Database: {db_path}")
+        if notable:
+            print("No notable campaigns found.")
+        else:
+            print("No campaigns found.")
+            print(f"Database: {db_path}")
         return
 
     # Header row with fixed widths: ID(6), Date(12), Name(30), Variant(12), Trials(8), Baseline(8), Commit(10)
@@ -1337,7 +1383,10 @@ def list_campaigns(
         date_str = c.created_at[:10] if c.created_at else "N/A"
         baseline_str = "Yes" if c.baseline else "No"
         variant_str = getattr(c, 'variant_name', 'default')[:10]
-        name_str = c.name[:28] if c.name else "N/A"
+        name_display = c.name[:28] if c.name else "N/A"
+        if c.notable:
+            name_display = f"\u25c6 {name_display}"[:30]
+        name_str = name_display
         commit_str = c.git_commit_hash[:8] if c.git_commit_hash else ""
         print(f"{c.id:<6} {date_str:<12} {name_str:<30} {variant_str:<12} {c.trial_count:<8} {baseline_str:<8} {commit_str:<10}")
 

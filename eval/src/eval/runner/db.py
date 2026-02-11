@@ -55,6 +55,10 @@ class EvalDBProtocol(Protocol):
         """Update a trial's behavior classification JSON."""
         ...
 
+    async def update_campaign_notable(self, campaign_id: int, notable: bool) -> None:
+        """Update a campaign's notable flag."""
+        ...
+
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""
         ...
@@ -102,6 +106,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     trial_count INTEGER NOT NULL,
     baseline INTEGER NOT NULL DEFAULT 0,
     continuous INTEGER NOT NULL DEFAULT 0,
+    notable INTEGER NOT NULL DEFAULT 0,
     variant_name TEXT DEFAULT 'default',
     topology_json TEXT DEFAULT '',
     git_commit_hash TEXT DEFAULT '',
@@ -198,6 +203,12 @@ class EvalDB:
             if "continuous" not in column_names:
                 await db.execute(
                     "ALTER TABLE campaigns ADD COLUMN continuous INTEGER NOT NULL DEFAULT 0"
+                )
+                await db.commit()
+
+            if "notable" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN notable INTEGER NOT NULL DEFAULT 0"
                 )
                 await db.commit()
 
@@ -343,6 +354,20 @@ class EvalDB:
             await db.execute(
                 "UPDATE trials SET behavior_json = ? WHERE id = ?",
                 (behavior_json, trial_id),
+            )
+            await db.commit()
+
+    async def update_campaign_notable(self, campaign_id: int, notable: bool) -> None:
+        """Update a campaign's notable flag.
+
+        Args:
+            campaign_id: Campaign to update
+            notable: Whether to mark as notable
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE campaigns SET notable = ? WHERE id = ?",
+                (1 if notable else 0, campaign_id),
             )
             await db.commit()
 

@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     trial_count INTEGER NOT NULL,
     baseline BOOLEAN DEFAULT FALSE,
     continuous BOOLEAN DEFAULT FALSE,
+    notable BOOLEAN DEFAULT FALSE,
     variant_name TEXT DEFAULT 'default',
     topology_json JSONB,
     git_commit_hash TEXT DEFAULT '',
@@ -90,7 +91,6 @@ CREATE INDEX IF NOT EXISTS idx_trials_campaign ON trials(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaigns_variant ON campaigns(variant_name);
 CREATE INDEX IF NOT EXISTS idx_work_queue_status ON work_queue(status);
 CREATE INDEX IF NOT EXISTS idx_work_queue_campaign ON work_queue(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_work_queue_sequence ON work_queue(campaign_id, sequence_number);
 """
 
 
@@ -204,6 +204,17 @@ class PostgresDB:
             if not continuous_col_exists:
                 await conn.execute(
                     "ALTER TABLE campaigns ADD COLUMN continuous BOOLEAN DEFAULT FALSE"
+                )
+            # Migration: add notable column to campaigns if missing
+            notable_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'notable'
+                )
+            """)
+            if not notable_col_exists:
+                await conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN notable BOOLEAN DEFAULT FALSE"
                 )
             # Migration: add sequence_number column to work_queue if missing
             seq_col_exists = await conn.fetchval("""
@@ -329,6 +340,21 @@ class PostgresDB:
                 "UPDATE trials SET behavior_json = $1 WHERE id = $2",
                 behavior_json,
                 trial_id,
+            )
+
+    async def update_campaign_notable(self, campaign_id: int, notable: bool) -> None:
+        """Update a campaign's notable flag.
+
+        Args:
+            campaign_id: Campaign to update
+            notable: Whether to mark as notable
+        """
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE campaigns SET notable = $1 WHERE id = $2",
+                notable,
+                campaign_id,
             )
 
     async def count_campaigns(self) -> int:
