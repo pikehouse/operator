@@ -598,7 +598,7 @@ _JS = """\
         : esc(e.entry_type);
       const content = e.content ? esc(e.content).slice(0, 500) : '';
       const reasoning = e.reasoning ? `<div class="cmd-reasoning">${esc(e.reasoning)}</div>` : '';
-      out += `<details class="reasoning-entry">
+      out += `<details class="reasoning-entry" open>
         <summary>
           <span class="reasoning-type">${typeLabel}</span>
           ${elapsed}
@@ -611,7 +611,7 @@ _JS = """\
     return out;
   }
 
-  function showTrial(id) {
+  function showTrial(id, scroll = true) {
     const t = trialMap[id];
     if (!t) return;
 
@@ -679,7 +679,7 @@ _JS = """\
       </details>
     `;
     panel.classList.add('visible');
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (scroll) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   // Click handler on trial rows
@@ -690,8 +690,10 @@ _JS = """\
     if (id) showTrial(id);
   });
 
-  // Auto-show first trial
-  if (trials.length > 0) showTrial(trials[0].id);
+  // Auto-show first trial (without scrolling)
+  if (trials.length > 0) {
+    showTrial(trials[0].id, /* scroll */ false);
+  }
 })();
 """
 
