@@ -363,14 +363,20 @@ class GCPTiKVSubject(CloudSubjectBase):
         available_bytes = int(stdout.strip())
         fill_bytes = int(available_bytes * (fill_percent / 100))
 
-        # Create fill file
+        # Create fill file using fallocate (instant) with dd fallback
         fill_file = "/tmp/chaos-fill.bin"
-        block_size = 1024 * 1024  # 1MB
-        count = fill_bytes // block_size
 
-        await self.vm.run_command(
-            f"docker exec {target} dd if=/dev/zero of={fill_file} bs={block_size} count={count} 2>/dev/null"
+        exit_code, _, _ = await self.vm.run_command(
+            f"docker exec {target} fallocate -l {fill_bytes} {fill_file}"
         )
+        if exit_code != 0:
+            # fallocate not available (e.g., tmpfs), fall back to dd
+            block_size = 1024 * 1024  # 1MB
+            count = fill_bytes // block_size
+            await self.vm.run_command(
+                f"docker exec {target} dd if=/dev/zero of={fill_file} bs={block_size} count={count} 2>/dev/null",
+                timeout_sec=300.0,
+            )
 
         return {
             "chaos_type": "disk_pressure",
