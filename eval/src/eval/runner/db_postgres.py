@@ -180,6 +180,17 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE campaigns ADD COLUMN git_commit_hash TEXT DEFAULT ''"
                 )
+            # Migration: add behavior_json column if missing
+            behavior_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'trials' AND column_name = 'behavior_json'
+                )
+            """)
+            if not behavior_col_exists:
+                await conn.execute(
+                    "ALTER TABLE trials ADD COLUMN behavior_json TEXT DEFAULT ''"
+                )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
@@ -275,6 +286,21 @@ class PostgresDB:
                 offset,
             )
             return [Campaign.from_row(row) for row in rows]
+
+    async def update_trial_behavior(self, trial_id: int, behavior_json: str) -> None:
+        """Update a trial's behavior classification JSON.
+
+        Args:
+            trial_id: Trial to update
+            behavior_json: Serialized BehaviorTimeline JSON
+        """
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE trials SET behavior_json = $1 WHERE id = $2",
+                behavior_json,
+                trial_id,
+            )
 
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""

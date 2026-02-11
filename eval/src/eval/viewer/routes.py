@@ -110,6 +110,26 @@ async def get_campaign(request: Request, campaign_id: int):
             chaos_params = {k: v for k, v in chaos_meta.items() if k != "chaos_type"}
             group_key = f"{chaos_type}|{json.dumps(chaos_params, sort_keys=True)}" if not is_baseline else "baseline"
 
+            # Parse behavior timeline
+            behavior_phases = []
+            if t.behavior_json:
+                try:
+                    bdata = json.loads(t.behavior_json)
+                    if isinstance(bdata, dict) and bdata.get("phases"):
+                        from eval.analysis.behavior import ACTION_COLORS
+                        for phase in bdata["phases"]:
+                            action_type = phase.get("action_type", "investigate")
+                            colors = ACTION_COLORS.get(action_type, ACTION_COLORS["investigate"])
+                            behavior_phases.append({
+                                "label": phase.get("label", ""),
+                                "action_type": action_type,
+                                "bg": colors["bg"],
+                                "text": colors["text"],
+                                "border": colors["border"],
+                            })
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
             trial_data.append({
                 "trial": t,
                 "outcome": outcome,
@@ -121,6 +141,7 @@ async def get_campaign(request: Request, campaign_id: int):
                 "detection_invariant": detection_invariant,
                 "agent_summary": agent_summary,
                 "group_key": group_key,
+                "behavior_phases": behavior_phases,
             })
 
         # Sort trials by group (baselines last), then by trial ID within group

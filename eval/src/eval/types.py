@@ -253,6 +253,7 @@ class Trial:
     chaos_metadata: str = ""  # JSON blob
     commands_json: str = "[]"  # JSON array of commands
     operator_data_json: str = "{}"  # JSON blob of operator monitoring data
+    behavior_json: str = ""  # JSON blob of behavioral timeline classification
 
     @classmethod
     def from_row(cls, row, *, keys: set[str] | None = None, jsonb_to_str=None) -> "Trial":
@@ -300,6 +301,10 @@ class Trial:
             operator_data_json=jsonb_to_str(
                 row["operator_data_json"] if "operator_data_json" in keys else None,
                 "{}",
+            ),
+            behavior_json=jsonb_to_str(
+                row["behavior_json"] if "behavior_json" in keys else None,
+                "",
             ),
         )
 

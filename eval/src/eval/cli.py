@@ -820,6 +820,134 @@ def compare_variants_cmd(
     console.print(f"[dim]{len(result.variants)} variant(s) compared[/dim]")
 
 
+@app.command("behavior")
+def behavior_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to classify"),
+    trial_id: Optional[int] = typer.Option(
+        None,
+        "--trial", "-t",
+        help="Classify a single trial only",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Re-classify even if already done",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output as JSON",
+    ),
+    db_path: Path = typer.Option(
+        Path("eval.db"),
+        "--db",
+        help="Path to eval database",
+    ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Classify agent behavior into strategic phases.
+
+    Analyzes each trial's reasoning/command timeline and classifies it
+    into high-level behavioral phases (investigate, change_config, deploy,
+    etc.) using Haiku. Results are stored and displayed as colored timelines.
+
+    Examples:
+        eval behavior 1
+        eval behavior 1 -t 5         # Single trial
+        eval behavior 1 --force      # Re-classify
+        eval behavior 1 --json       # JSON output
+        eval behavior 1 --remote     # Use PostgreSQL
+    """
+    from eval.analysis.behavior import (
+        classify_campaign_behavior,
+        BehaviorTimeline,
+        ACTION_COLORS,
+    )
+    from eval.analysis.scoring import score_trial
+    from rich.text import Text
+
+    async def run():
+        db = await _get_db_or_exit(remote, db_path)
+        try:
+            timelines = await classify_campaign_behavior(
+                db, campaign_id, force=force, trial_id=trial_id,
+            )
+            # Also fetch campaign and trials for display context
+            campaign = await db.get_campaign(campaign_id)
+            trials = await db.get_trials(campaign_id)
+            return timelines, campaign, trials
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
+
+    try:
+        timelines, campaign, trials = asyncio.run(run())
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    if json_output:
+        data = [t.model_dump() for t in timelines]
+        print(json.dumps(data, indent=2))
+        return
+
+    # Build trial_id -> score lookup
+    trial_scores = {}
+    for t in trials:
+        score = score_trial(t, campaign.subject_name)
+        trial_scores[t.id] = score
+
+    console.print(f"\n[bold]Campaign {campaign_id}: {campaign.name}[/bold]\n")
+
+    # Build trial_id -> timeline lookup
+    timeline_map = {tl.trial_id: tl for tl in timelines}
+
+    for t in trials:
+        if trial_id is not None and t.id != trial_id:
+            continue
+
+        tl = timeline_map.get(t.id)
+        score = trial_scores.get(t.id)
+
+        # Build colored pill line using Rich markup
+        line = Text()
+        line.append(f"T-{t.id:02d}: ", style="bold")
+
+        if tl and tl.phases:
+            for i, phase in enumerate(tl.phases):
+                colors = ACTION_COLORS.get(phase.action_type.value, ACTION_COLORS["investigate"])
+                # Use Rich style approximation
+                style_map = {
+                    "investigate": "dim",
+                    "change_config": "yellow",
+                    "change_code": "green",
+                    "change_db": "cyan",
+                    "deploy": "bold",
+                    "observe": "blue",
+                    "bad_action": "red bold",
+                    "revert": "dark_orange",
+                }
+                style = style_map.get(phase.action_type.value, "")
+                line.append(f"[{phase.label}]", style=style)
+                if i < len(tl.phases) - 1:
+                    line.append(" \u2192 ", style="dim")
+        else:
+            line.append("(no behavior data)", style="dim italic")
+
+        # Append outcome
+        if score:
+            outcome_style = "green" if score.resolved else "red"
+            line.append(f"  {score.outcome.value.upper()}", style=outcome_style)
+
+        console.print(line)
+
+    console.print()
+
+
 @app.command("export")
 def export_cmd(
     campaign_id: int = typer.Argument(..., help="Campaign ID to export"),

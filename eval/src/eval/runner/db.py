@@ -51,6 +51,10 @@ class EvalDBProtocol(Protocol):
         """Get all campaigns with pagination."""
         ...
 
+    async def update_trial_behavior(self, trial_id: int, behavior_json: str) -> None:
+        """Update a trial's behavior classification JSON."""
+        ...
+
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""
         ...
@@ -201,6 +205,12 @@ class EvalDB:
                 )
                 await db.commit()
 
+            if "behavior_json" not in trial_column_names:
+                await db.execute(
+                    "ALTER TABLE trials ADD COLUMN behavior_json TEXT DEFAULT ''"
+                )
+                await db.commit()
+
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
         async with aiosqlite.connect(self.db_path) as db:
@@ -313,6 +323,20 @@ class EvalDB:
             if row:
                 return Trial.from_row(row)
             return None
+
+    async def update_trial_behavior(self, trial_id: int, behavior_json: str) -> None:
+        """Update a trial's behavior classification JSON.
+
+        Args:
+            trial_id: Trial to update
+            behavior_json: Serialized BehaviorTimeline JSON
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE trials SET behavior_json = ? WHERE id = ?",
+                (behavior_json, trial_id),
+            )
+            await db.commit()
 
     async def count_campaigns(self) -> int:
         """Count total number of campaigns.

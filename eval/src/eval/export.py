@@ -149,6 +149,26 @@ def _enrich_trial(trial: Trial) -> dict[str, Any]:
     chaos_params = {k: v for k, v in chaos_meta.items() if k != "chaos_type"}
     group_key = f"{chaos_type}|{json.dumps(chaos_params, sort_keys=True)}" if not is_baseline else "baseline"
 
+    # Behavior timeline
+    behavior_phases = []
+    if trial.behavior_json:
+        try:
+            bdata = json.loads(trial.behavior_json)
+            if isinstance(bdata, dict) and bdata.get("phases"):
+                from eval.analysis.behavior import ACTION_COLORS
+                for phase in bdata["phases"]:
+                    action_type = phase.get("action_type", "investigate")
+                    colors = ACTION_COLORS.get(action_type, ACTION_COLORS["investigate"])
+                    behavior_phases.append({
+                        "label": phase.get("label", ""),
+                        "action_type": action_type,
+                        "bg": colors["bg"],
+                        "text": colors["text"],
+                        "border": colors["border"],
+                    })
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return {
         "id": trial.id,
         "campaign_id": trial.campaign_id,
@@ -171,6 +191,7 @@ def _enrich_trial(trial: Trial) -> dict[str, Any]:
         "reasoning_entries": reasoning_entries,
         "code_diff": code_diff or "",
         "db_config_diff": db_config_diff,
+        "behavior_phases": behavior_phases,
     }
 
 
@@ -376,6 +397,15 @@ details[open] > summary::before { content: '\\25BC  '; }
   background: var(--red-bg); border-color: var(--red);
 }
 .empty { color: var(--text-muted); font-style: italic; font-size: 0.85rem; }
+.bh-timeline { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.bh-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 9999px;
+  font-size: 0.75rem; font-weight: 500; white-space: nowrap;
+}
+.bh-arrow { color: var(--text-muted); font-size: 0.7rem; }
+.bh-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.bh-trial-id { font-family: monospace; font-size: 0.8rem; width: 48px; flex-shrink: 0; }
+.bh-outcome { flex-shrink: 0; margin-left: auto; }
 @media print {
   body { max-width: 100%; padding: 12px; }
   .detail-panel { display: block !important; break-inside: avoid; }
@@ -416,6 +446,17 @@ _JS = """\
     } catch(e) { return iso.slice(11, 19); }
   }
 
+  function renderBehaviorTimeline(phases) {
+    if (!phases || phases.length === 0) return '<span class="empty">no behavior data</span>';
+    let out = '';
+    for (let i = 0; i < phases.length; i++) {
+      const p = phases[i];
+      out += `<span class="bh-pill" style="background:${p.bg};color:${p.text};border:1px solid ${p.border}">${esc(p.label)}</span>`;
+      if (i < phases.length - 1) out += '<span class="bh-arrow">&rarr;</span>';
+    }
+    return out;
+  }
+
   // Render campaign header
   const hdr = document.getElementById('campaign-header');
   hdr.innerHTML = `
@@ -439,6 +480,25 @@ _JS = """\
   // Topology (pre-rendered SVG)
   if (DATA.topology_svg) {
     document.getElementById('topology').innerHTML = DATA.topology_svg;
+  }
+
+  // Behavior swimlane
+  const bhSection = document.getElementById('behavior-swimlane');
+  const hasBehavior = trials.some(t => t.behavior_phases && t.behavior_phases.length > 0);
+  if (hasBehavior) {
+    let bhHtml = '';
+    for (const t of trials) {
+      const badge = t.outcome === 'success'
+        ? '<span class="badge badge-success">success</span>'
+        : '<span class="badge badge-timeout">timeout</span>';
+      bhHtml += `<div class="bh-row">
+        <span class="bh-trial-id">T-${String(t.id).padStart(2, '0')}</span>
+        <div class="bh-timeline">${renderBehaviorTimeline(t.behavior_phases)}</div>
+        <span class="bh-outcome">${badge}</span>
+      </div>`;
+    }
+    bhSection.innerHTML = `<h2>Behavior Timeline</h2>${bhHtml}`;
+    bhSection.style.display = 'block';
   }
 
   // Trial table
@@ -654,6 +714,7 @@ def render_html(data: dict[str, Any]) -> str:
 <div id="campaign-header"></div>
 <div id="summary-stats" class="stats-bar"></div>
 <div id="topology" class="topology-svg"></div>
+<div id="behavior-swimlane" style="display:none"></div>
 
 <h2>Trials</h2>
 <table>

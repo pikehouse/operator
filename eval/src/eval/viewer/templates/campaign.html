@@ -62,6 +62,38 @@
 </div>
 {% endif %}
 
+{% set has_behavior = trials | selectattr('behavior_phases') | list | length > 0 %}
+{% if has_behavior %}
+<div class="bg-white shadow rounded p-4 mb-4">
+    <h2 class="text-lg font-semibold mb-3">Behavior Timeline</h2>
+    <div class="space-y-2">
+        {% for item in trials %}
+        <div class="flex items-center gap-2 text-sm">
+            <a href="/trial/{{ item.trial.id }}" class="text-blue-600 hover:underline font-mono w-14 shrink-0">T-{{ '%02d' | format(item.trial.id) }}</a>
+            <div class="flex items-center gap-1 flex-wrap">
+                {% for phase in item.behavior_phases %}
+                <span style="background:{{ phase.bg }};color:{{ phase.text }};border:1px solid {{ phase.border }};padding:2px 8px;border-radius:9999px;font-size:0.75rem;font-weight:500;white-space:nowrap;">{{ phase.label }}</span>
+                {% if not loop.last %}
+                <span class="text-gray-300 text-xs">&rarr;</span>
+                {% endif %}
+                {% endfor %}
+                {% if not item.behavior_phases %}
+                <span class="text-gray-400 text-xs italic">no behavior data</span>
+                {% endif %}
+            </div>
+            <span class="ml-auto shrink-0">
+                {% if item.outcome == 'success' %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Success</span>
+                {% else %}
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Timeout</span>
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <h2 class="text-xl font-bold mb-4">Trials</h2>
 
 {% if trials %}
