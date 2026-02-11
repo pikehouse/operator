@@ -304,6 +304,24 @@ class Worker:
         def now() -> str:
             return datetime.now(timezone.utc).isoformat()
 
+        async def vm_now() -> str:
+            """Get current UTC time from the VM's clock.
+
+            Uses the VM clock so timestamps are comparable with operator
+            ticket timestamps (which also use the VM clock).  Falls back
+            to local clock if the SSH call fails.
+            """
+            if hasattr(subject, "vm"):
+                try:
+                    exit_code, stdout, _ = await subject.vm.run_command(
+                        "date -u +%Y-%m-%dT%H:%M:%S+00:00", timeout_sec=10.0
+                    )
+                    if exit_code == 0 and stdout.strip():
+                        return stdout.strip()
+                except Exception:
+                    pass
+            return now()
+
         started_at = now()
 
         # Reset subject
@@ -393,7 +411,7 @@ class Worker:
             # Inject chaos (unless baseline)
             if not baseline and chaos_type != "none":
                 console.log(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
-                chaos_injected_at = now()
+                chaos_injected_at = await vm_now()
                 chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)
 
                 # For debug_code_edit, inject a synthetic ticket via the operator DB
