@@ -192,10 +192,14 @@
             {% if entry.reasoning %}
             <div class="text-sm text-blue-700 italic mb-1">💭 {{ entry.reasoning }}</div>
             {% endif %}
+            {% if entry.entry_type == 'tool_call' and entry.command %}
+            <div class="font-mono text-sm text-gray-800 bg-white rounded p-2 overflow-x-auto">{{ entry.command }}</div>
+            {% elif entry.content %}
             <details class="text-sm text-gray-800">
                 <summary class="cursor-pointer hover:text-blue-600">{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</summary>
                 <pre class="mt-2 p-2 bg-white rounded text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
             </details>
+            {% endif %}
         </div>
         {% endfor %}
     </div>

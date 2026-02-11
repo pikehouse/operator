@@ -10,6 +10,26 @@ from eval.types import get_chaos_description, safe_json_loads
 router = APIRouter()
 
 
+def _extract_tool_command(tool_name: str, params: dict) -> str:
+    """Extract a readable command string from tool call parameters."""
+    cmd = params.get("command", "")
+    if cmd:
+        return cmd
+    if tool_name == "Read":
+        return f"[Read] {params.get('file_path', '')}"
+    if tool_name == "Write":
+        return f"[Write] {params.get('file_path', '')}"
+    if tool_name == "Edit":
+        return f"[Edit] {params.get('file_path', '')}"
+    if tool_name == "Glob":
+        return f"[Glob] {params.get('pattern', '')}"
+    if tool_name == "Grep":
+        return f"[Grep] {params.get('pattern', '')}"
+    if tool_name:
+        return f"[{tool_name}]"
+    return ""
+
+
 async def _get_viewer_db(request: Request) -> EvalDBProtocol:
     """Get the appropriate database backend from app state."""
     return await get_db(
@@ -303,12 +323,14 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
         if "reasoning_entries" in stored_operator_data:
             prev_ts = None
             for e in stored_operator_data["reasoning_entries"]:
-                # Extract reasoning from tool_params
+                # Extract reasoning and command from tool_params
                 reasoning = None
+                command = ""
                 if e.get("entry_type") == "tool_call" and e.get("tool_params"):
                     try:
                         params = json.loads(e["tool_params"]) if isinstance(e["tool_params"], str) else e["tool_params"]
                         reasoning = params.get("reasoning")
+                        command = _extract_tool_command(e.get("tool_name", ""), params)
                     except (json.JSONDecodeError, TypeError):
                         pass
 
@@ -321,6 +343,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                 reasoning_entries.append({
                     "entry_type": e.get("entry_type", ""),
                     "content": e.get("content", ""),
+                    "command": command,
                     "tool_name": e.get("tool_name"),
                     "timestamp": e.get("timestamp"),
                     "reasoning": reasoning,
@@ -434,12 +457,14 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                     # Get full content (prefer raw_content if available)
                     content = e["raw_content"] or e["content"] or ""
 
-                    # For tool_calls, extract reasoning from tool_params
+                    # For tool_calls, extract reasoning and command from tool_params
                     reasoning = None
+                    command = ""
                     if e["entry_type"] == "tool_call" and e["tool_params"]:
                         try:
                             params = json.loads(e["tool_params"])
                             reasoning = params.get("reasoning")
+                            command = _extract_tool_command(e["tool_name"] or "", params)
                         except:
                             pass
 
@@ -452,6 +477,7 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
                     entries.append({
                         "entry_type": e["entry_type"],
                         "content": content,
+                        "command": command,
                         "tool_name": e["tool_name"],
                         "timestamp": e["timestamp"],
                         "reasoning": reasoning,
