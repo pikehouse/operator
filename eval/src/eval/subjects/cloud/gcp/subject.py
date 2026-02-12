@@ -94,13 +94,20 @@ class GCPTiKVSubject(CloudSubjectBase):
         """
         await install_compose_plugin(self.vm)
 
-        # Create directory on VM
-        await self.vm.run_command(f"mkdir -p {self.compose_dir}")
+        # Create directories on VM
+        await self.vm.run_command(f"mkdir -p {self.compose_dir}/config")
 
         # Upload cloud compose file (uses pre-built images from Artifact Registry)
         await self.vm.upload_file(
             str(self._local_compose),
             f"{self.compose_dir}/docker-compose.yaml",
+        )
+
+        # Upload Prometheus config (needed for metrics collection)
+        prom_config = self._local_compose.parent / "config" / "prometheus.yml"
+        await self.vm.upload_file(
+            str(prom_config),
+            f"{self.compose_dir}/config/prometheus.yml",
         )
 
         await configure_artifact_registry(self.vm)

@@ -1,6 +1,6 @@
 # TiKV Cluster for Cloud Eval
 # Uses pre-built images from Artifact Registry (no docker build needed).
-# Stripped of observability stack (prometheus/grafana) for minimal footprint.
+# Minimal footprint: Prometheus for metrics (needed by operator monitor), no Grafana.
 
 services:
   # PD Cluster (3 nodes)
@@ -154,6 +154,24 @@ services:
       start_period: 30s
     restart: on-failure
 
+  # Prometheus (needed by operator monitor for metrics_unavailable checks)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=1d
+      - --web.enable-lifecycle
+    depends_on:
+      tikv0:
+        condition: service_healthy
+    restart: on-failure
+
 volumes:
   pd0-data:
   pd1-data:
@@ -161,3 +179,4 @@ volumes:
   tikv0-data:
   tikv1-data:
   tikv2-data:
+  prometheus-data:
