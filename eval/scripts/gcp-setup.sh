@@ -345,7 +345,8 @@ docker run -d --name eval-worker --restart=always --network=host \
     -e CHATDB_CLOUD_SQL_PASSWORD="${CHATDB_CLOUD_SQL_PASSWORD}" \
     -e CHATDB_APP_IMAGE="${CHATDB_APP_IMAGE}" \
     -e CHATDB_LOADGEN_IMAGE="${CHATDB_LOADGEN_IMAGE}" \
-    ${IMAGE}
+    ${IMAGE} \
+    worker start --cloud=gcp --operator-image=${OPERATOR_IMAGE}
 STARTUP_EOF
 )
 
