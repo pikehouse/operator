@@ -169,6 +169,21 @@ class WorkQueue:
                 )
             return None
 
+    async def update_vm_name(self, work_id: int, vm_name: str) -> None:
+        """Record the VM name for a running work item.
+
+        Args:
+            work_id: Work item ID
+            vm_name: GCP VM instance name
+        """
+        pool = await self.db._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE work_queue SET vm_name = $1 WHERE id = $2",
+                vm_name,
+                work_id,
+            )
+
     async def complete(
         self,
         work_id: int,
@@ -263,7 +278,7 @@ class WorkQueue:
             rows = await conn.fetch(
                 """
                 SELECT id, subject_type, chaos_type, baseline, status,
-                       worker_id, claimed_at, completed_at, trial_id, error
+                       worker_id, claimed_at, completed_at, trial_id, error, vm_name
                 FROM work_queue
                 WHERE campaign_id = $1
                 ORDER BY id
@@ -345,7 +360,11 @@ class WorkQueue:
                      ORDER BY w3.claimed_at DESC LIMIT 1) as current_campaign_id,
                     (SELECT claimed_at FROM work_queue w4
                      WHERE w4.worker_id = work_queue.worker_id AND w4.status = 'running'
-                     ORDER BY w4.claimed_at DESC LIMIT 1) as current_claimed_at
+                     ORDER BY w4.claimed_at DESC LIMIT 1) as current_claimed_at,
+                    -- VM name from most recent work item
+                    (SELECT vm_name FROM work_queue w5
+                     WHERE w5.worker_id = work_queue.worker_id AND w5.vm_name IS NOT NULL
+                     ORDER BY w5.claimed_at DESC LIMIT 1) as vm_name
                 FROM work_queue
                 WHERE worker_id IS NOT NULL
                 GROUP BY worker_id

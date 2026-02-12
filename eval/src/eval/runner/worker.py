@@ -134,6 +134,10 @@ class Worker:
             subject = await self._get_or_create_subject(work_item)
             self._current_subject = subject
 
+            # Record VM name for worker-to-VM mapping
+            if hasattr(subject, "vm") and hasattr(subject.vm, "name"):
+                await self.queue.update_vm_name(work_item.id, subject.vm.name)
+
             # Get campaign for variant info
             campaign = await self.db.get_campaign(work_item.campaign_id)
             variant_config = None

@@ -1691,6 +1691,7 @@ def worker_status(
                 table.add_column("Chaos Type", min_width=16)
                 table.add_column("Status", min_width=10)
                 table.add_column("Worker", style="dim", min_width=12)
+                table.add_column("VM", style="dim", min_width=20)
                 table.add_column("Duration", min_width=10)
                 table.add_column("Trial", style="dim", min_width=6)
                 table.add_column("Error", style="red", max_width=40)
@@ -1714,6 +1715,7 @@ def worker_status(
                         chaos_label += " [dim](baseline)[/dim]"
 
                     worker = (item["worker_id"] or "")[:16]
+                    vm_name = item.get("vm_name") or ""
                     trial = str(item["trial_id"]) if item["trial_id"] else ""
                     error = (item["error"] or "")[:40]
 
@@ -1722,6 +1724,7 @@ def worker_status(
                         chaos_label,
                         f"[{color}]{status}[/{color}]",
                         worker,
+                        vm_name,
                         duration,
                         trial,
                         error,
@@ -1840,6 +1843,7 @@ def worker_list(
         console.print(f"\n[bold]Worker Status[/bold]\n")
         table = Table(show_header=True, header_style="bold")
         table.add_column("Worker ID", min_width=18)
+        table.add_column("VM", style="dim", min_width=20)
         table.add_column("State", min_width=10)
         table.add_column("Current Task", min_width=22)
         table.add_column("Duration", min_width=10)
@@ -1877,8 +1881,11 @@ def worker_list(
                 else:
                     last_active = f"{delta.total_seconds() / 3600:.1f}h ago"
 
+            vm_name = w.get("vm_name") or ""
+
             table.add_row(
                 worker_id,
+                vm_name,
                 state,
                 task,
                 duration,

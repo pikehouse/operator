@@ -84,7 +84,8 @@ CREATE TABLE IF NOT EXISTS work_queue (
     completed_at TIMESTAMPTZ,
     trial_id INTEGER REFERENCES trials(id),
     error TEXT,
-    sequence_number INTEGER
+    sequence_number INTEGER,
+    vm_name TEXT
 );
 
 -- Indexes
@@ -241,6 +242,17 @@ class PostgresDB:
                 )
                 await conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_work_queue_sequence ON work_queue(campaign_id, sequence_number)"
+                )
+            # Migration: add vm_name column to work_queue if missing
+            vm_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'work_queue' AND column_name = 'vm_name'
+                )
+            """)
+            if not vm_col_exists:
+                await conn.execute(
+                    "ALTER TABLE work_queue ADD COLUMN vm_name TEXT"
                 )
 
     async def insert_campaign(self, campaign: Campaign) -> int:
