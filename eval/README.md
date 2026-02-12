@@ -56,7 +56,7 @@ uv run eval run --subject tikv --chaos node_kill --trials 1
 
 ## Running Cloud Campaigns (GCP)
 
-Cloud campaigns provision GCP VMs, run trials there, and store results in a shared PostgreSQL database.
+Cloud campaigns provision GCP VMs, run trials there, and store results in a shared PostgreSQL database. See [CLOUD.md](CLOUD.md) for the full cloud architecture reference (terminology, Docker images, rebuild decision matrix).
 
 ### Cloud prerequisites
 

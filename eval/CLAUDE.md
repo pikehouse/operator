@@ -2,6 +2,8 @@
 
 This is a chaos engineering evaluation framework that tests how an autonomous operator system detects and resolves infrastructure issues. It orchestrates campaigns of trials where chaos is injected into a test subject (TiKV cluster), and an agent attempts to diagnose and fix the problem.
 
+For cloud (GCP) deployment details — architecture, Docker images, rebuild decisions — see [CLOUD.md](CLOUD.md).
+
 ## Quick Orientation
 
 ```
