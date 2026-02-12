@@ -270,7 +270,7 @@ class GCPVM:
 
         while (asyncio.get_running_loop().time() - start) < timeout_sec:
             try:
-                exit_code, _, _ = await self.run_command("echo ready", timeout_sec=10.0)
+                exit_code, _, _ = await self.run_command("echo ready", timeout_sec=30.0)
                 if exit_code == 0:
                     return
             except Exception:

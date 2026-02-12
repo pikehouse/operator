@@ -154,6 +154,30 @@ services:
       start_period: 30s
     restart: on-failure
 
+  # YCSB load generator (continuous background traffic for latency metrics)
+  ycsb:
+    image: us-central1-docker.pkg.dev/operator-486214/eval/ycsb:latest
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        go-ycsb load tikv -P /workloads/workloada
+        -p tikv.pd=pd0:2379,pd1:2379,pd2:2379
+        -p recordcount=$${YCSB_RECORD_COUNT:-10000}
+        --threads $${YCSB_THREADS:-4} &&
+        exec go-ycsb run tikv -P /workloads/workloada
+        -p tikv.pd=pd0:2379,pd1:2379,pd2:2379
+        -p operationcount=2147483647
+        --threads $${YCSB_THREADS:-4}
+        --target $${YCSB_TARGET_OPS:-100}
+    depends_on:
+      tikv0:
+        condition: service_healthy
+      tikv1:
+        condition: service_healthy
+      tikv2:
+        condition: service_healthy
+    restart: on-failure
+
   # Prometheus (needed by operator monitor for metrics_unavailable checks)
   prometheus:
     image: prom/prometheus:latest

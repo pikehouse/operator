@@ -181,9 +181,10 @@ class CloudSubjectBase(ABC):
         # leave the network in a conflicted state on the next up.
         await self.vm.run_command("docker network prune -f")
 
-        # Up and wait
+        # Up and wait (TiKV healthchecks can take 55s+ so allow generous timeout)
         await self.vm.run_command(
-            f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} up -d --wait"
+            f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} up -d --wait",
+            timeout_sec=180.0,
         )
 
     async def wait_healthy(self, timeout_sec: float = 60.0) -> bool:

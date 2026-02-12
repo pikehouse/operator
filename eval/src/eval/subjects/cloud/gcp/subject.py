@@ -121,15 +121,19 @@ class GCPTiKVSubject(CloudSubjectBase):
     async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
         """Wait for TiKV cluster to be healthy.
 
-        Checks both container health and PD API for store count.
+        Checks PD API for store count with progressive backoff.
         """
         if not self._created:
             return False
 
         start = asyncio.get_running_loop().time()
-        while (asyncio.get_running_loop().time() - start) < timeout_sec:
+        while True:
+            elapsed = asyncio.get_running_loop().time() - start
+            if elapsed >= timeout_sec:
+                logger.warning(f"TiKV health check timed out after {elapsed:.0f}s")
+                return False
+
             try:
-                # Check PD API via SSH curl
                 exit_code, stdout, _ = await self.vm.run_command(
                     f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
                 )
@@ -141,14 +145,20 @@ class GCPTiKVSubject(CloudSubjectBase):
                         if s.get("store", {}).get("state_name") == "Up"
                     ]
                     if len(up_stores) >= 3:
+                        logger.info(f"TiKV healthy: {len(up_stores)} stores up ({elapsed:.0f}s)")
                         return True
+                    logger.debug(f"Waiting for stores: {len(up_stores)}/3 up ({elapsed:.0f}s)")
 
             except Exception as e:
-                logger.debug(f"Health check error: {e}")
+                logger.debug(f"Health check error ({elapsed:.0f}s): {e}")
 
-            await asyncio.sleep(2.0)
-
-        return False
+            # Progressive backoff: 3s early, 5s mid, 10s late
+            if elapsed < 30:
+                await asyncio.sleep(3.0)
+            elif elapsed < 60:
+                await asyncio.sleep(5.0)
+            else:
+                await asyncio.sleep(10.0)
 
     async def capture_state(self) -> dict[str, Any]:
         """Capture PD cluster state via API."""

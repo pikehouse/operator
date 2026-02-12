@@ -299,6 +299,16 @@ docker tag tikv-chaos:v8.5.5 "${TIKV_CHAOS_IMAGE}"
 echo ">>> Pushing tikv-chaos image to Artifact Registry..."
 docker push "${TIKV_CHAOS_IMAGE}"
 
+# Build and push YCSB load generator image
+YCSB_IMAGE="${REGISTRY}/ycsb:latest"
+echo ""
+echo ">>> Building ycsb Docker image (amd64)..."
+docker build --platform linux/amd64 -t ycsb -f Dockerfile.ycsb .
+docker tag ycsb "${YCSB_IMAGE}"
+
+echo ">>> Pushing ycsb image to Artifact Registry..."
+docker push "${YCSB_IMAGE}"
+
 # --- Instance Template ---
 echo ""
 echo ">>> Instance template..."
@@ -372,6 +382,7 @@ echo "  Connection: ${CONNECTION_NAME}"
 echo ""
 echo "Worker Image: ${IMAGE}"
 echo "Operator Image: ${OPERATOR_IMAGE}"
+echo "YCSB Image: ${YCSB_IMAGE}"
 echo "Instance Template: eval-worker-template"
 echo ""
 echo "Configuration saved to: ${ENV_FILE}"
