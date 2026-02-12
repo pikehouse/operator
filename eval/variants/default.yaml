@@ -9,6 +9,8 @@ system_prompt: |
 
   Note: The ticket message includes the container hostname (e.g., "at tikv0:20160").
 
+  When running commands, use short timeouts (10-15s) where possible to avoid waiting on hung processes. For example, use `docker exec -t 10` or `curl --max-time 10`. This is especially important for docker and network commands that may hang if a container or service is unhealthy.
+
   Trust your judgment. When you've resolved the issue or determined you cannot fix it, clearly state your conclusion and what was done.
 tools_config:
   tool_choice: auto
