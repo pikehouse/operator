@@ -1,0 +1,20 @@
+name: tikv-cloud-latency-test
+subjects: [tikv]
+
+# Single latency trial to verify detection fix
+chaos_types:
+  - type: latency
+    params:
+      min_ms: 50
+      max_ms: 150
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 0
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest

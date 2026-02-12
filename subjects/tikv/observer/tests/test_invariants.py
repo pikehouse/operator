@@ -17,6 +17,7 @@ from operator_protocols.types import Store, StoreMetrics
 from operator_protocols import InvariantViolation
 from tikv_observer.invariants import (
     HIGH_LATENCY_CONFIG,
+    HIGH_RAFT_COMMIT_CONFIG,
     HIGH_RAFT_LAG_CONFIG,
     InvariantConfig,
     LEADER_IMBALANCE_CONFIG,
@@ -195,7 +196,7 @@ class TestCheckLatency:
         # First check - starts tracking but within grace period
         violation = checker.check_latency(high_latency_metrics)
 
-        # With default 60s grace period, immediate check returns None
+        # With default 30s grace period, immediate check returns None
         assert violation is None
 
     def test_high_latency_after_grace_period_returns_violation(
@@ -273,9 +274,9 @@ class TestCheckLatency:
         """Verify default latency threshold per CONTEXT.md."""
         assert HIGH_LATENCY_CONFIG.threshold == 100.0
 
-    def test_default_latency_grace_period_is_60s(self):
-        """Verify default latency grace period per CONTEXT.md."""
-        assert HIGH_LATENCY_CONFIG.grace_period == timedelta(seconds=60)
+    def test_default_latency_grace_period_is_30s(self):
+        """Verify default latency grace period."""
+        assert HIGH_LATENCY_CONFIG.grace_period == timedelta(seconds=30)
 
 
 # =============================================================================
@@ -581,9 +582,76 @@ class TestCheckRaftLag:
 
     def test_default_config_values(self):
         """Verify default raft lag config."""
-        assert HIGH_RAFT_LAG_CONFIG.threshold == 1000.0
-        assert HIGH_RAFT_LAG_CONFIG.grace_period == timedelta(seconds=15)
+        assert HIGH_RAFT_LAG_CONFIG.threshold == 50.0
+        assert HIGH_RAFT_LAG_CONFIG.grace_period == timedelta(seconds=30)
         assert HIGH_RAFT_LAG_CONFIG.severity == "warning"
+
+
+# =============================================================================
+# Raft Commit Duration Tests
+# =============================================================================
+
+
+class TestCheckRaftCommit:
+    """Tests for InvariantChecker.check_raft_commit()."""
+
+    def test_normal_commit_returns_none(self, checker, healthy_metrics):
+        """No violation when raft commit duration is low."""
+        violation = checker.check_raft_commit(healthy_metrics)
+        assert violation is None
+
+    def test_high_commit_returns_violation(self, checker):
+        """Returns violation when raft commit duration exceeds threshold."""
+        config = InvariantConfig(
+            name="high_raft_commit",
+            grace_period=timedelta(seconds=0),
+            threshold=50.0,
+            severity="warning",
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=0,
+            raft_commit_p99_ms=200.0,
+        )
+
+        violation = checker.check_raft_commit(metrics, config=config)
+
+        assert violation is not None
+        assert violation.invariant_name == "high_raft_commit"
+        assert violation.store_id == "1"
+        assert "200.0ms" in violation.message
+
+    def test_commit_at_threshold_is_not_violation(self, checker):
+        """Commit duration exactly at threshold is not a violation (> not >=)."""
+        config = InvariantConfig(
+            name="high_raft_commit",
+            grace_period=timedelta(seconds=0),
+            threshold=50.0,
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=0,
+            raft_commit_p99_ms=50.0,
+        )
+
+        violation = checker.check_raft_commit(metrics, config=config)
+        assert violation is None
+
+    def test_default_config_values(self):
+        """Verify default raft commit config."""
+        assert HIGH_RAFT_COMMIT_CONFIG.threshold == 50.0
+        assert HIGH_RAFT_COMMIT_CONFIG.grace_period == timedelta(seconds=30)
+        assert HIGH_RAFT_COMMIT_CONFIG.severity == "warning"
 
 
 # =============================================================================

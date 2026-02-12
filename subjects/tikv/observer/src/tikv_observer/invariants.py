@@ -53,7 +53,7 @@ STORE_DOWN_CONFIG = InvariantConfig(
 
 HIGH_LATENCY_CONFIG = InvariantConfig(
     name="high_latency",
-    grace_period=timedelta(seconds=60),  # 60 seconds - allow transient spikes
+    grace_period=timedelta(seconds=30),  # 30 seconds - allow Prometheus rate window to stabilize
     threshold=100.0,  # 100ms P99 threshold
     severity="warning",
 )
@@ -74,14 +74,21 @@ LEADER_IMBALANCE_CONFIG = InvariantConfig(
 
 HIGH_RAFT_LAG_CONFIG = InvariantConfig(
     name="high_raft_lag",
-    grace_period=timedelta(seconds=15),
-    threshold=1000.0,  # raft log entries behind
+    grace_period=timedelta(seconds=30),
+    threshold=50.0,  # raft log entries behind
     severity="warning",
 )
 
 METRICS_UNAVAILABLE_CONFIG = InvariantConfig(
     name="metrics_unavailable",
     grace_period=timedelta(seconds=30),
+    severity="warning",
+)
+
+HIGH_RAFT_COMMIT_CONFIG = InvariantConfig(
+    name="high_raft_commit",
+    grace_period=timedelta(seconds=30),
+    threshold=50.0,  # 50ms, baseline is ~6ms
     severity="warning",
 )
 
@@ -164,6 +171,7 @@ class TiKVInvariantChecker:
                 disk_total_bytes=metrics_data.get("disk_total_bytes", 1),
                 cpu_percent=metrics_data.get("cpu_percent", 0.0),
                 raft_lag=metrics_data.get("raft_lag", 0),
+                raft_commit_p99_ms=metrics_data.get("raft_commit_p99_ms", 0.0),
             )
 
             # Check latency invariant
@@ -176,6 +184,10 @@ class TiKVInvariantChecker:
 
             # Check raft lag invariant
             if violation := self.check_raft_lag(metrics):
+                violations.append(violation)
+
+            # Check raft commit duration invariant
+            if violation := self.check_raft_commit(metrics):
                 violations.append(violation)
 
         # Check leader balance across cluster
@@ -409,6 +421,37 @@ class TiKVInvariantChecker:
             message=(
                 f"Store {metrics.store_id} raft lag {metrics.raft_lag} entries "
                 f"exceeds threshold {int(config.threshold)}"
+            ),
+            store_id=metrics.store_id,
+        )
+
+    def check_raft_commit(
+        self,
+        metrics: StoreMetrics,
+        config: InvariantConfig | None = None,
+    ) -> InvariantViolation | None:
+        """Check that Raft commit duration is below threshold.
+
+        Raft commit duration measures peer-to-peer network round-trip time.
+        Spikes indicate network issues (latency, packet loss, partitions).
+
+        Args:
+            metrics: StoreMetrics with raft_commit_p99_ms field
+            config: Optional custom configuration (defaults to HIGH_RAFT_COMMIT_CONFIG)
+
+        Returns:
+            InvariantViolation if raft commit duration exceeds threshold past grace period
+        """
+        config = config or HIGH_RAFT_COMMIT_CONFIG
+
+        is_high = metrics.raft_commit_p99_ms > config.threshold
+
+        return self._check_with_grace_period(
+            config=config,
+            is_violated=is_high,
+            message=(
+                f"Store {metrics.store_id} raft commit P99 {metrics.raft_commit_p99_ms:.1f}ms "
+                f"exceeds threshold {config.threshold:.1f}ms"
             ),
             store_id=metrics.store_id,
         )

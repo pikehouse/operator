@@ -114,9 +114,12 @@ class PrometheusClient:
             Per RESEARCH.md: Uses regex matching for instance label flexibility
             Address colon is replaced with .* for flexible port matching
         """
-        # Use regex matching for instance label flexibility (per RESEARCH.md)
-        # tikv:20160 -> tikv.*20160 (handles port variations)
-        addr_pattern = store_address.replace(":", ".*")
+        # Use hostname prefix for instance label matching.
+        # PD reports peer address (tikv0:20160) but Prometheus scrapes
+        # status address (tikv0:20180). Match just the hostname with .*
+        # to handle any port suffix.
+        hostname = store_address.split(":")[0]
+        addr_pattern = f"{hostname}.*"
 
         # Query all metrics
         qps = await self.get_metric_value(
@@ -124,7 +127,7 @@ class PrometheusClient:
         ) or 0.0
 
         latency_seconds = await self.get_metric_value(
-            f'histogram_quantile(0.99, rate(tikv_grpc_msg_duration_seconds_bucket{{instance=~"{addr_pattern}"}}[1m]))'
+            f'max(histogram_quantile(0.99, rate(tikv_grpc_msg_duration_seconds_bucket{{instance=~"{addr_pattern}", type=~"raw_put|raw_get|kv_prewrite|kv_commit|kv_get|kv_scan"}}[1m])))'
         ) or 0.0
 
         disk_used = await self.get_metric_value(
@@ -143,6 +146,10 @@ class PrometheusClient:
             f'max(tikv_raftstore_log_lag{{instance=~"{addr_pattern}"}}) or vector(0)'
         ) or 0
 
+        raft_commit_seconds = await self.get_metric_value(
+            f'histogram_quantile(0.99, rate(tikv_raftstore_commit_log_duration_seconds_bucket{{instance=~"{addr_pattern}"}}[1m]))'
+        ) or 0.0
+
         return StoreMetrics(
             store_id=store_id,
             qps=qps,
@@ -151,4 +158,5 @@ class PrometheusClient:
             disk_total_bytes=int(disk_capacity),
             cpu_percent=cpu_percent,
             raft_lag=int(raft_lag_val),
+            raft_commit_p99_ms=raft_commit_seconds * 1000,
         )

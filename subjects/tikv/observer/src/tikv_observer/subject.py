@@ -108,6 +108,7 @@ class TiKVSubject:
                         "disk_total_bytes": metrics.disk_total_bytes,
                         "cpu_percent": metrics.cpu_percent,
                         "raft_lag": metrics.raft_lag,
+                        "raft_commit_p99_ms": metrics.raft_commit_p99_ms,
                     }
                 except Exception:
                     # Skip failed metrics - don't block observation

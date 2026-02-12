@@ -226,7 +226,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
     # Using flexible matching since queries contain the address pattern
     mock_responses = {
         # QPS query
-        'sum(rate(tikv_storage_command_total{instance=~"tikv-0.*20160"}[1m]))': MockResponse(
+        'sum(rate(tikv_storage_command_total{instance=~"tikv-0.*"}[1m]))': MockResponse(
             {
                 "status": "success",
                 "data": {
@@ -235,8 +235,8 @@ async def test_get_store_metrics_aggregates_all_metrics():
                 },
             }
         ),
-        # P99 latency query (returns seconds)
-        'histogram_quantile(0.99, rate(tikv_grpc_msg_duration_seconds_bucket{instance=~"tikv-0.*20160"}[1m]))': MockResponse(
+        # P99 latency query (returns seconds, with type filter + max wrapper)
+        'max(histogram_quantile(0.99, rate(tikv_grpc_msg_duration_seconds_bucket{instance=~"tikv-0.*", type=~"raw_put|raw_get|kv_prewrite|kv_commit|kv_get|kv_scan"}[1m])))': MockResponse(
             {
                 "status": "success",
                 "data": {
@@ -246,7 +246,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
             }
         ),
         # Disk used query
-        'tikv_store_size_bytes{type="used", instance=~"tikv-0.*20160"}': MockResponse(
+        'tikv_store_size_bytes{type="used", instance=~"tikv-0.*"}': MockResponse(
             {
                 "status": "success",
                 "data": {
@@ -256,7 +256,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
             }
         ),
         # Disk capacity query
-        'tikv_store_size_bytes{type="capacity", instance=~"tikv-0.*20160"}': MockResponse(
+        'tikv_store_size_bytes{type="capacity", instance=~"tikv-0.*"}': MockResponse(
             {
                 "status": "success",
                 "data": {
@@ -266,7 +266,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
             }
         ),
         # CPU query
-        'rate(process_cpu_seconds_total{instance=~"tikv-0.*20160"}[1m]) * 100': MockResponse(
+        'rate(process_cpu_seconds_total{instance=~"tikv-0.*"}[1m]) * 100': MockResponse(
             {
                 "status": "success",
                 "data": {
@@ -276,12 +276,22 @@ async def test_get_store_metrics_aggregates_all_metrics():
             }
         ),
         # Raft lag query
-        'max(tikv_raftstore_log_lag{instance=~"tikv-0.*20160"}) or vector(0)': MockResponse(
+        'max(tikv_raftstore_log_lag{instance=~"tikv-0.*"}) or vector(0)': MockResponse(
             {
                 "status": "success",
                 "data": {
                     "resultType": "vector",
                     "result": [{"metric": {}, "value": [1234567890.0, "42"]}],
+                },
+            }
+        ),
+        # Raft commit duration query (returns seconds)
+        'histogram_quantile(0.99, rate(tikv_raftstore_commit_log_duration_seconds_bucket{instance=~"tikv-0.*"}[1m]))': MockResponse(
+            {
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [{"metric": {}, "value": [1234567890.0, "0.006"]}],  # 6ms
                 },
             }
         ),
@@ -300,6 +310,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
     assert metrics.disk_total_bytes == 100000000000
     assert metrics.cpu_percent == pytest.approx(45.5)
     assert metrics.raft_lag == 42
+    assert metrics.raft_commit_p99_ms == pytest.approx(6.0)  # 0.006s * 1000
 
 
 @pytest.mark.asyncio
@@ -329,6 +340,7 @@ async def test_get_store_metrics_uses_correct_tikv_metric_names():
     assert "tikv_store_size_bytes" in query_text  # Disk
     assert "process_cpu_seconds_total" in query_text  # CPU
     assert "tikv_raftstore_log_lag" in query_text  # Raft lag
+    assert "tikv_raftstore_commit_log_duration_seconds_bucket" in query_text  # Raft commit
 
 
 @pytest.mark.asyncio
@@ -385,8 +397,8 @@ async def test_get_store_metrics_converts_latency_to_milliseconds():
 
 
 @pytest.mark.asyncio
-async def test_get_store_metrics_address_pattern_escaping():
-    """Store address colon is escaped for regex matching."""
+async def test_get_store_metrics_address_pattern_uses_hostname():
+    """Store address uses hostname prefix for Prometheus instance matching."""
     mock_http = MockAsyncClient({})
     queries_made = []
 
@@ -401,6 +413,6 @@ async def test_get_store_metrics_address_pattern_escaping():
     client = PrometheusClient(http=mock_http)
     await client.get_store_metrics(store_id="1", store_address="tikv-0:20160")
 
-    # Verify address is pattern-escaped (colon -> .*)
+    # Verify hostname is used as prefix pattern (matches any port)
     query_text = " ".join(queries_made)
-    assert "tikv-0.*20160" in query_text  # Colon replaced with .*
+    assert "tikv-0.*" in query_text  # Hostname prefix with wildcard
