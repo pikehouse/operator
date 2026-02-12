@@ -146,6 +146,11 @@ uv run eval list --notable                      # Only notable campaigns
 uv run eval notable <campaign_id>
 uv run eval notable <campaign_id> --clear       # Unmark
 
+# Annotate campaigns with notes
+uv run eval note <campaign_id> "Reference baseline for TiKV node_kill"
+uv run eval note <campaign_id>                  # View current note
+uv run eval note <campaign_id> --clear          # Clear
+
 # Score a campaign
 uv run eval analyze <campaign_id>
 uv run eval analyze <campaign_id> --commands    # Include LLM command classification

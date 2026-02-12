@@ -91,6 +91,11 @@ eval show --trial 5         # Trial details
 eval notable 42             # Mark campaign 42 as notable
 eval notable 42 --clear     # Unmark
 
+# Annotate campaigns with notes
+eval note 42 "Reference baseline for TiKV node_kill"
+eval note 42                # View current note
+eval note 42 --clear        # Clear the note
+
 # Web UI
 eval viewer                 # http://127.0.0.1:8000
 ```
@@ -107,6 +112,7 @@ class Campaign:
     trial_count: int
     baseline: bool = False
     notable: bool = False  # User-set flag for significant campaigns
+    notes: str = ""        # Free-text annotation (set via `eval note`)
     variant_name: str = "default"
     created_at: str        # ISO8601
 ```
@@ -206,7 +212,7 @@ variant: "default"
 ## Database Schema
 
 **campaigns table:**
-- `id`, `subject_name`, `chaos_type` (deprecated), `name`, `trial_count`, `baseline`, `notable`, `variant_name`, `created_at`
+- `id`, `subject_name`, `chaos_type` (deprecated), `name`, `trial_count`, `baseline`, `notable`, `notes`, `variant_name`, `created_at`
 
 **trials table:**
 - `id`, `campaign_id`, `started_at`, `chaos_injected_at`, `ticket_created_at`, `resolved_at`, `ended_at`

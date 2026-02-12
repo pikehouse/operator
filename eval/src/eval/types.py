@@ -193,6 +193,7 @@ class Campaign:
     variant_name: str = "default"
     continuous: bool = False
     notable: bool = False
+    notes: str = ""
     topology_json: str = ""
     git_commit_hash: str = ""
     created_at: str = field(
@@ -234,6 +235,7 @@ class Campaign:
             baseline=bool(row["baseline"]),
             continuous=bool(row["continuous"]) if "continuous" in keys else False,
             notable=bool(row["notable"]) if "notable" in keys else False,
+            notes=row["notes"] if "notes" in keys else "",
             variant_name=(row["variant_name"] if "variant_name" in keys and row["variant_name"] else "default"),
             topology_json=topo,
             git_commit_hash=(row["git_commit_hash"] if "git_commit_hash" in keys and row["git_commit_hash"] else ""),

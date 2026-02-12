@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     baseline BOOLEAN DEFAULT FALSE,
     continuous BOOLEAN DEFAULT FALSE,
     notable BOOLEAN DEFAULT FALSE,
+    notes TEXT DEFAULT '',
     variant_name TEXT DEFAULT 'default',
     topology_json JSONB,
     git_commit_hash TEXT DEFAULT '',
@@ -216,6 +217,17 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE campaigns ADD COLUMN notable BOOLEAN DEFAULT FALSE"
                 )
+            # Migration: add notes column to campaigns if missing
+            notes_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'campaigns' AND column_name = 'notes'
+                )
+            """)
+            if not notes_col_exists:
+                await conn.execute(
+                    "ALTER TABLE campaigns ADD COLUMN notes TEXT DEFAULT ''"
+                )
             # Migration: add sequence_number column to work_queue if missing
             seq_col_exists = await conn.fetchval("""
                 SELECT EXISTS (
@@ -354,6 +366,21 @@ class PostgresDB:
             await conn.execute(
                 "UPDATE campaigns SET notable = $1 WHERE id = $2",
                 notable,
+                campaign_id,
+            )
+
+    async def update_campaign_notes(self, campaign_id: int, notes: str) -> None:
+        """Update a campaign's notes text.
+
+        Args:
+            campaign_id: Campaign to update
+            notes: Free-text notes (empty string to clear)
+        """
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE campaigns SET notes = $1 WHERE id = $2",
+                notes,
                 campaign_id,
             )
 

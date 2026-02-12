@@ -24,6 +24,10 @@
         <dt class="text-gray-500">Notable:</dt>
         <dd><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-700">&#9670; Notable</span></dd>
         {% endif %}
+        {% if campaign.notes %}
+        <dt class="text-gray-500">Notes:</dt>
+        <dd style="white-space: pre-wrap;">{{ campaign.notes }}</dd>
+        {% endif %}
         {% if campaign.git_commit_hash %}
         <dt class="text-gray-500">Commit:</dt>
         <dd class="font-mono text-xs">{{ campaign.git_commit_hash }}</dd>

@@ -141,6 +141,162 @@ class TestProtocolCompliance:
             assert isinstance(db, EvalDBProtocol)
 
 
+class TestCampaignNotes:
+    """Tests for campaign notes (set, view, clear)."""
+
+    def test_notes_default_empty(self, tmp_db):
+        """New campaigns have empty notes by default."""
+        from eval.types import Campaign
+
+        async def _test():
+            db = EvalDB(tmp_db)
+            await db.ensure_schema()
+
+            campaign = Campaign(
+                subject_name="tikv",
+                name="tikv/node_kill",
+                trial_count=1,
+                created_at="2025-01-01T00:00:00+00:00",
+            )
+            cid = await db.insert_campaign(campaign)
+            fetched = await db.get_campaign(cid)
+            assert fetched is not None
+            assert fetched.notes == ""
+
+        run_async(_test())
+
+    def test_update_campaign_notes(self, tmp_db):
+        """update_campaign_notes sets and retrieves notes."""
+        from eval.types import Campaign
+
+        async def _test():
+            db = EvalDB(tmp_db)
+            await db.ensure_schema()
+
+            campaign = Campaign(
+                subject_name="tikv",
+                name="tikv/node_kill",
+                trial_count=1,
+                created_at="2025-01-01T00:00:00+00:00",
+            )
+            cid = await db.insert_campaign(campaign)
+
+            await db.update_campaign_notes(cid, "Reference baseline for TiKV node_kill")
+            fetched = await db.get_campaign(cid)
+            assert fetched is not None
+            assert fetched.notes == "Reference baseline for TiKV node_kill"
+
+        run_async(_test())
+
+    def test_clear_campaign_notes(self, tmp_db):
+        """Clearing notes sets them back to empty string."""
+        from eval.types import Campaign
+
+        async def _test():
+            db = EvalDB(tmp_db)
+            await db.ensure_schema()
+
+            campaign = Campaign(
+                subject_name="tikv",
+                name="tikv/node_kill",
+                trial_count=1,
+                created_at="2025-01-01T00:00:00+00:00",
+            )
+            cid = await db.insert_campaign(campaign)
+
+            await db.update_campaign_notes(cid, "some note")
+            await db.update_campaign_notes(cid, "")
+            fetched = await db.get_campaign(cid)
+            assert fetched is not None
+            assert fetched.notes == ""
+
+        run_async(_test())
+
+    def test_notes_in_get_all_campaigns(self, tmp_db):
+        """Notes are included when listing all campaigns."""
+        from eval.types import Campaign
+
+        async def _test():
+            db = EvalDB(tmp_db)
+            await db.ensure_schema()
+
+            campaign = Campaign(
+                subject_name="tikv",
+                name="tikv/node_kill",
+                trial_count=1,
+                created_at="2025-01-01T00:00:00+00:00",
+            )
+            cid = await db.insert_campaign(campaign)
+            await db.update_campaign_notes(cid, "listed note")
+
+            campaigns = await db.get_all_campaigns()
+            assert len(campaigns) == 1
+            assert campaigns[0].notes == "listed note"
+
+        run_async(_test())
+
+    def test_notes_migration(self, tmp_db):
+        """Migration adds notes column to existing databases without it."""
+        import aiosqlite
+
+        async def _test():
+            # Create a DB with schema that's missing the notes column
+            async with aiosqlite.connect(tmp_db) as conn:
+                await conn.execute("""
+                    CREATE TABLE campaigns (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        subject_name TEXT NOT NULL,
+                        chaos_type TEXT NOT NULL DEFAULT '',
+                        name TEXT DEFAULT '',
+                        trial_count INTEGER NOT NULL,
+                        baseline INTEGER NOT NULL DEFAULT 0,
+                        continuous INTEGER NOT NULL DEFAULT 0,
+                        notable INTEGER NOT NULL DEFAULT 0,
+                        variant_name TEXT DEFAULT 'default',
+                        topology_json TEXT DEFAULT '',
+                        git_commit_hash TEXT DEFAULT '',
+                        created_at TEXT NOT NULL
+                    )
+                """)
+                await conn.execute("""
+                    CREATE TABLE trials (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        campaign_id INTEGER NOT NULL,
+                        started_at TEXT NOT NULL,
+                        chaos_injected_at TEXT NOT NULL,
+                        ticket_created_at TEXT,
+                        resolved_at TEXT,
+                        ended_at TEXT NOT NULL,
+                        initial_state TEXT NOT NULL,
+                        final_state TEXT NOT NULL,
+                        chaos_metadata TEXT NOT NULL,
+                        commands_json TEXT NOT NULL DEFAULT '[]',
+                        operator_data_json TEXT NOT NULL DEFAULT '{}',
+                        behavior_json TEXT DEFAULT ''
+                    )
+                """)
+                await conn.execute(
+                    "INSERT INTO campaigns (subject_name, trial_count, created_at) VALUES ('tikv', 1, '2025-01-01')"
+                )
+                await conn.commit()
+
+            # Now run ensure_schema which should migrate
+            db = EvalDB(tmp_db)
+            await db.ensure_schema()
+
+            # Verify notes column exists and defaults to empty
+            fetched = await db.get_campaign(1)
+            assert fetched is not None
+            assert fetched.notes == ""
+
+            # Verify we can update notes
+            await db.update_campaign_notes(1, "migrated note")
+            fetched = await db.get_campaign(1)
+            assert fetched.notes == "migrated note"
+
+        run_async(_test())
+
+
 class TestAnalysisAcceptsProtocol:
     """Tests that analysis functions accept EvalDBProtocol."""
 

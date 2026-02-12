@@ -59,6 +59,10 @@ class EvalDBProtocol(Protocol):
         """Update a campaign's notable flag."""
         ...
 
+    async def update_campaign_notes(self, campaign_id: int, notes: str) -> None:
+        """Update a campaign's notes text."""
+        ...
+
     async def count_campaigns(self) -> int:
         """Count total number of campaigns."""
         ...
@@ -107,6 +111,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     baseline INTEGER NOT NULL DEFAULT 0,
     continuous INTEGER NOT NULL DEFAULT 0,
     notable INTEGER NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
     variant_name TEXT DEFAULT 'default',
     topology_json TEXT DEFAULT '',
     git_commit_hash TEXT DEFAULT '',
@@ -209,6 +214,12 @@ class EvalDB:
             if "notable" not in column_names:
                 await db.execute(
                     "ALTER TABLE campaigns ADD COLUMN notable INTEGER NOT NULL DEFAULT 0"
+                )
+                await db.commit()
+
+            if "notes" not in column_names:
+                await db.execute(
+                    "ALTER TABLE campaigns ADD COLUMN notes TEXT DEFAULT ''"
                 )
                 await db.commit()
 
@@ -368,6 +379,20 @@ class EvalDB:
             await db.execute(
                 "UPDATE campaigns SET notable = ? WHERE id = ?",
                 (1 if notable else 0, campaign_id),
+            )
+            await db.commit()
+
+    async def update_campaign_notes(self, campaign_id: int, notes: str) -> None:
+        """Update a campaign's notes text.
+
+        Args:
+            campaign_id: Campaign to update
+            notes: Free-text notes (empty string to clear)
+        """
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE campaigns SET notes = ? WHERE id = ?",
+                (notes, campaign_id),
             )
             await db.commit()
 

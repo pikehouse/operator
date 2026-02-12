@@ -1221,6 +1221,7 @@ def show_detail(
                 "trial_count": campaign.trial_count,
                 "baseline": campaign.baseline,
                 "notable": campaign.notable,
+                "notes": campaign.notes,
                 "git_commit_hash": campaign.git_commit_hash,
                 "created_at": campaign.created_at,
                 "trials": [
@@ -1251,6 +1252,8 @@ def show_detail(
         print(f"Baseline: {'Yes' if campaign.baseline else 'No'}")
         if campaign.notable:
             print(f"Notable:  Yes")
+        if campaign.notes:
+            print(f"Notes:    {campaign.notes}")
         if campaign.git_commit_hash:
             print(f"Commit:   {campaign.git_commit_hash}")
         print()
@@ -1325,6 +1328,51 @@ def notable_cmd(
     asyncio.run(run())
 
 
+@app.command("note")
+def note_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to annotate"),
+    text: Optional[str] = typer.Argument(None, help="Note text (omit to view current note)"),
+    clear: bool = typer.Option(False, "--clear", help="Clear the note"),
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+) -> None:
+    """Set, view, or clear a campaign note.
+
+    Notes are free-text annotations for capturing context — what was
+    interesting, what the baseline was for, observations about agent behavior.
+
+    Examples:
+        eval note 42 "Reference baseline for TiKV node_kill"
+        eval note 42                # View current note
+        eval note 42 --clear        # Clear the note
+    """
+    async def run():
+        db = await _get_db_or_exit(remote, db_path)
+        try:
+            campaign = await db.get_campaign(campaign_id)
+            if campaign is None:
+                console.print(f"[red]Error: Campaign {campaign_id} not found[/red]")
+                raise typer.Exit(1)
+
+            if clear:
+                await db.update_campaign_notes(campaign_id, "")
+                console.print(f"Campaign {campaign_id} note cleared")
+            elif text is not None:
+                await db.update_campaign_notes(campaign_id, text)
+                console.print(f"Campaign {campaign_id} note updated")
+            else:
+                # View current note
+                if campaign.notes:
+                    console.print(campaign.notes)
+                else:
+                    console.print(f"[dim]Campaign {campaign_id} has no note[/dim]")
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
+
+    asyncio.run(run())
+
+
 @app.command("list")
 def list_campaigns(
     db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
@@ -1360,6 +1408,7 @@ def list_campaigns(
                 "trial_count": c.trial_count,
                 "baseline": c.baseline,
                 "notable": c.notable,
+                "notes": c.notes,
                 "variant_name": getattr(c, 'variant_name', 'default'),
                 "git_commit_hash": c.git_commit_hash,
                 "created_at": c.created_at,
