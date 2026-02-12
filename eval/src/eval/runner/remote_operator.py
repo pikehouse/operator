@@ -281,14 +281,14 @@ class RemoteOperatorProcesses:
         # Make data volume writable by the non-root agent user
         await self.vm.run_command(
             f"docker exec {MONITOR_CONTAINER} chmod -R 777 /data",
-            timeout_sec=10.0,
+            timeout_sec=30.0,
         )
 
         # Defense-in-depth: verify agent didn't crash shortly after starting
         await asyncio.sleep(3)
         exit_code, stdout, _ = await self.vm.run_command(
             f"docker inspect -f '{{{{.State.Running}}}}' {AGENT_CONTAINER} 2>/dev/null",
-            timeout_sec=10.0,
+            timeout_sec=30.0,
         )
         if exit_code != 0 or "true" not in stdout.lower():
             _, agent_logs, _ = await self.vm.run_command(
@@ -350,10 +350,14 @@ class RemoteOperatorProcesses:
             "conn.close()"
         )
 
-        exit_code, stdout, stderr = await self.vm.run_command(
-            f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
-            timeout_sec=10.0,
-        )
+        try:
+            exit_code, stdout, stderr = await self.vm.run_command(
+                f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
+                timeout_sec=30.0,
+            )
+        except (TimeoutError, Exception) as e:
+            logger.debug(f"DB query timed out or failed: {e}")
+            return "[]"
 
         if exit_code != 0:
             logger.debug(f"DB query failed: {stderr}")
@@ -381,10 +385,14 @@ class RemoteOperatorProcesses:
             "conn.close()"
         )
 
-        exit_code, stdout, stderr = await self.vm.run_command(
-            f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
-            timeout_sec=10.0,
-        )
+        try:
+            exit_code, stdout, stderr = await self.vm.run_command(
+                f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
+                timeout_sec=30.0,
+            )
+        except (TimeoutError, Exception) as e:
+            logger.debug(f"DB execute timed out or failed: {e}")
+            return 0
 
         if exit_code != 0:
             logger.debug(f"DB execute failed: {stderr}")
@@ -445,10 +453,15 @@ class RemoteOperatorProcesses:
             "conn.commit(); conn.close(); print('OK')"
         )
 
-        exit_code, stdout, stderr = await self.vm.run_command(
-            f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
-            timeout_sec=10.0,
-        )
+        try:
+            exit_code, stdout, stderr = await self.vm.run_command(
+                f'docker exec {MONITOR_CONTAINER} python3 -c "{python_script}"',
+                timeout_sec=30.0,
+            )
+        except (TimeoutError, Exception) as e:
+            logger.warning(f"inject_ticket timed out: {e}")
+            console.print(f"[yellow]inject_ticket timed out: {e}[/yellow]")
+            return
 
         if exit_code != 0:
             logger.warning(f"inject_ticket failed: {stderr}")
