@@ -221,6 +221,9 @@ class ChatDBAppEvalSubject:
                 await asyncio.to_thread(
                     ws._run_git, "rm", "-r", "--cached", "--quiet", "loadgen"
                 )
+                await asyncio.to_thread(
+                    ws._run_git, "commit", "-m", "remove loadgen from agent workspace"
+                )
             except Exception:
                 pass
 
