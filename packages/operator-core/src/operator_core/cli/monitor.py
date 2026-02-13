@@ -36,7 +36,7 @@ def run_monitor(
         30.0, "--interval", "-i", help="Check interval in seconds"
     ),
     pd_endpoint: str = typer.Option(
-        None, "--pd", envvar="PD_ENDPOINT", help="PD endpoint for TiKV (e.g., http://pd:2379)"
+        None, "--pd", envvar="PD_ENDPOINT", help="PD endpoint(s) for TiKV, comma-separated for failover (e.g., http://pd0:2379,http://pd1:2379,http://pd2:2379)"
     ),
     prometheus_url: str = typer.Option(
         None,

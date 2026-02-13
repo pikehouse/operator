@@ -19,7 +19,7 @@ Per RESEARCH.md Pattern 4:
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from operator_protocols import InvariantViolation
@@ -97,6 +97,13 @@ HIGH_SCRAPE_DURATION_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=0.5,  # 500ms; baseline is ~10ms, network latency inflates scrape time
     severity="warning",
+)
+
+STALE_HEARTBEAT_CONFIG = InvariantConfig(
+    name="stale_heartbeat",
+    grace_period=timedelta(seconds=0),  # Immediate — staleness IS the grace
+    threshold=60.0,  # seconds since last heartbeat
+    severity="critical",
 )
 
 
@@ -212,6 +219,9 @@ class TiKVInvariantChecker:
         violations.extend(
             self.check_metrics_availability(stores_data, store_metrics_data)
         )
+
+        # Check heartbeat staleness (network partition detection)
+        violations.extend(self.check_heartbeat_stale(stores_data))
 
         return violations
 
@@ -500,6 +510,85 @@ class TiKVInvariantChecker:
             ),
             store_id=metrics.store_id,
         )
+
+    def check_heartbeat_stale(
+        self,
+        stores_data: list[dict],
+        config: InvariantConfig | None = None,
+    ) -> list[InvariantViolation]:
+        """Check that Up stores have recent heartbeats from PD.
+
+        Detects network partitions by checking if a store's last heartbeat
+        timestamp is older than the threshold. During a partition, TiKV cannot
+        send heartbeats to PD, but PD keeps the store in "Up" state for up to
+        30 minutes (max-store-down-time). This invariant detects the gap
+        within ~75 seconds instead.
+
+        Args:
+            stores_data: List of store dicts with id, address, state,
+                last_heartbeat_ts
+            config: Optional custom configuration (defaults to STALE_HEARTBEAT_CONFIG)
+
+        Returns:
+            List of violations for Up stores with stale heartbeats
+        """
+        config = config or STALE_HEARTBEAT_CONFIG
+        violations: list[InvariantViolation] = []
+        now = datetime.now(timezone.utc)
+
+        for store in stores_data:
+            store_id = str(store.get("id", ""))
+            state = store.get("state", "")
+            address = store.get("address", "")
+            heartbeat_ts = store.get("last_heartbeat_ts", "")
+
+            if state != "Up":
+                key = self._get_violation_key(config.name, store_id)
+                self._first_seen.pop(key, None)
+                continue
+
+            if not heartbeat_ts:
+                # No heartbeat data available — skip (don't false-alarm)
+                continue
+
+            try:
+                # PD returns timestamps like "2024-01-15T10:30:00.123456789+08:00"
+                # Python's fromisoformat handles most ISO formats; strip nanoseconds
+                # beyond microseconds if present
+                ts_str = heartbeat_ts
+                # Handle nanosecond precision: keep only up to 6 fractional digits
+                if "." in ts_str:
+                    dot_idx = ts_str.index(".")
+                    # Find the end of fractional digits
+                    frac_end = dot_idx + 1
+                    while frac_end < len(ts_str) and ts_str[frac_end].isdigit():
+                        frac_end += 1
+                    frac_digits = ts_str[dot_idx + 1 : frac_end]
+                    remainder = ts_str[frac_end:]
+                    ts_str = ts_str[: dot_idx + 1] + frac_digits[:6] + remainder
+
+                last_hb = datetime.fromisoformat(ts_str)
+                if last_hb.tzinfo is None:
+                    last_hb = last_hb.replace(tzinfo=timezone.utc)
+                staleness = (now - last_hb).total_seconds()
+            except (ValueError, TypeError):
+                continue
+
+            is_stale = staleness > config.threshold
+
+            violation = self._check_with_grace_period(
+                config=config,
+                is_violated=is_stale,
+                message=(
+                    f"Store {store_id} at {address} heartbeat stale by {staleness:.0f}s "
+                    f"(threshold {config.threshold:.0f}s)"
+                ),
+                store_id=store_id,
+            )
+            if violation:
+                violations.append(violation)
+
+        return violations
 
     def check_metrics_availability(
         self,

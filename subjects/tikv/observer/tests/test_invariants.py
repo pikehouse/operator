@@ -9,7 +9,7 @@ These tests verify the InvariantChecker correctly:
 - Clears violations when conditions resolve
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -24,6 +24,7 @@ from tikv_observer.invariants import (
     LEADER_IMBALANCE_CONFIG,
     LOW_DISK_SPACE_CONFIG,
     METRICS_UNAVAILABLE_CONFIG,
+    STALE_HEARTBEAT_CONFIG,
     STORE_DOWN_CONFIG,
     TiKVInvariantChecker,
 )
@@ -887,3 +888,140 @@ class TestCheckWithNewInvariants:
         violations = checker.check(observation)
         invariant_names = [v.invariant_name for v in violations]
         assert "high_scrape_duration" in invariant_names
+
+    def test_check_returns_stale_heartbeat_from_observation(self, checker):
+        """check() finds stale_heartbeat from observation dict."""
+        stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+        observation = {
+            "stores": [
+                {
+                    "id": "1",
+                    "address": "tikv-0:20160",
+                    "state": "Up",
+                    "last_heartbeat_ts": stale_ts,
+                },
+            ],
+            "store_metrics": {
+                "1": {
+                    "qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10,
+                    "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0,
+                },
+            },
+            "cluster_metrics": {},
+        }
+
+        violations = checker.check(observation)
+        invariant_names = [v.invariant_name for v in violations]
+        assert "stale_heartbeat" in invariant_names
+
+
+# =============================================================================
+# Stale Heartbeat Tests
+# =============================================================================
+
+
+class TestCheckHeartbeatStale:
+    """Tests for InvariantChecker.check_heartbeat_stale()."""
+
+    def test_recent_heartbeat_returns_empty(self, checker):
+        """No violation when heartbeat is recent."""
+        recent_ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": recent_ts},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+        assert violations == []
+
+    def test_stale_heartbeat_returns_violation(self, checker):
+        """Returns violation when heartbeat is older than threshold."""
+        stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": stale_ts},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+
+        assert len(violations) == 1
+        assert violations[0].invariant_name == "stale_heartbeat"
+        assert violations[0].store_id == "1"
+        assert violations[0].severity == "critical"
+        assert "120s" in violations[0].message or "119s" in violations[0].message
+
+    def test_down_store_skipped(self, checker):
+        """Down stores are not checked for heartbeat staleness."""
+        stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Down", "last_heartbeat_ts": stale_ts},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+        assert violations == []
+
+    def test_empty_heartbeat_skipped(self, checker):
+        """Stores without heartbeat data are not flagged."""
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": ""},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+        assert violations == []
+
+    def test_missing_heartbeat_key_skipped(self, checker):
+        """Stores without last_heartbeat_ts key are not flagged."""
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+        assert violations == []
+
+    def test_heartbeat_at_threshold_not_violation(self, checker):
+        """Heartbeat exactly at threshold is not a violation (> not >=)."""
+        # Use a custom config with high threshold so 59s is under it
+        config = InvariantConfig(
+            name="stale_heartbeat",
+            grace_period=timedelta(seconds=0),
+            threshold=60.0,
+            severity="critical",
+        )
+        ts = (datetime.now(timezone.utc) - timedelta(seconds=59)).isoformat()
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": ts},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data, config=config)
+        assert violations == []
+
+    def test_clears_when_heartbeat_freshens(self, checker):
+        """Violation tracking clears when heartbeat becomes fresh."""
+        stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+        fresh_ts = (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()
+
+        stores_stale = [{"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": stale_ts}]
+        stores_fresh = [{"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": fresh_ts}]
+
+        violations = checker.check_heartbeat_stale(stores_stale)
+        assert len(violations) == 1
+
+        violations = checker.check_heartbeat_stale(stores_fresh)
+        assert violations == []
+
+    def test_handles_nanosecond_timestamps(self, checker):
+        """PD may return nanosecond-precision timestamps."""
+        # Timestamp with nanoseconds (9 fractional digits)
+        stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120))
+        # Format with nanoseconds manually
+        ts_str = stale_ts.strftime("%Y-%m-%dT%H:%M:%S.") + "123456789+00:00"
+        stores_data = [
+            {"id": "1", "address": "tikv-0:20160", "state": "Up", "last_heartbeat_ts": ts_str},
+        ]
+
+        violations = checker.check_heartbeat_stale(stores_data)
+        assert len(violations) == 1
+
+    def test_default_config_values(self):
+        """Verify default stale heartbeat config."""
+        assert STALE_HEARTBEAT_CONFIG.threshold == 60.0
+        assert STALE_HEARTBEAT_CONFIG.grace_period == timedelta(seconds=0)
+        assert STALE_HEARTBEAT_CONFIG.severity == "critical"

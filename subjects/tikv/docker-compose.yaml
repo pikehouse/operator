@@ -238,7 +238,7 @@ services:
       context: ../..
       dockerfile: subjects/tikv/Dockerfile.operator
     environment:
-      - PD_ENDPOINT=http://pd0:2379
+      - PD_ENDPOINT=http://pd0:2379,http://pd1:2379,http://pd2:2379
       - PROMETHEUS_URL=http://prometheus:9090
     depends_on:
       tikv0:

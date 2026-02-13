@@ -13,7 +13,7 @@ import httpx
 from httpx import Response, Request
 
 from operator_protocols.types import Store
-from tikv_observer.pd_client import PDClient
+from tikv_observer.pd_client import FailoverPDClient, PDClient
 from tikv_observer.types import Region
 
 
@@ -361,3 +361,172 @@ class TestGetRegion:
             client = PDClient(http=http)
             with pytest.raises(httpx.HTTPStatusError):
                 await client.get_region(999)
+
+
+# =============================================================================
+# Heartbeat Tests
+# =============================================================================
+
+
+class TestGetStoreHeartbeats:
+    """Tests for PDClient.get_store_heartbeats() method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_heartbeat_timestamps(self):
+        """get_store_heartbeats returns store_id -> last_heartbeat_ts mapping."""
+        stores_json = {
+            "count": 2,
+            "stores": [
+                {
+                    "store": {"id": 1, "address": "tikv-0:20160", "state_name": "Up"},
+                    "status": {
+                        "capacity": "100GiB",
+                        "leader_count": 10,
+                        "region_count": 30,
+                        "last_heartbeat_ts": "2024-01-15T10:30:00+00:00",
+                    },
+                },
+                {
+                    "store": {"id": 2, "address": "tikv-1:20160", "state_name": "Up"},
+                    "status": {
+                        "capacity": "100GiB",
+                        "leader_count": 12,
+                        "region_count": 28,
+                        "last_heartbeat_ts": "2024-01-15T10:30:05+00:00",
+                    },
+                },
+            ],
+        }
+        transport = MockTransport({"/pd/api/v1/stores": {"json": stores_json}})
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://pd:2379"
+        ) as http:
+            client = PDClient(http=http)
+            heartbeats = await client.get_store_heartbeats()
+
+        assert heartbeats == {
+            "1": "2024-01-15T10:30:00+00:00",
+            "2": "2024-01-15T10:30:05+00:00",
+        }
+
+    @pytest.mark.asyncio
+    async def test_missing_status_returns_empty_string(self):
+        """Stores without status get empty heartbeat string."""
+        stores_json = {
+            "count": 1,
+            "stores": [
+                {
+                    "store": {"id": 1, "address": "tikv-0:20160", "state_name": "Up"},
+                    "status": None,
+                },
+            ],
+        }
+        transport = MockTransport({"/pd/api/v1/stores": {"json": stores_json}})
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://pd:2379"
+        ) as http:
+            client = PDClient(http=http)
+            heartbeats = await client.get_store_heartbeats()
+
+        assert heartbeats == {"1": ""}
+
+
+# =============================================================================
+# Failover Client Tests
+# =============================================================================
+
+
+class FailTransport(httpx.AsyncBaseTransport):
+    """Transport that always raises ConnectError."""
+
+    async def handle_async_request(self, request: Request) -> Response:
+        raise httpx.ConnectError("Connection refused")
+
+
+class TestFailoverPDClient:
+    """Tests for FailoverPDClient."""
+
+    @pytest.mark.asyncio
+    async def test_uses_first_endpoint_when_healthy(self, stores_response):
+        """Uses primary endpoint when it's reachable."""
+        good_transport = MockTransport({
+            "/pd/api/v1/stores": {"json": stores_response}
+        })
+        client = FailoverPDClient.__new__(FailoverPDClient)
+        client._current = 0
+        client._clients = [
+            PDClient(http=httpx.AsyncClient(transport=good_transport, base_url="http://pd0:2379")),
+            PDClient(http=httpx.AsyncClient(transport=good_transport, base_url="http://pd1:2379")),
+        ]
+
+        stores = await client.get_stores()
+        assert len(stores) == 3
+        assert client._current == 0  # Stayed on primary
+
+    @pytest.mark.asyncio
+    async def test_failover_to_second_endpoint(self, stores_response):
+        """Falls over to second endpoint when first fails."""
+        good_transport = MockTransport({
+            "/pd/api/v1/stores": {"json": stores_response}
+        })
+        client = FailoverPDClient.__new__(FailoverPDClient)
+        client._current = 0
+        client._clients = [
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd0:2379")),
+            PDClient(http=httpx.AsyncClient(transport=good_transport, base_url="http://pd1:2379")),
+        ]
+
+        stores = await client.get_stores()
+        assert len(stores) == 3
+        assert client._current == 1  # Moved to second endpoint
+
+    @pytest.mark.asyncio
+    async def test_all_endpoints_down_raises(self):
+        """Raises last error when all endpoints fail."""
+        client = FailoverPDClient.__new__(FailoverPDClient)
+        client._current = 0
+        client._clients = [
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd0:2379")),
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd1:2379")),
+        ]
+
+        with pytest.raises(httpx.ConnectError):
+            await client.get_stores()
+
+    @pytest.mark.asyncio
+    async def test_failover_wraps_around(self, stores_response):
+        """Failover wraps around from last to first endpoint."""
+        good_transport = MockTransport({
+            "/pd/api/v1/stores": {"json": stores_response}
+        })
+        client = FailoverPDClient.__new__(FailoverPDClient)
+        client._current = 2  # Start at last endpoint
+        client._clients = [
+            PDClient(http=httpx.AsyncClient(transport=good_transport, base_url="http://pd0:2379")),
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd1:2379")),
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd2:2379")),
+        ]
+
+        stores = await client.get_stores()
+        assert len(stores) == 3
+        assert client._current == 0  # Wrapped around to first
+
+    @pytest.mark.asyncio
+    async def test_sticks_to_working_endpoint(self, stores_response):
+        """After failover, subsequent calls use the working endpoint."""
+        good_transport = MockTransport({
+            "/pd/api/v1/stores": {"json": stores_response}
+        })
+        client = FailoverPDClient.__new__(FailoverPDClient)
+        client._current = 0
+        client._clients = [
+            PDClient(http=httpx.AsyncClient(transport=FailTransport(), base_url="http://pd0:2379")),
+            PDClient(http=httpx.AsyncClient(transport=good_transport, base_url="http://pd1:2379")),
+        ]
+
+        await client.get_stores()
+        assert client._current == 1
+
+        # Second call should still use endpoint 1
+        await client.get_stores()
+        assert client._current == 1

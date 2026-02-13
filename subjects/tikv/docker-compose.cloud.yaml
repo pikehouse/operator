@@ -28,6 +28,8 @@ services:
 
   pd1:
     image: pingcap/pd:v8.5.5
+    ports:
+      - "2381:2379"
     volumes:
       - pd1-data:/data
     command: >
@@ -48,6 +50,8 @@ services:
 
   pd2:
     image: pingcap/pd:v8.5.5
+    ports:
+      - "2382:2379"
     volumes:
       - pd2-data:/data
     command: >

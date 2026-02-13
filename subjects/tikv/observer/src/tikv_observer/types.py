@@ -77,6 +77,7 @@ class PDStoreStatus(BaseModel):
     available: str = ""
     leader_count: int = 0
     region_count: int = 0
+    last_heartbeat_ts: str = ""  # ISO timestamp, e.g. "2024-01-15T10:30:00Z"
 
 
 class PDStoreItem(BaseModel):

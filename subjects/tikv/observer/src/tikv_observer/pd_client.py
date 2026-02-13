@@ -25,6 +25,9 @@ from tikv_observer.types import (
     RegionId,
 )
 
+# Connection errors that indicate the PD endpoint is unreachable
+_FAILOVER_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
+
 
 @dataclass
 class PDClient:
@@ -253,3 +256,81 @@ class PDClient:
             },
         )
         response.raise_for_status()
+
+    async def get_store_heartbeats(self) -> dict[str, str]:
+        """
+        Get last heartbeat timestamps for all stores.
+
+        Returns:
+            Dict mapping store_id (str) to last_heartbeat_ts (ISO timestamp string).
+            Stores without status or heartbeat data get empty string.
+        """
+        response = await self.http.get("/pd/api/v1/stores")
+        response.raise_for_status()
+
+        data = PDStoresResponse.model_validate(response.json())
+
+        return {
+            str(item.store.id): (
+                item.status.last_heartbeat_ts if item.status else ""
+            )
+            for item in data.stores
+        }
+
+
+class FailoverPDClient:
+    """PDClient wrapper that fails over across multiple PD endpoints.
+
+    Tries each endpoint in round-robin order on connection failure.
+    Once a working endpoint is found, subsequent calls continue using it
+    until it fails, at which point failover resumes.
+    """
+
+    def __init__(self, endpoints: list[str], timeout: float = 10.0):
+        self._clients = [
+            PDClient(http=httpx.AsyncClient(base_url=ep, timeout=timeout))
+            for ep in endpoints
+        ]
+        self._current = 0
+
+    async def _call_with_failover(self, method_name: str, *args, **kwargs):
+        last_error = None
+        for _ in range(len(self._clients)):
+            client = self._clients[self._current]
+            try:
+                return await getattr(client, method_name)(*args, **kwargs)
+            except _FAILOVER_ERRORS as e:
+                last_error = e
+                self._current = (self._current + 1) % len(self._clients)
+        raise last_error  # type: ignore[misc]
+
+    async def get_stores(self) -> list[Store]:
+        return await self._call_with_failover("get_stores")
+
+    async def get_regions(self) -> list[Region]:
+        return await self._call_with_failover("get_regions")
+
+    async def get_region(self, region_id: RegionId) -> Region:
+        return await self._call_with_failover("get_region", region_id)
+
+    async def add_transfer_leader_operator(
+        self, region_id: int, to_store_id: int
+    ) -> None:
+        return await self._call_with_failover(
+            "add_transfer_leader_operator", region_id, to_store_id
+        )
+
+    async def add_transfer_peer_operator(
+        self, region_id: int, from_store_id: int, to_store_id: int
+    ) -> None:
+        return await self._call_with_failover(
+            "add_transfer_peer_operator", region_id, from_store_id, to_store_id
+        )
+
+    async def add_evict_leader_scheduler(self, store_id: int) -> None:
+        return await self._call_with_failover(
+            "add_evict_leader_scheduler", store_id
+        )
+
+    async def get_store_heartbeats(self) -> dict[str, str]:
+        return await self._call_with_failover("get_store_heartbeats")

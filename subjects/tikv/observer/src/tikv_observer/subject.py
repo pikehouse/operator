@@ -92,6 +92,12 @@ class TiKVSubject:
         # Get store states
         stores = await self.pd.get_stores()
 
+        # Get heartbeat timestamps (separate call to same endpoint)
+        try:
+            heartbeats = await self.pd.get_store_heartbeats()
+        except Exception:
+            heartbeats = {}
+
         # Get cluster-level metrics
         cluster_metrics = await self.get_cluster_metrics()
 
@@ -117,7 +123,13 @@ class TiKVSubject:
 
         return {
             "stores": [
-                {"id": s.id, "address": s.address, "state": s.state} for s in stores
+                {
+                    "id": s.id,
+                    "address": s.address,
+                    "state": s.state,
+                    "last_heartbeat_ts": heartbeats.get(s.id, ""),
+                }
+                for s in stores
             ],
             "cluster_metrics": {
                 "store_count": cluster_metrics.store_count,
