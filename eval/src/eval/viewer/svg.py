@@ -7,19 +7,19 @@ Uses fixed layouts with parametric sizing — not a generic graph layout.
 from typing import Any
 from xml.sax.saxutils import escape
 
-# Color palette (Tailwind-inspired)
-COLOR_PD = "#3B82F6"       # blue
-COLOR_TIKV = "#10B981"     # green
-COLOR_OBS = "#8B5CF6"      # purple
-COLOR_OPERATOR = "#F59E0B" # orange
-COLOR_EVAL = "#6B7280"     # gray
-COLOR_DATABASE = "#6366F1" # indigo
-COLOR_APP = "#EC4899"      # pink
-COLOR_OTHER = "#9CA3AF"    # light gray
-COLOR_BORDER = "#D1D5DB"   # gray-300
-COLOR_TEXT = "#374151"      # gray-700
-COLOR_LABEL = "#6B7280"    # gray-500
-COLOR_VM_BG = "#EFF6FF"    # blue-50 tint for VM background
+# Color palette (warm stone)
+COLOR_PD = "#78716c"       # stone-500
+COLOR_TIKV = "#57534e"     # stone-600
+COLOR_OBS = "#a8a29e"      # stone-400
+COLOR_OPERATOR = "#44403c" # stone-700
+COLOR_EVAL = "#a8a29e"     # stone-400
+COLOR_DATABASE = "#78716c" # stone-500
+COLOR_APP = "#78716c"      # stone-500
+COLOR_OTHER = "#d6d3d1"    # stone-300
+COLOR_BORDER = "#d6d3d1"   # stone-300
+COLOR_TEXT = "#1c1917"      # stone-900
+COLOR_LABEL = "#78716c"    # stone-500
+COLOR_VM_BG = "#f5f5f4"    # stone-100 tint for VM background
 
 ROLE_COLORS = {
     "pd": COLOR_PD,
@@ -75,9 +75,9 @@ def _node_svg(x: int, y: int, label: str, role: str, w: int = NODE_W) -> str:
     display = label[:max_chars]
     return (
         f'<rect x="{x}" y="{y}" width="{w}" height="{NODE_H}" rx="{NODE_RX}" '
-        f'fill="{color}10" stroke="{color}" stroke-width="1.5"/>\n'
+        f'fill="white" stroke="{color}" stroke-width="1.5"/>\n'
         f'<text x="{x + w // 2}" y="{y + NODE_H // 2 + 4}" '
-        f'text-anchor="middle" font-size="11" fill="{color}" font-weight="500">'
+        f'text-anchor="middle" font-size="11" fill="{COLOR_TEXT}" font-weight="500">'
         f'{escape(display)}</text>\n'
     )
 
