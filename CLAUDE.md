@@ -187,6 +187,10 @@ uv run pytest subjects/tikv/observer/tests/
 cd eval && uv run pytest tests/
 ```
 
+### Incremental Verification
+
+After each logical change you make, run a quick smoke test or verification before moving to the next change. Don't batch multiple untested changes together. If a test fails, fix it before proceeding.
+
 ### Commit Hygiene
 
 - Commit working code with passing tests
@@ -222,3 +226,23 @@ To understand operator-core, you only need to know:
 - Agent reads tickets and observations to reason about problems
 
 You don't need to know anything about TiKV, PD APIs, Prometheus, or rate limiters.
+
+## Tech Stack
+
+This project is primarily Python. The main stack is: Python, Docker Compose, GCP (Cloud SQL PostgreSQL, Cloud Run), FastAPI. Shell scripts are used for automation but core logic is Python.
+
+## Infrastructure / Environment
+
+Always check Docker first for running services (not tiup, not other tools). The project runs TiKV and other infrastructure in Docker Compose.
+
+## Code Style / Architecture Principles
+
+Prefer simplicity over abstraction. Don't over-engineer with fancy typing, predefined option sets, or complex patterns. Keep things subject-agnostic with strict layer separation. When I say simplify, I mean radically simplify.
+
+## Debugging / Troubleshooting
+
+Before making assumptions about errors or limitations (e.g., billing quotas, resource limits), verify with actual evidence. Don't invent explanations — say 'I'm not sure' if you don't know.
+
+## Testing / Demos
+
+When running demos or smoke tests, always verify the correct container names/filters before executing kill/restart commands. Container name patterns can match unintended services (e.g., PD nodes matching TiKV filters).

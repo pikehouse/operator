@@ -323,30 +323,34 @@ class RemoteOperatorProcesses:
         self._started = True
         console.print("[green]Remote operator started[/green]")
 
-    async def restart_agent(self) -> None:
-        """Restart the agent container to kill any in-progress ticket processing.
+    async def restart_operator(self) -> None:
+        """Restart both monitor and agent containers to clear all in-memory state.
 
-        After force-resolving startup tickets, the agent may still be processing
-        a ticket it picked up before the force-resolve. Restarting the container
-        kills the Claude agent SDK session and lets the agent start fresh with
-        a clean polling loop.
+        After force-resolving startup tickets:
+        - Monitor restart clears the invariant checker's _first_seen dict,
+          preventing immediate re-creation of tickets for lingering violations.
+        - Agent restart kills any in-progress Claude SDK session from startup
+          ticket processing (force-resolve only changes DB, not in-flight work).
+
+        Uses compose restart which preserves volumes and network config.
         """
         exit_code, _, stderr = await self.vm.run_command(
-            f"docker restart {AGENT_CONTAINER}",
-            timeout_sec=30.0,
+            self._compose("restart"),
+            timeout_sec=60.0,
         )
         if exit_code != 0:
-            console.print(f"[yellow]Agent restart failed: {stderr}[/yellow]")
+            console.print(f"[yellow]Operator restart failed: {stderr}[/yellow]")
             return
 
-        # Verify agent is running after restart
-        await asyncio.sleep(3)
-        exit_code, stdout, _ = await self.vm.run_command(
-            f"docker inspect -f '{{{{.State.Running}}}}' {AGENT_CONTAINER} 2>/dev/null",
-            timeout_sec=10.0,
-        )
-        if exit_code != 0 or "true" not in stdout.lower():
-            console.print("[yellow]Agent may not have restarted cleanly[/yellow]")
+        # Wait for both containers to be running
+        await asyncio.sleep(5)
+        for container in (MONITOR_CONTAINER, AGENT_CONTAINER):
+            exit_code, stdout, _ = await self.vm.run_command(
+                f"docker inspect -f '{{{{.State.Running}}}}' {container} 2>/dev/null",
+                timeout_sec=10.0,
+            )
+            if exit_code != 0 or "true" not in stdout.lower():
+                console.print(f"[yellow]{container} may not have restarted cleanly[/yellow]")
 
     async def stop(self) -> None:
         """Stop and remove operator containers via compose down."""

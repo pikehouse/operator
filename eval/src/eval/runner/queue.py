@@ -452,11 +452,14 @@ class WorkQueue:
 
         return {"pending_cancelled": pending, "running_cancelled": running}
 
-    async def retry_failed(self, campaign_id: int | None = None) -> int:
+    async def retry_failed(
+        self, campaign_id: int | None = None, chaos_type: str | None = None
+    ) -> int:
         """Reset failed work items back to pending for retry.
 
         Args:
             campaign_id: Optional campaign to filter by. If None, retries all.
+            chaos_type: Optional chaos type to filter by (e.g., "pd_leader_kill").
 
         Returns:
             Number of items reset.
@@ -464,32 +467,31 @@ class WorkQueue:
         pool = await self.db._get_pool()
 
         async with pool.acquire() as conn:
-            if campaign_id:
-                result = await conn.execute(
-                    """
-                    UPDATE work_queue
-                    SET status = 'pending',
-                        worker_id = NULL,
-                        claimed_at = NULL,
-                        completed_at = NULL,
-                        error = NULL
-                    WHERE status = 'failed'
-                      AND campaign_id = $1
-                    """,
-                    campaign_id,
-                )
-            else:
-                result = await conn.execute(
-                    """
-                    UPDATE work_queue
-                    SET status = 'pending',
-                        worker_id = NULL,
-                        claimed_at = NULL,
-                        completed_at = NULL,
-                        error = NULL
-                    WHERE status = 'failed'
-                    """
-                )
+            # Build query dynamically based on filters
+            conditions = ["status = 'failed'"]
+            params: list[Any] = []
+
+            if campaign_id is not None:
+                params.append(campaign_id)
+                conditions.append(f"campaign_id = ${len(params)}")
+
+            if chaos_type is not None:
+                params.append(chaos_type)
+                conditions.append(f"chaos_type = ${len(params)}")
+
+            where = " AND ".join(conditions)
+            result = await conn.execute(
+                f"""
+                UPDATE work_queue
+                SET status = 'pending',
+                    worker_id = NULL,
+                    claimed_at = NULL,
+                    completed_at = NULL,
+                    error = NULL
+                WHERE {where}
+                """,
+                *params,
+            )
             return int(result.split()[1]) if result else 0
 
     async def release_stale(self, timeout_seconds: int = 3600) -> int:

@@ -1273,19 +1273,16 @@ def show_detail(
 
         # Trial list table
         if trials:
+            from eval.analysis.scoring import score_trial
             print("Trials:")
             # Header: ID(6), Started(20), Resolved(20), Status(10)
             print(f"  {'ID':<6} {'Started':<20} {'Resolved':<20} {'Status':<10}")
             for t in trials:
                 resolved_str = t.resolved_at[:19] if t.resolved_at else "N/A"
                 started_str = t.started_at[:19] if t.started_at else "N/A"
-                # Determine status
-                if t.resolved_at:
-                    status = "Success"
-                elif t.ended_at:
-                    status = "Timeout"
-                else:
-                    status = "Running"
+                # Use scoring logic for consistent status display
+                trial_score = score_trial(t, campaign.subject_name)
+                status = trial_score.outcome.value.capitalize()
                 print(f"  {t.id:<6} {started_str:<20} {resolved_str:<20} {status:<10}")
         else:
             print("No trials recorded.")
@@ -1371,6 +1368,123 @@ def note_cmd(
                 await db.close()
 
     asyncio.run(run())
+
+
+@app.command("logs")
+def logs_cmd(
+    trial_id: int = typer.Argument(..., help="Trial ID to fetch logs for"),
+    container: Optional[str] = typer.Option(
+        None,
+        "--container", "-c",
+        help="Filter by container name (e.g., 'operator-monitor', 'operator-agent')",
+    ),
+    lines: int = typer.Option(
+        100,
+        "--lines", "-n",
+        help="Maximum number of log lines to show",
+    ),
+    remote: bool = typer.Option(
+        False,
+        "--remote",
+        help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)",
+    ),
+) -> None:
+    """Fetch Cloud Logging for a trial's VM.
+
+    Looks up the trial's VM instance name from the work queue, then queries
+    GCP Cloud Logging for container logs from that VM.
+
+    Requires `gcloud` CLI to be configured with access to operator-486214 project.
+
+    Examples:
+        eval logs 278 --remote
+        eval logs 278 --remote --container operator-monitor
+        eval logs 278 --remote -n 200
+    """
+    import subprocess
+
+    if not remote:
+        console.print("[red]Error: logs command requires --remote (cloud trials only)[/red]")
+        raise typer.Exit(1)
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print("[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]")
+        raise typer.Exit(1)
+
+    async def run():
+        from eval.runner.db_postgres import PostgresDB
+        from eval.runner.queue import WorkQueue
+
+        db = PostgresDB(db_url)
+        await db.ensure_schema()
+        queue = WorkQueue(db)
+
+        # Find the work item that produced this trial
+        pool = await db._get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT vm_name, claimed_at, completed_at FROM work_queue WHERE trial_id = $1",
+                trial_id,
+            )
+
+        if not row or not row["vm_name"]:
+            console.print(f"[red]No VM name found for trial {trial_id}[/red]")
+            console.print("[dim]Hint: VM names are only recorded for cloud trials[/dim]")
+            await db.close()
+            raise typer.Exit(1)
+
+        vm_name = row["vm_name"]
+        console.print(f"[dim]VM: {vm_name}[/dim]")
+
+        # Build gcloud logging filter
+        log_filter = (
+            f'resource.type="gce_instance" '
+            f'resource.labels.instance_id="{vm_name}" '
+            f'OR labels."compute.googleapis.com/resource_name"="{vm_name}"'
+        )
+
+        if container:
+            log_filter += f' jsonPayload.container.name="/{container}"'
+
+        # Use timestamp range if available
+        if row["claimed_at"]:
+            # Format as RFC3339 for gcloud
+            start_ts = row["claimed_at"].strftime("%Y-%m-%dT%H:%M:%SZ")
+            log_filter = f'timestamp>="{start_ts}" AND ({log_filter})'
+
+        await db.close()
+        return vm_name, log_filter
+
+    vm_name, log_filter = asyncio.run(run())
+
+    # Run gcloud logging read
+    cmd = [
+        "gcloud", "logging", "read",
+        log_filter,
+        "--project=operator-486214",
+        f"--limit={lines}",
+        "--format=value(timestamp,jsonPayload.container.name,textPayload)",
+        "--order=asc",
+    ]
+
+    console.print(f"[dim]Fetching logs...[/dim]")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            console.print(f"[red]gcloud error: {result.stderr.strip()}[/red]")
+            raise typer.Exit(1)
+        if result.stdout.strip():
+            print(result.stdout)
+        else:
+            console.print(f"[yellow]No logs found for VM {vm_name}[/yellow]")
+            console.print("[dim]Logs may take a few minutes to appear in Cloud Logging[/dim]")
+    except FileNotFoundError:
+        console.print("[red]Error: gcloud CLI not found. Install Google Cloud SDK.[/red]")
+        raise typer.Exit(1)
+    except subprocess.TimeoutExpired:
+        console.print("[red]gcloud command timed out[/red]")
+        raise typer.Exit(1)
 
 
 @app.command("list")
@@ -1959,6 +2073,11 @@ def worker_retry_failed(
         "-c",
         help="Campaign ID to retry (default: all campaigns)",
     ),
+    chaos_type: Optional[str] = typer.Option(
+        None,
+        "--chaos-type",
+        help="Only retry failed items with this chaos type (e.g., 'pd_leader_kill')",
+    ),
     remote: bool = typer.Option(
         False,
         "--remote",
@@ -1971,6 +2090,7 @@ def worker_retry_failed(
 
     Examples:
         eval worker retry-failed --remote --campaign 59
+        eval worker retry-failed --remote --campaign 85 --chaos-type pd_leader_kill
         eval worker retry-failed --remote
     """
     if not remote:
@@ -1992,9 +2112,14 @@ def worker_retry_failed(
         await db.ensure_schema()
         queue = WorkQueue(db)
 
-        retried = await queue.retry_failed(campaign_id=campaign)
+        retried = await queue.retry_failed(
+            campaign_id=campaign, chaos_type=chaos_type
+        )
         if retried:
-            console.print(f"[green]Reset {retried} failed item(s) to pending[/green]")
+            filter_desc = ""
+            if chaos_type:
+                filter_desc = f" ({chaos_type})"
+            console.print(f"[green]Reset {retried} failed item(s){filter_desc} to pending[/green]")
         else:
             console.print("[dim]No failed items to retry[/dim]")
 
