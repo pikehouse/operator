@@ -67,8 +67,8 @@ LOW_DISK_SPACE_CONFIG = InvariantConfig(
 
 LEADER_IMBALANCE_CONFIG = InvariantConfig(
     name="leader_imbalance",
-    grace_period=timedelta(seconds=30),
-    threshold=5.0,  # max - min leader count difference
+    grace_period=timedelta(seconds=15),
+    threshold=2.0,  # max - min leader count difference; triggers when 1 store has 3+ more leaders
     severity="warning",
 )
 
@@ -103,6 +103,13 @@ STALE_HEARTBEAT_CONFIG = InvariantConfig(
     name="stale_heartbeat",
     grace_period=timedelta(seconds=0),  # Immediate — staleness IS the grace
     threshold=60.0,  # seconds since last heartbeat
+    severity="critical",
+)
+
+PD_HEALTH_CONFIG = InvariantConfig(
+    name="pd_health",
+    grace_period=timedelta(seconds=15),  # Brief grace: PD elections take ~5-10s
+    threshold=3.0,  # Expected PD node count
     severity="critical",
 )
 
@@ -210,9 +217,11 @@ class TiKVInvariantChecker:
                 violations.append(violation)
 
         # Check leader balance across cluster
+        # Skip when all counts are 0 — indicates a failed regions query
+        # which would incorrectly clear the grace period timer
         cluster_metrics = observation.get("cluster_metrics", {})
         leader_counts = cluster_metrics.get("leader_count", {})
-        if leader_counts:
+        if leader_counts and any(v > 0 for v in leader_counts.values()):
             violations.extend(self.check_leader_balance(leader_counts))
 
         # Check metrics availability (Up stores missing metrics)
@@ -222,6 +231,11 @@ class TiKVInvariantChecker:
 
         # Check heartbeat staleness (network partition detection)
         violations.extend(self.check_heartbeat_stale(stores_data))
+
+        # Check PD cluster health
+        pd_health = observation.get("pd_health")
+        if pd_health:
+            violations.extend(self.check_pd_health(pd_health))
 
         return violations
 
@@ -639,6 +653,43 @@ class TiKVInvariantChecker:
                 violations.append(violation)
 
         return violations
+
+    def check_pd_health(
+        self,
+        pd_health: dict[str, Any],
+        config: InvariantConfig | None = None,
+    ) -> list[InvariantViolation]:
+        """Check that the PD cluster has all expected nodes healthy.
+
+        Detects when a PD node is killed or unreachable by comparing the
+        number of responsive PD endpoints to the expected total.
+
+        Args:
+            pd_health: Dict with "total" (expected count) and "healthy" (responsive count)
+            config: Optional custom configuration (defaults to PD_HEALTH_CONFIG)
+
+        Returns:
+            List with a single violation if PD cluster is degraded
+        """
+        config = config or PD_HEALTH_CONFIG
+
+        total = pd_health.get("total", 0)
+        healthy = pd_health.get("healthy", 0)
+
+        if total == 0:
+            return []
+
+        is_degraded = healthy < total
+
+        violation = self._check_with_grace_period(
+            config=config,
+            is_violated=is_degraded,
+            message=(
+                f"PD cluster degraded: {healthy}/{total} nodes healthy"
+            ),
+        )
+
+        return [violation] if violation else []
 
     def clear_state(self) -> None:
         """Clear all tracked violation state."""

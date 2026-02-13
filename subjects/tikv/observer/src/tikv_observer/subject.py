@@ -98,6 +98,12 @@ class TiKVSubject:
         except Exception:
             heartbeats = {}
 
+        # Check PD cluster health (probe all endpoints)
+        try:
+            pd_health = await self.pd.check_health()
+        except Exception:
+            pd_health = {}
+
         # Get cluster-level metrics
         cluster_metrics = await self.get_cluster_metrics()
 
@@ -137,6 +143,7 @@ class TiKVSubject:
                 "leader_count": cluster_metrics.leader_count,
             },
             "store_metrics": store_metrics,
+            "pd_health": pd_health,
         }
 
     # -------------------------------------------------------------------------

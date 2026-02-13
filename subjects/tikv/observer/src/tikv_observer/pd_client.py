@@ -277,6 +277,21 @@ class PDClient:
             for item in data.stores
         }
 
+    async def check_health(self) -> dict[str, int]:
+        """Check PD health by probing the health endpoint.
+
+        For a single-endpoint PDClient, returns total=1 and healthy=0 or 1.
+
+        Returns:
+            Dict with "total" and "healthy" counts.
+        """
+        try:
+            response = await self.http.get("/pd/api/v1/health")
+            response.raise_for_status()
+            return {"total": 1, "healthy": 1}
+        except Exception:
+            return {"total": 1, "healthy": 0}
+
 
 class FailoverPDClient:
     """PDClient wrapper that fails over across multiple PD endpoints.
@@ -334,3 +349,28 @@ class FailoverPDClient:
 
     async def get_store_heartbeats(self) -> dict[str, str]:
         return await self._call_with_failover("get_store_heartbeats")
+
+    async def check_health(self) -> dict[str, int]:
+        """Check PD health by probing ALL endpoints independently.
+
+        Unlike other methods that use failover (try until one works),
+        this probes every endpoint to get a count of healthy vs total.
+
+        Returns:
+            Dict with "total" and "healthy" counts.
+        """
+        import asyncio
+
+        async def _probe(client: PDClient) -> bool:
+            try:
+                resp = await client.http.get("/pd/api/v1/health")
+                resp.raise_for_status()
+                return True
+            except Exception:
+                return False
+
+        results = await asyncio.gather(*[_probe(c) for c in self._clients])
+        return {
+            "total": len(self._clients),
+            "healthy": sum(1 for r in results if r),
+        }
