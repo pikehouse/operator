@@ -20,6 +20,7 @@ Metric sources (from RESEARCH.md):
 - CPU: process_cpu_seconds_total
 """
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -91,7 +92,15 @@ class PrometheusClient:
 
         # PITFALL (RESEARCH.md Pitfall 2): Value is string, must convert
         # Format: {"metric": {...}, "value": [timestamp, "string_value"]}
-        return float(results[0]["value"][1])
+        value = float(results[0]["value"][1])
+        # histogram_quantile returns NaN when rate() has no data (e.g., under
+        # heavy latency). float("NaN") is truthy so `NaN or 0.0` silently
+        # passes NaN through, and `NaN > threshold` is always False in Python,
+        # causing invariant checks to miss real problems. Return None so
+        # callers' `or 0.0` fallback works correctly.
+        if math.isnan(value):
+            return None
+        return value
 
     async def get_store_metrics(
         self, store_id: StoreId, store_address: str
@@ -150,6 +159,10 @@ class PrometheusClient:
             f'histogram_quantile(0.99, rate(tikv_raftstore_commit_log_duration_seconds_bucket{{instance=~"{addr_pattern}"}}[1m]))'
         ) or 0.0
 
+        scrape_duration = await self.get_metric_value(
+            f'scrape_duration_seconds{{job="tikv", instance=~"{addr_pattern}"}}'
+        ) or 0.0
+
         return StoreMetrics(
             store_id=store_id,
             qps=qps,
@@ -159,4 +172,5 @@ class PrometheusClient:
             cpu_percent=cpu_percent,
             raft_lag=int(raft_lag_val),
             raft_commit_p99_ms=raft_commit_seconds * 1000,
+            scrape_duration_seconds=scrape_duration,
         )

@@ -92,6 +92,13 @@ HIGH_RAFT_COMMIT_CONFIG = InvariantConfig(
     severity="warning",
 )
 
+HIGH_SCRAPE_DURATION_CONFIG = InvariantConfig(
+    name="high_scrape_duration",
+    grace_period=timedelta(seconds=30),
+    threshold=0.5,  # 500ms; baseline is ~10ms, network latency inflates scrape time
+    severity="warning",
+)
+
 
 class TiKVInvariantChecker:
     """
@@ -172,6 +179,7 @@ class TiKVInvariantChecker:
                 cpu_percent=metrics_data.get("cpu_percent", 0.0),
                 raft_lag=metrics_data.get("raft_lag", 0),
                 raft_commit_p99_ms=metrics_data.get("raft_commit_p99_ms", 0.0),
+                scrape_duration_seconds=metrics_data.get("scrape_duration_seconds", 0.0),
             )
 
             # Check latency invariant
@@ -188,6 +196,10 @@ class TiKVInvariantChecker:
 
             # Check raft commit duration invariant
             if violation := self.check_raft_commit(metrics):
+                violations.append(violation)
+
+            # Check scrape duration invariant (workload-independent)
+            if violation := self.check_scrape_duration(metrics):
                 violations.append(violation)
 
         # Check leader balance across cluster
@@ -452,6 +464,39 @@ class TiKVInvariantChecker:
             message=(
                 f"Store {metrics.store_id} raft commit P99 {metrics.raft_commit_p99_ms:.1f}ms "
                 f"exceeds threshold {config.threshold:.1f}ms"
+            ),
+            store_id=metrics.store_id,
+        )
+
+    def check_scrape_duration(
+        self,
+        metrics: StoreMetrics,
+        config: InvariantConfig | None = None,
+    ) -> InvariantViolation | None:
+        """Check that Prometheus scrape duration is below threshold.
+
+        Scrape duration measures how long Prometheus takes to collect metrics
+        from a TiKV instance. When tc netem adds network latency, scrapes
+        slow down proportionally. This provides workload-independent detection
+        of network degradation (does not require client traffic like YCSB).
+
+        Args:
+            metrics: StoreMetrics with scrape_duration_seconds field
+            config: Optional custom configuration (defaults to HIGH_SCRAPE_DURATION_CONFIG)
+
+        Returns:
+            InvariantViolation if scrape duration exceeds threshold past grace period
+        """
+        config = config or HIGH_SCRAPE_DURATION_CONFIG
+
+        is_high = metrics.scrape_duration_seconds > config.threshold
+
+        return self._check_with_grace_period(
+            config=config,
+            is_violated=is_high,
+            message=(
+                f"Store {metrics.store_id} scrape duration {metrics.scrape_duration_seconds:.3f}s "
+                f"exceeds threshold {config.threshold:.3f}s"
             ),
             store_id=metrics.store_id,
         )

@@ -210,6 +210,18 @@ services:
       dockerfile: Dockerfile.ycsb
     profiles:
       - load
+    entrypoint: ["sh", "-c"]
+    command:
+      - >-
+        go-ycsb load tikv -P /workloads/workloada
+        -p tikv.pd=pd0:2379,pd1:2379,pd2:2379
+        -p recordcount=$${YCSB_RECORD_COUNT:-30000}
+        --threads $${YCSB_THREADS:-4} &&
+        exec go-ycsb run tikv -P /workloads/workloada
+        -p tikv.pd=pd0:2379,pd1:2379,pd2:2379
+        -p operationcount=2147483647
+        --threads $${YCSB_THREADS:-4}
+        --target $${YCSB_TARGET_OPS:-100}
     volumes:
       - ./workloads:/custom-workloads:ro
     depends_on:

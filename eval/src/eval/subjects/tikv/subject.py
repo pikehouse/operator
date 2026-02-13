@@ -160,6 +160,7 @@ class TiKVEvalSubject:
                 if all_healthy:
                     # Additional verification: PD reports 3 stores
                     if await self._verify_stores_up():
+                        await self._scatter_regions()
                         logger.debug("Cluster healthy: all containers running and 3 stores up")
                         return True
                     else:
@@ -429,6 +430,34 @@ class TiKVEvalSubject:
                 }
             ],
         }
+
+    async def _scatter_regions(self) -> None:
+        """Scatter all regions across stores for even leader distribution.
+
+        PD's balance scheduler eventually evens things out, but this
+        accelerates it so every store gets leaders immediately. This ensures
+        gRPC latency metrics are available on all stores (they require
+        client traffic routed through region leaders).
+        """
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"{self.pd_endpoint}/pd/api/v1/regions"
+                )
+                data = resp.json()
+                region_ids = [r["id"] for r in data.get("regions", [])]
+                if not region_ids:
+                    return
+
+                await client.post(
+                    f"{self.pd_endpoint}/pd/api/v1/regions/scatter",
+                    json={"regions_id": region_ids},
+                )
+                logger.debug(f"Scattered {len(region_ids)} regions")
+                # Brief wait for PD to process scatter operations
+                await asyncio.sleep(2.0)
+        except Exception as e:
+            logger.debug(f"Region scatter failed (non-fatal): {e}")
 
     async def _verify_stores_up(self) -> bool:
         """Verify PD reports 3 TiKV stores in Up state."""

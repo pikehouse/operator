@@ -19,6 +19,7 @@ from tikv_observer.invariants import (
     HIGH_LATENCY_CONFIG,
     HIGH_RAFT_COMMIT_CONFIG,
     HIGH_RAFT_LAG_CONFIG,
+    HIGH_SCRAPE_DURATION_CONFIG,
     InvariantConfig,
     LEADER_IMBALANCE_CONFIG,
     LOW_DISK_SPACE_CONFIG,
@@ -725,6 +726,73 @@ class TestCheckMetricsAvailability:
 
 
 # =============================================================================
+# Scrape Duration Tests
+# =============================================================================
+
+
+class TestCheckScrapeDuration:
+    """Tests for InvariantChecker.check_scrape_duration()."""
+
+    def test_normal_scrape_returns_none(self, checker, healthy_metrics):
+        """No violation when scrape duration is low."""
+        violation = checker.check_scrape_duration(healthy_metrics)
+        assert violation is None
+
+    def test_high_scrape_returns_violation(self, checker):
+        """Returns violation when scrape duration exceeds threshold."""
+        config = InvariantConfig(
+            name="high_scrape_duration",
+            grace_period=timedelta(seconds=0),
+            threshold=0.5,
+            severity="warning",
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=0,
+            scrape_duration_seconds=1.2,
+        )
+
+        violation = checker.check_scrape_duration(metrics, config=config)
+
+        assert violation is not None
+        assert violation.invariant_name == "high_scrape_duration"
+        assert violation.store_id == "1"
+        assert "1.200s" in violation.message
+
+    def test_scrape_at_threshold_is_not_violation(self, checker):
+        """Scrape duration exactly at threshold is not a violation (> not >=)."""
+        config = InvariantConfig(
+            name="high_scrape_duration",
+            grace_period=timedelta(seconds=0),
+            threshold=0.5,
+        )
+        metrics = StoreMetrics(
+            store_id="1",
+            qps=1000.0,
+            latency_p99_ms=25.0,
+            disk_used_bytes=30_000_000_000,
+            disk_total_bytes=100_000_000_000,
+            cpu_percent=40.0,
+            raft_lag=0,
+            scrape_duration_seconds=0.5,
+        )
+
+        violation = checker.check_scrape_duration(metrics, config=config)
+        assert violation is None
+
+    def test_default_config_values(self):
+        """Verify default scrape duration config."""
+        assert HIGH_SCRAPE_DURATION_CONFIG.threshold == 0.5
+        assert HIGH_SCRAPE_DURATION_CONFIG.grace_period == timedelta(seconds=30)
+        assert HIGH_SCRAPE_DURATION_CONFIG.severity == "warning"
+
+
+# =============================================================================
 # Integration: check() with new invariants
 # =============================================================================
 
@@ -796,3 +864,26 @@ class TestCheckWithNewInvariants:
         violations = checker.check(observation)
         invariant_names = [v.invariant_name for v in violations]
         assert "metrics_unavailable" in invariant_names
+
+    def test_check_returns_high_scrape_duration_from_observation(self, checker):
+        """check() finds high_scrape_duration from observation dict."""
+        observation = {
+            "stores": [
+                {"id": "1", "address": "tikv-0:20160", "state": "Up"},
+            ],
+            "store_metrics": {
+                "1": {
+                    "qps": 100, "latency_p99_ms": 10, "disk_used_bytes": 10,
+                    "disk_total_bytes": 100, "cpu_percent": 10, "raft_lag": 0,
+                    "scrape_duration_seconds": 1.5,
+                },
+            },
+            "cluster_metrics": {},
+        }
+
+        # Manually expire the grace period
+        checker._first_seen["high_scrape_duration:1"] = datetime.now() - timedelta(seconds=60)
+
+        violations = checker.check(observation)
+        invariant_names = [v.invariant_name for v in violations]
+        assert "high_scrape_duration" in invariant_names

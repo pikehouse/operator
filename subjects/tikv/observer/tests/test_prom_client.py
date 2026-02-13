@@ -295,6 +295,16 @@ async def test_get_store_metrics_aggregates_all_metrics():
                 },
             }
         ),
+        # Scrape duration query
+        'scrape_duration_seconds{job="tikv", instance=~"tikv-0.*"}': MockResponse(
+            {
+                "status": "success",
+                "data": {
+                    "resultType": "vector",
+                    "result": [{"metric": {}, "value": [1234567890.0, "0.012"]}],  # 12ms
+                },
+            }
+        ),
     }
 
     mock_http = MockAsyncClient(mock_responses)
@@ -311,6 +321,7 @@ async def test_get_store_metrics_aggregates_all_metrics():
     assert metrics.cpu_percent == pytest.approx(45.5)
     assert metrics.raft_lag == 42
     assert metrics.raft_commit_p99_ms == pytest.approx(6.0)  # 0.006s * 1000
+    assert metrics.scrape_duration_seconds == pytest.approx(0.012)
 
 
 @pytest.mark.asyncio
@@ -341,6 +352,7 @@ async def test_get_store_metrics_uses_correct_tikv_metric_names():
     assert "process_cpu_seconds_total" in query_text  # CPU
     assert "tikv_raftstore_log_lag" in query_text  # Raft lag
     assert "tikv_raftstore_commit_log_duration_seconds_bucket" in query_text  # Raft commit
+    assert "scrape_duration_seconds" in query_text  # Scrape duration
 
 
 @pytest.mark.asyncio

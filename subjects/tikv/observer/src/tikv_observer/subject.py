@@ -109,6 +109,7 @@ class TiKVSubject:
                         "cpu_percent": metrics.cpu_percent,
                         "raft_lag": metrics.raft_lag,
                         "raft_commit_p99_ms": metrics.raft_commit_p99_ms,
+                        "scrape_duration_seconds": metrics.scrape_duration_seconds,
                     }
                 except Exception:
                     # Skip failed metrics - don't block observation

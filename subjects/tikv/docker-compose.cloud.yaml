@@ -162,7 +162,7 @@ services:
       - >-
         go-ycsb load tikv -P /workloads/workloada
         -p tikv.pd=pd0:2379,pd1:2379,pd2:2379
-        -p recordcount=$${YCSB_RECORD_COUNT:-10000}
+        -p recordcount=$${YCSB_RECORD_COUNT:-30000}
         --threads $${YCSB_THREADS:-4} &&
         exec go-ycsb run tikv -P /workloads/workloada
         -p tikv.pd=pd0:2379,pd1:2379,pd2:2379

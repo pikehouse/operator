@@ -67,6 +67,7 @@ class StoreMetrics:
     cpu_percent: float
     raft_lag: int
     raft_commit_p99_ms: float = 0.0
+    scrape_duration_seconds: float = 0.0
 
 
 @dataclass
