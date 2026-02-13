@@ -1,0 +1,5 @@
+# TiKV configuration for eval clusters
+# Smaller regions create more region leaders for meaningful balance testing
+
+[raftstore]
+region-split-size = "16MiB"

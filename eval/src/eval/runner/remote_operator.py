@@ -114,9 +114,12 @@ class RemoteOperatorProcesses:
             shared_volumes.append(self.workspace_volume_mount)
 
         # Build monitor command
+        # Pass all 3 PD endpoints for failover (enables FailoverPDClient)
+        pd_endpoints = "http://localhost:2379,http://localhost:2381,http://localhost:2382"
         monitor_cmd = (
             f"uv run operator monitor run"
             f" --subject {self.subject_name}"
+            f" --pd {pd_endpoints}"
             f" --db {OPERATOR_DB_PATH}"
             f" --interval 5"
         )
@@ -222,7 +225,8 @@ class RemoteOperatorProcesses:
             timeout_sec=30.0,
         )
 
-        # Create shared data volume (declared external in compose)
+        # Clean data volume from previous trials to prevent stale tickets
+        await self.vm.run_command(f"docker volume rm {DATA_VOLUME} 2>/dev/null || true")
         await self.vm.run_command(f"docker volume create {DATA_VOLUME}")
 
         # Make Docker socket accessible to non-root agent user.
@@ -251,14 +255,29 @@ class RemoteOperatorProcesses:
         # Upload compose file
         await self._upload_compose_file()
 
-        # Pull image via compose
+        # Pull image via compose (retry once on Docker socket errors)
         console.print(f"[dim]Pulling operator image: {self.operator_image}[/dim]")
-        exit_code, stdout, stderr = await self.vm.run_command(
-            self._compose("pull"),
-            timeout_sec=300.0,
-        )
-        if exit_code != 0:
-            raise RuntimeError(f"Failed to pull operator image: {stderr}")
+        for attempt in range(2):
+            exit_code, stdout, stderr = await self.vm.run_command(
+                self._compose("pull"),
+                timeout_sec=300.0,
+            )
+            if exit_code == 0:
+                break
+            # Check if image was actually pulled despite the error
+            # (Docker socket reset can cause non-zero exit after successful pull)
+            check_rc, check_out, _ = await self.vm.run_command(
+                f"docker image inspect {self.operator_image} --format '{{{{.Id}}}}'",
+                timeout_sec=15.0,
+            )
+            if check_rc == 0 and check_out.strip():
+                console.print(f"[dim]Image pulled despite exit code {exit_code}[/dim]")
+                break
+            if attempt == 0:
+                console.print(f"[yellow]Pull attempt 1 failed, retrying...[/yellow]")
+                await asyncio.sleep(5)
+            else:
+                raise RuntimeError(f"Failed to pull operator image: {stderr}")
 
         # Start services — --wait blocks until all healthchecks pass.
         # The monitor's healthcheck confirms operator.db exists, and the
@@ -303,6 +322,31 @@ class RemoteOperatorProcesses:
 
         self._started = True
         console.print("[green]Remote operator started[/green]")
+
+    async def restart_agent(self) -> None:
+        """Restart the agent container to kill any in-progress ticket processing.
+
+        After force-resolving startup tickets, the agent may still be processing
+        a ticket it picked up before the force-resolve. Restarting the container
+        kills the Claude agent SDK session and lets the agent start fresh with
+        a clean polling loop.
+        """
+        exit_code, _, stderr = await self.vm.run_command(
+            f"docker restart {AGENT_CONTAINER}",
+            timeout_sec=30.0,
+        )
+        if exit_code != 0:
+            console.print(f"[yellow]Agent restart failed: {stderr}[/yellow]")
+            return
+
+        # Verify agent is running after restart
+        await asyncio.sleep(3)
+        exit_code, stdout, _ = await self.vm.run_command(
+            f"docker inspect -f '{{{{.State.Running}}}}' {AGENT_CONTAINER} 2>/dev/null",
+            timeout_sec=10.0,
+        )
+        if exit_code != 0 or "true" not in stdout.lower():
+            console.print("[yellow]Agent may not have restarted cleanly[/yellow]")
 
     async def stop(self) -> None:
         """Stop and remove operator containers via compose down."""
@@ -522,7 +566,7 @@ class RemoteOperatorProcesses:
 
         while (asyncio.get_running_loop().time() - start) < timeout_sec:
             result = await self._run_db_query(
-                f"SELECT first_seen_at, resolved_at, status FROM tickets "
+                f"SELECT created_at, resolved_at, status FROM tickets "
                 f"WHERE id > {min_ticket_id} ORDER BY id DESC LIMIT 1"
             )
 
@@ -530,7 +574,7 @@ class RemoteOperatorProcesses:
                 rows = json.loads(result)
                 if rows:
                     row = rows[0]
-                    created = row.get("first_seen_at")
+                    created = row.get("created_at")
                     resolved = row.get("resolved_at")
                     status = row.get("status")
 

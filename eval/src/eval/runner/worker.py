@@ -401,24 +401,23 @@ class Worker:
             # Start operator on VM (if enabled)
             if remote_op:
                 await remote_op.start()
-                # Wait longer than the longest invariant grace period (30s)
-                # so any startup-noise violations create tickets that we can
-                # force-resolve before recording the baseline ticket ID.
-                # Without this, the invariant checker's in-memory _first_seen
-                # state outlives force_resolve (which only clears the DB),
-                # and a new ticket with pre-chaos first_seen_at gets created
-                # after chaos injection — causing false-positive detections
-                # with negative detect times.
+                # Wait longer than the longest invariant grace period so any
+                # startup-noise violations create tickets that we can force-resolve.
                 await asyncio.sleep(40.0)
                 # Clear any startup tickets (including those from grace periods)
                 await remote_op.force_resolve_all_tickets()
-                # Brief settle to catch any stragglers
                 await asyncio.sleep(5.0)
                 settled = await remote_op.force_resolve_all_tickets()
                 if settled > 0:
                     console.log(
                         f"[dim]Resolved {settled} additional startup ticket(s)[/dim]"
                     )
+                # Restart both containers to clear all in-memory state:
+                # - Monitor: clears invariant checker's _first_seen dict so it
+                #   won't immediately re-create tickets for lingering violations
+                # - Agent: kills any in-progress startup ticket processing
+                #   (force-resolve only changes DB, doesn't stop Claude SDK)
+                await remote_op.restart_operator()
                 # Record baseline ticket ID
                 pre_chaos_max_ticket_id = await remote_op.get_max_ticket_id()
                 if pre_chaos_max_ticket_id > 0:
@@ -441,6 +440,14 @@ class Worker:
                 logger.debug(f"Topology capture skipped: {e}")
             # Inject chaos (unless baseline)
             if not baseline and chaos_type != "none":
+                # Re-resolve any tickets that appeared during topology capture
+                # and re-record baseline to prevent pre-chaos ticket race
+                if remote_op:
+                    stale = await remote_op.force_resolve_all_tickets()
+                    if stale > 0:
+                        console.log(f"[dim]Resolved {stale} pre-chaos ticket(s)[/dim]")
+                    pre_chaos_max_ticket_id = await remote_op.get_max_ticket_id()
+
                 console.log(f"[yellow]Injecting chaos: {chaos_type}[/yellow]")
                 chaos_injected_at = await vm_now()
                 chaos_metadata = await subject.inject_chaos(chaos_type, **chaos_params)

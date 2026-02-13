@@ -110,6 +110,14 @@ class GCPTiKVSubject(CloudSubjectBase):
             f"{self.compose_dir}/config/prometheus.yml",
         )
 
+        # Upload TiKV config (smaller regions for meaningful leader balance tests)
+        tikv_config = self._local_compose.parent / "config" / "tikv.toml"
+        if tikv_config.exists():
+            await self.vm.upload_file(
+                str(tikv_config),
+                f"{self.compose_dir}/config/tikv.toml",
+            )
+
         await configure_artifact_registry(self.vm)
 
         # Pull images
@@ -118,7 +126,7 @@ class GCPTiKVSubject(CloudSubjectBase):
             timeout_sec=300.0,
         )
 
-    async def wait_healthy(self, timeout_sec: float = 120.0) -> bool:
+    async def wait_healthy(self, timeout_sec: float = 180.0) -> bool:
         """Wait for TiKV cluster to be healthy.
 
         Checks PD API for store count with progressive backoff.
@@ -130,27 +138,33 @@ class GCPTiKVSubject(CloudSubjectBase):
         while True:
             elapsed = asyncio.get_running_loop().time() - start
             if elapsed >= timeout_sec:
-                logger.warning(f"TiKV health check timed out after {elapsed:.0f}s")
+                print(f"[wait_healthy] TiKV health check timed out after {elapsed:.0f}s")
                 return False
 
             try:
-                exit_code, stdout, _ = await self.vm.run_command(
+                exit_code, stdout, stderr = await self.vm.run_command(
                     f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
                 )
-                if exit_code == 0:
+                if exit_code == 0 and stdout.strip().startswith("{"):
                     data = json.loads(stdout)
-                    stores = data.get("stores", [])
+                    stores = data.get("stores", []) if isinstance(data, dict) else []
                     up_stores = [
                         s for s in stores
-                        if s.get("store", {}).get("state_name") == "Up"
+                        if isinstance(s, dict) and s.get("store", {}).get("state_name") == "Up"
                     ]
                     if len(up_stores) >= 3:
-                        logger.info(f"TiKV healthy: {len(up_stores)} stores up ({elapsed:.0f}s)")
+                        print(f"[wait_healthy] TiKV healthy: {len(up_stores)} stores up ({elapsed:.0f}s)")
                         return True
-                    logger.debug(f"Waiting for stores: {len(up_stores)}/3 up ({elapsed:.0f}s)")
+                    if int(elapsed) % 15 < 5:
+                        store_states = [s.get("store", {}).get("state_name", "?") for s in stores if isinstance(s, dict)]
+                        print(f"[wait_healthy] {elapsed:.0f}s: {len(up_stores)}/3 up, states={store_states}")
+                else:
+                    if int(elapsed) % 15 < 5:
+                        print(f"[wait_healthy] {elapsed:.0f}s: curl rc={exit_code} out={stdout.strip()[:80]}")
 
             except Exception as e:
-                logger.debug(f"Health check error ({elapsed:.0f}s): {e}")
+                if int(elapsed) % 15 < 5:
+                    print(f"[wait_healthy] {elapsed:.0f}s: error: {e}")
 
             # Progressive backoff: 3s early, 5s mid, 10s late
             if elapsed < 30:
@@ -314,7 +328,22 @@ class GCPTiKVSubject(CloudSubjectBase):
                 await self.vm.run_command(f"docker update --restart={original_policy} {target}")
                 await self.vm.run_command(f"docker start {target}")
             elif chaos_type == "leader_concentration":
-                pass  # PD auto-rebalances
+                pd_url = f"http://localhost:{self._pd_port}"
+                # Restore leader-schedule-limit (default is 4)
+                await self.vm.run_command(
+                    f'curl -s -X POST {pd_url}/pd/api/v1/config '
+                    f'-d \'{{"schedule.leader-schedule-limit": 4}}\''
+                )
+                # Remove evict-leader-schedulers
+                for sid in chaos_metadata.get("evicted_stores", []):
+                    await self.vm.run_command(
+                        f"curl -s -X DELETE {pd_url}/pd/api/v1/schedulers/evict-leader-scheduler-{sid}"
+                    )
+                # Re-enable balance-leader-scheduler
+                await self.vm.run_command(
+                    f"curl -s -X POST {pd_url}/pd/api/v1/schedulers "
+                    f'-d \'{{"name": "balance-leader-scheduler"}}\''
+                )
         except Exception as e:
             logger.debug(f"Cleanup note: {e}")
 
@@ -355,13 +384,26 @@ class GCPTiKVSubject(CloudSubjectBase):
         }
 
     async def _inject_network_partition(self, target: str) -> dict[str, Any]:
-        """Inject network partition (block peer communication)."""
-        # Block all traffic to other containers
+        """Inject network partition (block peer AND PD communication).
+
+        Blocks traffic to both TiKV peers (port 20160) and PD nodes
+        (port 2379), causing the isolated node to lose both Raft
+        replication and PD heartbeats. PD will mark the store as
+        Disconnected/Down after missing heartbeats.
+        """
+        # Block TiKV peer traffic (Raft replication)
         await self.vm.run_command(
             f"docker exec {target} iptables -I OUTPUT -p tcp --dport 20160 -j DROP"
         )
         await self.vm.run_command(
             f"docker exec {target} iptables -I INPUT -p tcp --sport 20160 -j DROP"
+        )
+        # Block PD traffic (heartbeats, region reporting)
+        await self.vm.run_command(
+            f"docker exec {target} iptables -I OUTPUT -p tcp --dport 2379 -j DROP"
+        )
+        await self.vm.run_command(
+            f"docker exec {target} iptables -I INPUT -p tcp --sport 2379 -j DROP"
         )
         return {"chaos_type": "network_partition", "target_container": target}
 
@@ -536,42 +578,111 @@ class GCPTiKVSubject(CloudSubjectBase):
         }
 
     async def _inject_leader_concentration(self) -> dict[str, Any]:
-        """Transfer all region leaders to one store via PD API."""
-        # Get stores
-        exit_code, stdout, _ = await self.vm.run_command(
-            f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
+        """Transfer all region leaders to one store via PD API.
+
+        Disables leader scheduling via PD config (leader-schedule-limit=0)
+        AND removes balance-leader-scheduler. The config limit is more
+        reliable because PD auto-recreates deleted schedulers.
+        """
+        pd_url = f"http://localhost:{self._pd_port}"
+
+        # Set leader-schedule-limit to 0 — prevents PD from creating any
+        # leader transfer operators, even if balance-leader-scheduler is recreated
+        await self.vm.run_command(
+            f'curl -s -X POST {pd_url}/pd/api/v1/config '
+            f'-d \'{{"schedule.leader-schedule-limit": 0}}\''
         )
+        print("[leader_concentration] Set leader-schedule-limit=0")
+
+        # Also delete balance-leader-scheduler for belt-and-suspenders
+        del_rc, del_out, del_err = await self.vm.run_command(
+            f"curl -s -X DELETE {pd_url}/pd/api/v1/schedulers/balance-leader-scheduler"
+        )
+        print(f"[leader_concentration] DELETE balance-leader-scheduler: rc={del_rc} out={del_out.strip()!r} err={del_err.strip()!r}")
+
+        # Get stores
+        exit_code, stdout, stderr = await self.vm.run_command(
+            f"curl -s {pd_url}/pd/api/v1/stores"
+        )
+        print(f"[leader_concentration] GET stores: rc={exit_code} len={len(stdout)}")
         stores = json.loads(stdout).get("stores", []) if exit_code == 0 else []
         up_stores = [
             s for s in stores
             if s.get("store", {}).get("state_name") == "Up"
         ]
+        print(f"[leader_concentration] Up stores: {[s['store']['id'] for s in up_stores]}")
         if not up_stores:
             raise RuntimeError("No Up stores")
 
         target_store_id = up_stores[0]["store"]["id"]
+        evicted_stores = []
 
-        # Get all regions and transfer leaders
+        # Add evict-leader-scheduler for all OTHER stores (moves leaders away)
+        for store in up_stores:
+            sid = store["store"]["id"]
+            if sid != target_store_id:
+                evict_rc, evict_out, evict_err = await self.vm.run_command(
+                    f"curl -s -X POST {pd_url}/pd/api/v1/schedulers "
+                    f'-d \'{{"name": "evict-leader-scheduler", "store_id": {sid}}}\''
+                )
+                print(f"[leader_concentration] POST evict-leader-scheduler store={sid}: rc={evict_rc} out={evict_out.strip()!r}")
+                evicted_stores.append(sid)
+
+        # Also transfer leaders via operator API for immediate effect
         exit_code, stdout, _ = await self.vm.run_command(
-            f"curl -s http://localhost:{self._pd_port}/pd/api/v1/regions"
+            f"curl -s {pd_url}/pd/api/v1/regions"
         )
         regions = json.loads(stdout).get("regions", []) if exit_code == 0 else []
+        print(f"[leader_concentration] Found {len(regions)} regions for leader transfer to store {target_store_id}")
 
         transferred = 0
         for region in regions:
             region_id = region.get("id")
             leader = region.get("leader", {})
             if leader.get("store_id") != target_store_id:
-                await self.vm.run_command(
-                    f"curl -s -X POST http://localhost:{self._pd_port}/pd/api/v1/operators "
+                tr_rc, tr_out, _ = await self.vm.run_command(
+                    f"curl -s -X POST {pd_url}/pd/api/v1/operators "
                     f'-d \'{{"name": "transfer-leader", "region_id": {region_id}, "to_store_id": {target_store_id}}}\''
                 )
+                if transferred < 3:  # Log first few transfers
+                    print(f"[leader_concentration] transfer-leader region={region_id}: rc={tr_rc} out={tr_out.strip()!r}")
                 transferred += 1
+
+        print(f"[leader_concentration] Transferred {transferred}/{len(regions)} region leaders to store {target_store_id}")
+
+        # Wait for evict-leader-schedulers to take effect
+        print(f"[leader_concentration] Waiting 15s for schedulers to take effect...")
+        await asyncio.sleep(15)
+
+        # Verify leader distribution after injection
+        _, regions_out, _ = await self.vm.run_command(
+            f"curl -s {pd_url}/pd/api/v1/regions"
+        )
+        try:
+            post_regions = json.loads(regions_out).get("regions", [])
+            leader_dist: dict[int, int] = {}
+            for r in post_regions:
+                lid = r.get("leader", {}).get("store_id")
+                if lid:
+                    leader_dist[lid] = leader_dist.get(lid, 0) + 1
+            print(f"[leader_concentration] POST-INJECTION leader distribution: {leader_dist}")
+        except Exception as e:
+            print(f"[leader_concentration] ERROR verifying distribution: {e}")
+            leader_dist = {}
+
+        # Verify schedulers are active
+        _, sched_out, _ = await self.vm.run_command(
+            f"curl -s {pd_url}/pd/api/v1/schedulers"
+        )
+        print(f"[leader_concentration] Active schedulers: {sched_out.strip()[:300]}")
 
         return {
             "chaos_type": "leader_concentration",
             "target_store_id": target_store_id,
             "regions_transferred": transferred,
+            "evicted_stores": evicted_stores,
+            "total_regions": len(regions),
+            "post_leader_dist": leader_dist,
         }
 
 

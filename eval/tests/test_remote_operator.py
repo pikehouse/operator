@@ -424,7 +424,7 @@ class TestRemoteOperatorTicketResolution:
         vm.set_response(
             "python3",
             0,
-            '[{"first_seen_at": "2025-01-01T00:00:10+00:00", '
+            '[{"created_at": "2025-01-01T00:00:10+00:00", '
             '"resolved_at": "2025-01-01T00:01:00+00:00", '
             '"status": "resolved"}]',
         )
@@ -468,7 +468,7 @@ class TestRemoteOperatorTicketResolution:
         vm.set_response(
             "python3",
             0,
-            '[{"first_seen_at": "2025-01-01T00:00:10+00:00", '
+            '[{"created_at": "2025-01-01T00:00:10+00:00", '
             '"resolved_at": null, '
             '"status": "open"}]',
         )
@@ -521,9 +521,9 @@ class TestOperatorTrialIntegration:
             vm.set_response("MAX(id)", 0, '[{"max_id": 0}]')
             # wait_for_ticket_resolution finds resolved ticket
             vm.set_response(
-                "first_seen_at",
+                "created_at",
                 0,
-                '[{"first_seen_at": "2025-01-01T00:00:10+00:00", '
+                '[{"created_at": "2025-01-01T00:00:10+00:00", '
                 '"resolved_at": "2025-01-01T00:01:00+00:00", '
                 '"status": "resolved"}]',
             )
@@ -577,9 +577,9 @@ class TestOperatorTrialIntegration:
 
             # Ticket exists but not resolved
             vm.set_response(
-                "first_seen_at",
+                "created_at",
                 0,
-                '[{"first_seen_at": "2025-01-01T00:00:10+00:00", '
+                '[{"created_at": "2025-01-01T00:00:10+00:00", '
                 '"resolved_at": null, '
                 '"status": "open"}]',
             )

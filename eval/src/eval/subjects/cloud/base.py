@@ -182,10 +182,16 @@ class CloudSubjectBase(ABC):
         await self.vm.run_command("docker network prune -f")
 
         # Up and wait (TiKV healthchecks can take 55s+ so allow generous timeout)
-        await self.vm.run_command(
+        rc, out, err = await self.vm.run_command(
             f"cd {self.compose_file} && {self.docker_compose_cmd} -p {self.project_name} up -d --wait",
             timeout_sec=180.0,
         )
+        if rc != 0:
+            print(f"[reset] compose up failed: rc={rc}")
+            print(f"[reset] stdout: {out.strip()[-500:]}")
+            print(f"[reset] stderr: {err.strip()[-500:]}")
+        else:
+            print(f"[reset] compose up completed: rc={rc}")
 
     async def wait_healthy(self, timeout_sec: float = 60.0) -> bool:
         """Wait for subject to be healthy on the VM.
