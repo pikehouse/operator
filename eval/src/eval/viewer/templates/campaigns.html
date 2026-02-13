@@ -2,42 +2,49 @@
 
 {% block title %}Campaigns - Eval Viewer{% endblock %}
 
-{% block content %}
-<h1 class="text-2xl font-bold mb-4">Campaigns</h1>
+{% block page_header %}
+<div class="bg-stone-900 px-4 py-8">
+    <div class="container mx-auto">
+        <h1 class="text-2xl font-bold text-stone-50">Campaigns</h1>
+        <p class="text-stone-400 text-sm mt-1">All evaluation campaigns</p>
+    </div>
+</div>
+{% endblock %}
 
+{% block content %}
 {% if campaigns %}
-<div class="bg-white shadow rounded overflow-hidden">
+<div class="bg-white border border-stone-200 rounded-lg overflow-hidden mt-6">
     <table class="min-w-full">
-        <thead class="bg-gray-50">
+        <thead class="bg-[#faf9f7]">
             <tr>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">ID</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Name</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Subject</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Trials</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Baseline</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Commit</th>
-                <th class="px-4 py-2 text-left text-sm font-medium text-gray-500">Created</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">ID</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Name</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Subject</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Trials</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Baseline</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Commit</th>
+                <th class="px-4 py-2.5 text-left text-xs font-semibold text-stone-500 uppercase tracking-wide">Created</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
+        <tbody class="divide-y divide-stone-200">
             {% for campaign in campaigns %}
-            <tr class="hover:bg-gray-50">
-                <td class="px-4 py-2">
-                    <a href="/campaign/{{ campaign.id }}" class="text-blue-600 hover:underline">{{ campaign.id }}</a>
+            <tr class="hover:bg-stone-50 transition-colors">
+                <td class="px-4 py-2.5">
+                    <a href="/campaign/{{ campaign.id }}" class="text-stone-900 font-semibold hover:text-stone-600 transition-colors">{{ campaign.id }}</a>
                 </td>
-                <td class="px-4 py-2"{% if campaign.notes %} title="{{ campaign.notes }}"{% endif %}>{% if campaign.notable %}<span class="text-amber-500 font-bold" title="Notable">&#9670;</span> {% endif %}{{ campaign.name }}</td>
-                <td class="px-4 py-2">{{ campaign.subject_name }}</td>
-                <td class="px-4 py-2">{{ campaign.trial_count }}</td>
-                <td class="px-4 py-2">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
-                <td class="px-4 py-2 text-gray-400 text-xs font-mono">{% if campaign.git_commit_hash %}{{ campaign.git_commit_hash[:8] }}{% endif %}</td>
-                <td class="px-4 py-2 text-gray-500 text-sm"><time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time></td>
+                <td class="px-4 py-2.5"{% if campaign.notes %} title="{{ campaign.notes }}"{% endif %}>{% if campaign.notable %}<span class="text-amber-500 font-bold" title="Notable">&#9670;</span> {% endif %}{{ campaign.name }}</td>
+                <td class="px-4 py-2.5 text-stone-600">{{ campaign.subject_name }}</td>
+                <td class="px-4 py-2.5 text-stone-600">{{ campaign.trial_count }}</td>
+                <td class="px-4 py-2.5 text-stone-500">{% if campaign.baseline %}Yes{% else %}No{% endif %}</td>
+                <td class="px-4 py-2.5 text-stone-400 text-xs font-mono">{% if campaign.git_commit_hash %}{{ campaign.git_commit_hash[:8] }}{% endif %}</td>
+                <td class="px-4 py-2.5 text-stone-500 text-sm"><time datetime="{{ campaign.created_at }}">{{ campaign.created_at[:19] }}</time></td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
 {% else %}
-<div class="bg-white shadow rounded p-4 text-gray-500">
+<div class="bg-white border border-stone-200 rounded-lg p-6 text-stone-500 mt-6">
     No campaigns found. Run some evaluations first.
 </div>
 {% endif %}

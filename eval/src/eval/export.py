@@ -271,16 +271,19 @@ async def build_export_data(
 
 _CSS = """\
 :root {
-  --bg: #ffffff;
-  --bg-alt: #f9fafb;
-  --bg-hover: #f3f4f6;
-  --border: #e5e7eb;
-  --border-dark: #d1d5db;
-  --text: #111827;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --green: #059669;
-  --green-bg: #ecfdf5;
+  --bg: #faf9f7;
+  --bg-card: #ffffff;
+  --bg-hover: #f5f5f4;
+  --border: #e7e5e4;
+  --border-dark: #d6d3d1;
+  --text: #1c1917;
+  --text-secondary: #78716c;
+  --text-muted: #a8a29e;
+  --header-bg: #1c1917;
+  --header-text: #fafaf9;
+  --header-muted: #a8a29e;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
   --red: #dc2626;
   --red-bg: #fef2f2;
   --blue: #2563eb;
@@ -288,54 +291,87 @@ _CSS = """\
   --orange: #d97706;
   --orange-bg: #fffbeb;
   --purple: #7c3aed;
-  --diff-add-bg: #dcfce7;
-  --diff-add-text: #166534;
-  --diff-del-bg: #fee2e2;
-  --diff-del-text: #991b1b;
-  --diff-hunk-bg: #ede9fe;
-  --diff-hunk-text: #5b21b6;
+  --code-bg: #1c1917;
+  --code-text: #e7e5e4;
+  --diff-add-bg: rgba(22, 163, 74, 0.15);
+  --diff-add-text: #4ade80;
+  --diff-del-bg: rgba(220, 38, 38, 0.15);
+  --diff-del-text: #f87171;
+  --diff-hunk-bg: rgba(124, 58, 237, 0.15);
+  --diff-hunk-text: #c4b5fd;
 }
 *, *::before, *::after { box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--text); background: var(--bg);
-  margin: 0; padding: 24px; line-height: 1.5;
+  margin: 0; padding: 0; line-height: 1.6;
+}
+.page-body {
+  max-width: 1200px; margin: 0 auto; padding: 24px;
+}
+.page-header {
+  background: var(--header-bg); color: var(--header-text);
+  padding: 32px 24px; margin-bottom: 0;
+}
+.page-header-inner {
   max-width: 1200px; margin: 0 auto;
 }
-h1 { font-size: 1.5rem; margin: 0 0 4px; }
-h2 { font-size: 1.15rem; margin: 24px 0 12px; color: var(--text); }
-h3 { font-size: 1rem; margin: 16px 0 8px; }
+.page-header h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--header-text); font-weight: 700; letter-spacing: -0.01em; }
+.page-header .meta { color: var(--header-muted); font-size: 0.875rem; }
+h2 { font-size: 1.15rem; margin: 24px 0 12px; color: var(--text); font-weight: 600; }
+h3 { font-size: 1rem; margin: 16px 0 8px; font-weight: 600; }
 .meta { color: var(--text-secondary); font-size: 0.875rem; }
 .badge {
-  display: inline-block; padding: 2px 8px; border-radius: 9999px;
-  font-size: 0.75rem; font-weight: 600;
+  display: inline-block; padding: 2px 10px; border-radius: 6px;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.01em;
 }
 .badge-success { background: var(--green-bg); color: var(--green); }
 .badge-timeout { background: var(--red-bg); color: var(--red); }
 .badge-baseline { background: var(--blue-bg); color: var(--blue); }
 .stats-bar {
-  display: flex; gap: 24px; flex-wrap: wrap;
-  padding: 16px; background: var(--bg-alt); border: 1px solid var(--border);
-  border-radius: 8px; margin: 16px 0;
+  display: flex; gap: 16px; flex-wrap: wrap;
+  padding: 0; background: none; border: none;
+  margin: 16px 0;
 }
-.stat { text-align: center; }
-.stat-value { font-size: 1.5rem; font-weight: 700; }
-.stat-label { font-size: 0.75rem; color: var(--text-secondary); }
+.stat {
+  text-align: center; flex: 1; min-width: 120px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 12px;
+  border-top: 3px solid var(--border-dark);
+}
+.stat:nth-child(1) { border-top-color: var(--green); }
+.stat:nth-child(2) { border-top-color: var(--blue); }
+.stat:nth-child(3) { border-top-color: var(--orange); }
+.stat:nth-child(4) { border-top-color: var(--purple); }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: var(--text); }
+.stat-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
 .topology-svg { margin: 16px 0; overflow-x: auto; }
 .topology-svg svg { max-width: 100%; height: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border-dark); color: var(--text-secondary); font-weight: 600; }
-td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
-tr.clickable { cursor: pointer; }
+table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden;
+}
+th {
+  text-align: left; padding: 10px 12px;
+  border-bottom: 2px solid var(--border-dark);
+  color: var(--text-secondary); font-weight: 600; font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.03em;
+  background: var(--bg);
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tr.clickable { cursor: pointer; transition: background 0.1s; }
 tr.clickable:hover { background: var(--bg-hover); }
-tr.selected { background: var(--blue-bg); }
+tr.selected { background: #f5f3ff; }
 .group-header td {
-  padding: 12px 12px 4px; font-weight: 600; font-size: 0.8rem;
+  padding: 14px 12px 6px; font-weight: 600; font-size: 0.8rem;
   color: var(--text-secondary); border-bottom: none;
+  text-transform: uppercase; letter-spacing: 0.03em;
 }
 .detail-panel {
-  margin-top: 24px; padding: 20px; border: 1px solid var(--border);
-  border-radius: 8px; background: var(--bg-alt); display: none;
+  margin-top: 24px; padding: 24px;
+  border: 1px solid var(--border); border-left: 3px solid var(--blue);
+  border-radius: 8px; background: var(--bg-card); display: none;
 }
 .detail-panel.visible { display: block; }
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -344,44 +380,45 @@ tr.selected { background: var(--blue-bg); }
 details { margin: 4px 0; }
 details > summary {
   cursor: pointer; font-weight: 600; font-size: 0.875rem;
-  padding: 6px 0; color: var(--text);
+  padding: 8px 0; color: var(--text);
   list-style: none;
 }
-details > summary::before { content: '\\25B6  '; font-size: 0.7rem; }
+details > summary::before { content: '\\25B6  '; font-size: 0.7rem; color: var(--text-muted); }
 details[open] > summary::before { content: '\\25BC  '; }
 .cmd-list { margin: 0; padding: 0; list-style: none; }
-.cmd-item { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.cmd-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .cmd-command {
   font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
-  font-size: 0.8rem; background: var(--bg); padding: 4px 8px;
-  border-radius: 4px; display: block; word-break: break-all;
-  border: 1px solid var(--border);
+  font-size: 0.8rem; background: var(--code-bg); color: var(--code-text);
+  padding: 6px 10px; border-radius: 6px; display: block; word-break: break-all;
 }
 .cmd-reasoning {
   font-size: 0.8rem; color: var(--text-secondary);
-  margin-top: 4px; font-style: italic;
+  margin-top: 6px; font-style: italic;
 }
 .elapsed-badge {
   font-size: 0.7rem; color: var(--text-muted);
-  background: var(--bg-alt); padding: 1px 6px; border-radius: 4px;
-  margin-left: 8px;
+  background: var(--bg); padding: 1px 6px; border-radius: 4px;
+  margin-left: 8px; border: 1px solid var(--border);
 }
-.reasoning-entry { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.reasoning-entry {
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
 .reasoning-type {
   font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-muted); letter-spacing: 0.03em;
 }
 .reasoning-content {
-  font-size: 0.85rem; margin-top: 2px; white-space: pre-wrap;
-  word-break: break-word;
+  font-size: 0.85rem; margin-top: 4px; white-space: pre-wrap;
+  word-break: break-word; color: var(--text);
 }
 .diff-block {
   font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
   font-size: 0.8rem; line-height: 1.6; overflow-x: auto;
-  border: 1px solid var(--border); border-radius: 4px;
-  background: var(--bg); padding: 0;
+  border-radius: 8px;
+  background: var(--code-bg); padding: 0;
 }
-.diff-line { padding: 0 12px; margin: 0; white-space: pre; }
+.diff-line { padding: 0 12px; margin: 0; white-space: pre; color: var(--code-text); }
 .diff-add { background: var(--diff-add-bg); color: var(--diff-add-text); }
 .diff-del { background: var(--diff-del-bg); color: var(--diff-del-text); }
 .diff-hunk { background: var(--diff-hunk-bg); color: var(--diff-hunk-text); font-weight: 600; }
@@ -390,8 +427,8 @@ details[open] > summary::before { content: '\\25BC  '; }
 .db-change-del { color: var(--red); }
 .db-change-mod { color: var(--orange); }
 .conclusion-box {
-  padding: 12px; background: var(--green-bg); border: 1px solid var(--green);
-  border-radius: 6px; font-size: 0.9rem;
+  padding: 14px 16px; background: var(--green-bg); border: 1px solid var(--green);
+  border-radius: 8px; font-size: 0.9rem;
 }
 .conclusion-box.timeout {
   background: var(--red-bg); border-color: var(--red);
@@ -407,13 +444,16 @@ details[open] > summary::before { content: '\\25BC  '; }
 .bh-trial-id { font-family: monospace; font-size: 0.8rem; width: 48px; flex-shrink: 0; }
 .bh-outcome { flex-shrink: 0; margin-left: auto; }
 @media print {
-  body { max-width: 100%; padding: 12px; }
+  body { background: #fff; }
+  .page-body { max-width: 100%; padding: 12px; }
+  .page-header { background: #1c1917; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .detail-panel { display: block !important; break-inside: avoid; }
   tr.clickable:hover { background: none; }
 }
 @media (max-width: 768px) {
   .detail-grid { grid-template-columns: 1fr; }
-  .stats-bar { gap: 16px; }
+  .stats-bar { gap: 12px; }
+  .stat { min-width: 100px; }
 }
 """
 
@@ -713,7 +753,11 @@ def render_html(data: dict[str, Any]) -> str:
 </head>
 <body>
 
-<div id="campaign-header"></div>
+<div class="page-header">
+  <div class="page-header-inner" id="campaign-header"></div>
+</div>
+
+<div class="page-body">
 <div id="summary-stats" class="stats-bar"></div>
 <div id="topology" class="topology-svg"></div>
 <div id="behavior-swimlane" style="display:none"></div>
@@ -730,6 +774,7 @@ def render_html(data: dict[str, Any]) -> str:
 </table>
 
 <div id="detail-panel" class="detail-panel"></div>
+</div>
 
 <script>window.__EXPORT_DATA__ = {json_blob};</script>
 <script>{_JS}</script>
