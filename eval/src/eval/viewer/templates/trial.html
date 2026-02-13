@@ -122,7 +122,7 @@
             {% if monitor_detection.violation_details %}
             <div class="mt-2">
                 <dt class="text-stone-400 mb-1">Details:</dt>
-                <dd class="bg-stone-900 text-stone-200 p-2.5 rounded-md text-xs font-mono overflow-x-auto">{{ monitor_detection.violation_details }}</dd>
+                <dd class="bg-stone-800 text-stone-300 p-2.5 rounded-md text-xs font-mono overflow-x-auto">{{ monitor_detection.violation_details }}</dd>
             </div>
             {% endif %}
         </dl>
@@ -197,11 +197,11 @@
             <div class="text-sm text-stone-500 italic mb-1">{{ entry.reasoning }}</div>
             {% endif %}
             {% if entry.entry_type == 'tool_call' and entry.command %}
-            <div class="font-mono text-sm text-stone-200 bg-stone-900 rounded-md p-2.5 overflow-x-auto">{{ entry.command }}</div>
+            <div class="font-mono text-[0.7rem] leading-relaxed text-stone-300 bg-stone-800 rounded-md p-2.5 overflow-x-auto">{{ entry.command }}</div>
             {% elif entry.content %}
             <details class="text-sm text-stone-700">
                 <summary class="cursor-pointer hover:text-stone-900 transition-colors">{{ entry.content[:200] }}{% if entry.content|length > 200 %}...{% endif %}</summary>
-                <pre class="mt-2 p-2.5 bg-stone-900 text-stone-200 rounded-md text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
+                <pre class="mt-2 p-2.5 bg-stone-800 text-stone-300 rounded-md text-xs overflow-x-auto whitespace-pre-wrap">{{ entry.content }}</pre>
             </details>
             {% endif %}
         </div>
@@ -237,7 +237,7 @@
                 {{ cmd.reasoning }}
             </div>
             {% endif %}
-            <div class="bg-stone-900 text-stone-200 p-2.5 font-mono text-sm overflow-x-auto">
+            <div class="bg-stone-800 text-stone-300 p-2.5 font-mono text-[0.7rem] leading-relaxed overflow-x-auto">
                 {{ cmd.command }}
             </div>
         </div>
@@ -246,7 +246,7 @@
     {% elif commands %}
     <div class="space-y-2">
         {% for cmd in commands %}
-        <div class="bg-stone-900 text-stone-200 p-2.5 rounded-lg font-mono text-sm overflow-x-auto">
+        <div class="bg-stone-800 text-stone-300 p-2.5 rounded-lg font-mono text-[0.7rem] leading-relaxed overflow-x-auto">
             {% if cmd is string %}
             {{ cmd }}
             {% else %}
@@ -277,7 +277,7 @@
     {% if code_workspace is mapping and code_workspace.log %}
     <div class="mb-3">
         <h3 class="text-sm font-medium text-stone-500 mb-1">Git Log</h3>
-        <pre class="bg-stone-900 text-stone-200 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">{{ code_workspace.log }}</pre>
+        <pre class="bg-stone-800 text-stone-300 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">{{ code_workspace.log }}</pre>
     </div>
     {% endif %}
 
@@ -288,7 +288,7 @@
             <summary class="cursor-pointer text-sm text-stone-500 hover:text-stone-700 mb-1 transition-colors">
                 {{ code_diff.strip().split('\n') | length }} lines (click to expand)
             </summary>
-            <div class="bg-stone-900 rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-96 overflow-y-auto">
+            <div class="bg-stone-800 rounded-lg p-3 text-xs font-mono overflow-x-auto max-h-96 overflow-y-auto">
                 {% for line in code_diff.split('\n') %}
                 <div class="{% if line.startswith('+') and not line.startswith('+++') %}text-green-400{% elif line.startswith('-') and not line.startswith('---') %}text-red-400{% elif line.startswith('@@') %}text-purple-400{% elif line.startswith('diff ') or line.startswith('index ') %}text-amber-400{% else %}text-stone-300{% endif %} whitespace-pre">{{ line }}</div>
                 {% endfor %}
