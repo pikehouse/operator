@@ -1,0 +1,25 @@
+name: chatdb-notification-validation
+subjects: [chat-db-app]
+chaos_types:
+  - type: correlated_subquery
+  - type: notification_fanout
+  - type: notification_counter
+  - type: notification_realtime
+  - type: notification_poll_idle
+  - type: notification_mark_read
+  - type: notification_n_plus_one
+  - type: notification_payload
+  - type: notification_cleanup
+  - type: notification_serialize
+trials_per_combination: 1
+parallel: 3
+cooldown_seconds: 15
+
+cloud:
+  provider: gcp
+  project: null
+  zone: us-central1-a
+  machine_type: e2-standard-2
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
