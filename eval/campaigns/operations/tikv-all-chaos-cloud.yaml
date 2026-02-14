@@ -38,10 +38,10 @@ chaos_types:
   # Move all region leaders onto one store
   - type: leader_concentration
 
-  # Fill tmpfs to trigger disk pressure (cloud only)
-  - type: disk_pressure
+  # disk_pressure: removed — no invariant detects filesystem-level pressure
+  # (monitor checks tikv_store_size_bytes, not filesystem usage)
 
-# Note: memory_exhaustion and cpu_starvation are not yet implemented in chaos.py.
+  # memory_exhaustion, cpu_starvation: not yet implemented in chaos.py
 
 trials_per_combination: 3
 parallel: 1

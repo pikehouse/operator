@@ -507,6 +507,11 @@ class Worker:
                 recovered = await subject.wait_healthy(timeout_sec=300.0)
                 resolved_at = now() if recovered else None
 
+            # Wait for cluster to stabilize before capturing final state.
+            # After agent resolves (e.g., restarts a killed node), PD may
+            # still show the store as "Disconnected" for a few seconds.
+            await subject.wait_healthy(timeout_sec=30.0)
+
             # Capture final state
             final_state = await subject.capture_state()
             ended_at = now()
