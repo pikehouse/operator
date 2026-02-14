@@ -519,7 +519,7 @@ class TestCheckLeaderBalance:
 
     def test_default_config_values(self):
         """Verify default leader imbalance config."""
-        assert LEADER_IMBALANCE_CONFIG.threshold == 2.0
+        assert LEADER_IMBALANCE_CONFIG.threshold == 3.0
         assert LEADER_IMBALANCE_CONFIG.grace_period == timedelta(seconds=15)
         assert LEADER_IMBALANCE_CONFIG.severity == "warning"
 

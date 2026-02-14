@@ -130,10 +130,12 @@ class GCPTiKVSubject(CloudSubjectBase):
         """Wait for TiKV cluster to be healthy.
 
         Checks PD API for store count with progressive backoff.
+        Tries all PD endpoints so a killed PD node doesn't block health checks.
         """
         if not self._created:
             return False
 
+        pd_ports = [2379, 2381, 2382]
         start = asyncio.get_running_loop().time()
         while True:
             elapsed = asyncio.get_running_loop().time() - start
@@ -141,30 +143,33 @@ class GCPTiKVSubject(CloudSubjectBase):
                 print(f"[wait_healthy] TiKV health check timed out after {elapsed:.0f}s")
                 return False
 
-            try:
-                exit_code, stdout, stderr = await self.vm.run_command(
-                    f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
-                )
-                if exit_code == 0 and stdout.strip().startswith("{"):
-                    data = json.loads(stdout)
-                    stores = data.get("stores", []) if isinstance(data, dict) else []
-                    up_stores = [
-                        s for s in stores
-                        if isinstance(s, dict) and s.get("store", {}).get("state_name") == "Up"
-                    ]
-                    if len(up_stores) >= 3:
-                        print(f"[wait_healthy] TiKV healthy: {len(up_stores)} stores up ({elapsed:.0f}s)")
-                        return True
-                    if int(elapsed) % 15 < 5:
-                        store_states = [s.get("store", {}).get("state_name", "?") for s in stores if isinstance(s, dict)]
-                        print(f"[wait_healthy] {elapsed:.0f}s: {len(up_stores)}/3 up, states={store_states}")
-                else:
-                    if int(elapsed) % 15 < 5:
-                        print(f"[wait_healthy] {elapsed:.0f}s: curl rc={exit_code} out={stdout.strip()[:80]}")
-
-            except Exception as e:
+            for port in pd_ports:
+                try:
+                    exit_code, stdout, stderr = await self.vm.run_command(
+                        f"timeout 5 curl -s http://localhost:{port}/pd/api/v1/stores"
+                    )
+                    if exit_code == 0 and stdout.strip().startswith("{"):
+                        data = json.loads(stdout)
+                        stores = data.get("stores", []) if isinstance(data, dict) else []
+                        up_stores = [
+                            s for s in stores
+                            if isinstance(s, dict) and s.get("store", {}).get("state_name") == "Up"
+                        ]
+                        if len(up_stores) >= 3:
+                            print(f"[wait_healthy] TiKV healthy: {len(up_stores)} stores up ({elapsed:.0f}s)")
+                            return True
+                        if int(elapsed) % 15 < 5:
+                            store_states = [s.get("store", {}).get("state_name", "?") for s in stores if isinstance(s, dict)]
+                            print(f"[wait_healthy] {elapsed:.0f}s: {len(up_stores)}/3 up, states={store_states}")
+                        break  # Got a valid response, don't try other PDs
+                    else:
+                        continue  # Try next PD endpoint
+                except Exception:
+                    continue  # Try next PD endpoint
+            else:
+                # All PD endpoints failed
                 if int(elapsed) % 15 < 5:
-                    print(f"[wait_healthy] {elapsed:.0f}s: error: {e}")
+                    print(f"[wait_healthy] {elapsed:.0f}s: all PD endpoints unreachable")
 
             # Progressive backoff: 3s early, 5s mid, 10s late
             if elapsed < 30:
@@ -175,16 +180,19 @@ class GCPTiKVSubject(CloudSubjectBase):
                 await asyncio.sleep(10.0)
 
     async def capture_state(self) -> dict[str, Any]:
-        """Capture PD cluster state via API."""
-        try:
-            exit_code, stdout, _ = await self.vm.run_command(
-                f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stores"
-            )
-            if exit_code == 0:
+        """Capture PD cluster state via API, trying all PD endpoints."""
+        pd_ports = [2379, 2381, 2382]
+        for port in pd_ports:
+            try:
+                exit_code, stdout, _ = await self.vm.run_command(
+                    f"timeout 5 curl -s http://localhost:{port}/pd/api/v1/stores"
+                )
+                if exit_code != 0:
+                    continue
                 stores_data = json.loads(stdout)
 
                 exit_code, stdout, _ = await self.vm.run_command(
-                    f"curl -s http://localhost:{self._pd_port}/pd/api/v1/stats/region"
+                    f"timeout 5 curl -s http://localhost:{port}/pd/api/v1/stats/region"
                 )
                 regions_data = json.loads(stdout) if exit_code == 0 else {}
 
@@ -200,8 +208,8 @@ class GCPTiKVSubject(CloudSubjectBase):
                     ],
                     "region_count": regions_data.get("count", 0),
                 }
-        except Exception as e:
-            return {"error": str(e)}
+            except Exception:
+                continue
         return {}
 
     def get_chaos_types(self) -> list[str]:

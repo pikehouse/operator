@@ -68,7 +68,7 @@ LOW_DISK_SPACE_CONFIG = InvariantConfig(
 LEADER_IMBALANCE_CONFIG = InvariantConfig(
     name="leader_imbalance",
     grace_period=timedelta(seconds=15),
-    threshold=2.0,  # max - min leader count difference; triggers when 1 store has 3+ more leaders
+    threshold=3.0,  # max - min leader count; avoids startup noise while catching 6-0-0 concentration
     severity="warning",
 )
 
