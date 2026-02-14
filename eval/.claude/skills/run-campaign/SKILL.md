@@ -121,9 +121,15 @@ After starting, wait ~15 seconds and verify each worker claimed a work item by t
 
 ### 5. Report
 
-Show the campaign status: `source $PROJECT_ROOT/.env && uv run eval worker status --remote`
+Wait for the campaign to complete with live progress:
 
-Tell the user the campaign ID and how to monitor:
+```bash
+source $PROJECT_ROOT/.env && uv run eval wait <campaign_id> --remote
+```
+
+Run this as a background Bash command so you can continue working while it runs. It will show live progress and exit with a summary when all trials finish.
+
+If the user needs to check status manually:
 - `eval show <campaign_id> --remote`
 - `eval worker status --remote`
 - `eval viewer --remote` (web UI)

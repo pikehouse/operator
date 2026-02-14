@@ -287,6 +287,11 @@ def run_campaign_cmd(
         "--parallel",
         help="Number of parallel workers (cloud mode only)",
     ),
+    wait: bool = typer.Option(
+        False,
+        "--wait",
+        help="Wait for campaign completion with live progress (cloud mode only)",
+    ),
 ) -> None:
     """Run a campaign from YAML configuration file.
 
@@ -383,21 +388,21 @@ def run_campaign_cmd(
 
     # Cloud mode execution
     if cloud_mode:
+        # Resolve database URL before async closure (needed for --wait)
+        db_url = os.environ.get("EVAL_DATABASE_URL")
+        if config.cloud and config.cloud.database_url:
+            db_url = config.cloud.database_url
+
+        if not db_url:
+            console.print(
+                "[red]Error: EVAL_DATABASE_URL env var or cloud.database_url required for cloud mode[/red]"
+            )
+            raise typer.Exit(1)
+
         async def run_cloud():
             from eval.runner.db_postgres import PostgresDB
             from eval.runner.queue import WorkQueue
             from eval.runner.campaign import expand_campaign_matrix
-
-            # Get PostgreSQL connection URL
-            db_url = os.environ.get("EVAL_DATABASE_URL")
-            if config.cloud and config.cloud.database_url:
-                db_url = config.cloud.database_url
-
-            if not db_url:
-                console.print(
-                    "[red]Error: EVAL_DATABASE_URL env var or cloud.database_url required for cloud mode[/red]"
-                )
-                raise typer.Exit(1)
 
             # Connect to PostgreSQL
             db = PostgresDB(db_url)
@@ -454,7 +459,21 @@ def run_campaign_cmd(
 
         campaign_id = asyncio.run(run_cloud())
         console.print(f"\n[bold green]Campaign {campaign_id} created (cloud mode)[/bold green]")
-        console.print(f"Monitor with: eval show {campaign_id}")
+
+        if wait:
+            from eval.runner.notify import wait_for_campaign
+
+            counts = asyncio.run(wait_for_campaign(db_url, campaign_id))
+            completed = counts.get("completed", 0)
+            failed = counts.get("failed", 0)
+            total = sum(counts.values())
+            if failed:
+                console.print(f"\n[bold]Campaign {campaign_id} finished: {completed}/{total} completed, {failed} failed[/bold]")
+            else:
+                console.print(f"\n[bold green]Campaign {campaign_id} finished: {completed}/{total} completed[/bold green]")
+            console.print(f"Analyze with: eval analyze {campaign_id} --remote")
+        else:
+            console.print(f"Monitor with: eval show {campaign_id}")
         return
 
     # Local mode execution
@@ -502,6 +521,48 @@ def run_campaign_cmd(
     campaign_id = asyncio.run(run())
     console.print(f"\n[bold green]Campaign {campaign_id} finished[/bold green]")
     console.print(f"Analyze with: eval analyze {campaign_id}")
+
+
+@app.command("wait")
+def wait_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to wait for"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+    poll_interval: float = typer.Option(30.0, "--poll-interval", help="Seconds between poll fallbacks"),
+) -> None:
+    """Wait for a campaign to complete with live progress display.
+
+    Uses PostgreSQL LISTEN/NOTIFY for instant updates when work items
+    finish, with polling fallback. Exits when all items are done.
+
+    Requires --remote (LISTEN/NOTIFY only works with PostgreSQL).
+
+    Examples:
+        eval wait 100 --remote
+        eval wait 100 --remote --poll-interval 10
+    """
+    if not remote:
+        console.print("[red]Error: wait requires --remote (PostgreSQL only)[/red]")
+        raise typer.Exit(1)
+
+    db_url = os.environ.get("EVAL_DATABASE_URL")
+    if not db_url:
+        console.print("[red]Error: EVAL_DATABASE_URL not found (check .env)[/red]")
+        raise typer.Exit(1)
+
+    from eval.runner.notify import wait_for_campaign
+
+    counts = asyncio.run(wait_for_campaign(db_url, campaign_id, poll_interval))
+
+    completed = counts.get("completed", 0)
+    failed = counts.get("failed", 0)
+    total = sum(counts.values())
+
+    if failed:
+        console.print(f"\n[bold]Campaign {campaign_id} finished: {completed}/{total} completed, {failed} failed[/bold]")
+    else:
+        console.print(f"\n[bold green]Campaign {campaign_id} finished: {completed}/{total} completed[/bold green]")
+
+    console.print(f"Analyze with: eval analyze {campaign_id} --remote")
 
 
 @app.command()

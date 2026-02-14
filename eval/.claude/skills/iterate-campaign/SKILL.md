@@ -180,12 +180,13 @@ done
 
 ### 7. Monitor & Evaluate
 
-Poll for completion:
+Wait for the campaign to complete with live progress:
 
 ```bash
-source $PROJECT_ROOT/.env
-uv run eval show <new_campaign_id> --remote
+source $PROJECT_ROOT/.env && uv run eval wait <new_campaign_id> --remote
 ```
+
+Run this as a background Bash command so you can continue working while it runs. It will show live progress and exit with a summary when all trials finish.
 
 When complete, compare results against the previous campaign:
 - Did the targeted chaos types improve?

@@ -95,6 +95,28 @@ CREATE INDEX IF NOT EXISTS idx_work_queue_status ON work_queue(status);
 CREATE INDEX IF NOT EXISTS idx_work_queue_campaign ON work_queue(campaign_id);
 """
 
+NOTIFY_TRIGGERS_SQL = """
+CREATE OR REPLACE FUNCTION notify_work_item_completed()
+RETURNS trigger AS $$
+BEGIN
+    IF NEW.status IN ('completed', 'failed') AND OLD.status != NEW.status THEN
+        PERFORM pg_notify('work_item_completed', json_build_object(
+            'work_id', NEW.id,
+            'campaign_id', NEW.campaign_id,
+            'status', NEW.status,
+            'trial_id', NEW.trial_id
+        )::text);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_work_item_completed ON work_queue;
+CREATE TRIGGER trg_work_item_completed
+    AFTER UPDATE ON work_queue
+    FOR EACH ROW EXECUTE FUNCTION notify_work_item_completed();
+"""
+
 
 class PostgresDB:
     """Async PostgreSQL database for distributed eval execution.
@@ -254,6 +276,14 @@ class PostgresDB:
                 await conn.execute(
                     "ALTER TABLE work_queue ADD COLUMN vm_name TEXT"
                 )
+            # Migration: add NOTIFY trigger for work item completion
+            trigger_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_work_item_completed'
+                )
+            """)
+            if not trigger_exists:
+                await conn.execute(NOTIFY_TRIGGERS_SQL)
 
     async def insert_campaign(self, campaign: Campaign) -> int:
         """Insert campaign record, return campaign_id."""
