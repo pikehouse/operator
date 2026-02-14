@@ -1,8 +1,5 @@
 """
-FastAPI chat application with intentionally naive database patterns.
-
-This app works fine under light load but breaks predictably under pressure.
-An AI agent can read this source code, identify the anti-patterns, and fix them.
+FastAPI chat application backed by PostgreSQL.
 
 Endpoints:
 - POST /api/conversations          Create conversation
@@ -10,6 +7,7 @@ Endpoints:
 - GET  /api/conversations/{id}/messages   Get messages
 - POST /api/conversations/{id}/messages   Add message
 - POST /api/conversations/{id}/stream     Streaming message (holds transaction)
+- GET  /api/conversations/search?q=term  Search messages
 - DELETE /api/conversations/{id}   Delete conversation
 - GET  /health                     Health check
 - GET  /metrics                    Prometheus-format metrics
@@ -33,6 +31,7 @@ from app.models import (
     ensure_default_user,
     get_messages,
     list_conversations,
+    search_messages,
 )
 from app.pool import create_pool
 from app.streaming import stream_response
@@ -151,6 +150,14 @@ async def api_create_conversation(req: CreateConversationRequest):
 async def api_list_conversations():
     convs = await list_conversations(_pool, DEFAULT_USER_ID)
     return [_serialize(c) for c in convs]
+
+
+@app.get("/api/conversations/search")
+async def api_search_messages(q: str = ""):
+    if not q.strip():
+        return []
+    results = await search_messages(_pool, DEFAULT_USER_ID, q.strip())
+    return [_serialize(r) for r in results]
 
 
 @app.get("/api/conversations/{conversation_id}/messages")

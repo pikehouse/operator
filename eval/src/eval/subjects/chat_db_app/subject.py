@@ -33,6 +33,8 @@ LIGHT_LOAD = {
     "READ_RATIO": "0.3",
     "BURST_MODE": "false",
     "BURST_CONCURRENCY": "1",
+    "SEARCH_ENABLED": "false",
+    "SEARCH_RATIO": "0.0",
 }
 
 # Per-defect chaos profiles — each targets a specific app bug
@@ -46,6 +48,8 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "READ_RATIO": "0.8",
         "BURST_MODE": "false",
         "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
     },
     # Overwhelms unbounded connection pool
     "pool_exhaustion": {
@@ -56,6 +60,8 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "READ_RATIO": "0.3",
         "BURST_MODE": "false",
         "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
     },
     # Holds connections in long transactions via streaming responses
     "streaming_txn": {
@@ -66,6 +72,8 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "READ_RATIO": "0.3",
         "BURST_MODE": "false",
         "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
     },
     # Concurrent writes to same row trigger read-modify-write race on counter
     "counter_race": {
@@ -76,6 +84,32 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "READ_RATIO": "0.3",
         "BURST_MODE": "true",
         "BURST_CONCURRENCY": "10",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # Heavy fulltext search load — ILIKE '%term%' sequential scans
+    "fulltext_search": {
+        "NUM_USERS": "20",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.1",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.2",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "true",
+        "SEARCH_RATIO": "0.5",
+    },
+    # High read volume to overwhelm single PG → needs caching
+    "read_scale": {
+        "NUM_USERS": "60",
+        "REQUEST_DELAY": "0.2",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "10",
+        "READ_RATIO": "0.9",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
     },
 }
 
@@ -144,6 +178,7 @@ class ChatDBAppEvalSubject:
         for key in (
             "NUM_USERS", "REQUEST_DELAY", "STREAM_RATIO", "RAMP_UP_SECONDS",
             "READ_RATIO", "BURST_MODE", "BURST_CONCURRENCY",
+            "SEARCH_ENABLED", "SEARCH_RATIO",
         ):
             lines.append(f"{key}={profile[key]}")
         env_file.write_text("\n".join(lines) + "\n")
@@ -337,6 +372,113 @@ FROM generate_series(1, {count}) AS g;
         except Exception as e:
             logger.warning("Failed to pre-seed messages: %s", e)
 
+    async def _preseed_for_search(self, count: int = 500_000) -> None:
+        """Bulk-insert messages with diverse content for fulltext search chaos."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d messages for fulltext_search chaos...", count)
+
+        # Use the default user so searches hit these rows
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('10000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'search seed ' || g "
+            f"FROM generate_series(0, 999) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        # Templates covering SEARCH_TERMS words for realistic fulltext hits
+        templates_sql = """
+(ARRAY[
+    'What is the capital of France? Paris is the capital and largest city.',
+    'Explain quantum computing in simple terms. Quantum bits enable parallel computation.',
+    'How do connection pools work in PostgreSQL? A pool maintains persistent connections.',
+    'What are the ACID properties? Atomicity, Consistency, Isolation, Durability.',
+    'Describe the difference between SQL and NoSQL database systems.',
+    'What is a deadlock and how can it be prevented in concurrent systems?',
+    'Explain the CAP theorem and its implications for distributed databases.',
+    'What is eventual consistency in distributed systems?',
+    'How does the Raft consensus algorithm achieve distributed agreement?',
+    'What are the benefits of microservices architecture over monoliths?',
+    'Explain the observer pattern and its use in event-driven systems.',
+    'What is the difference between threads and processes in operating systems?',
+    'How does garbage collection work in managed runtime environments?',
+    'What is a race condition and how do you prevent it?',
+    'Explain connection pool exhaustion and its impact on database performance.',
+    'How does Kubernetes orchestrate container deployments at scale?',
+    'What is Terraform and how does it manage infrastructure as code?',
+    'Explain monitoring and observability in distributed systems.',
+    'What is consensus in distributed computing and why does it matter?',
+    'Describe the consistency models used in modern distributed databases.'
+])[1 + (g % 20)]
+"""
+
+        insert_sql = f"""
+INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+SELECT
+    gen_random_uuid(),
+    ('10000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid,
+    {templates_sql},
+    'user',
+    10,
+    now() - interval '1 second' * (g % 3600)
+FROM generate_series(1, {count}) AS g;
+"""
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, "-c", insert_sql,
+            )
+            logger.info("Pre-seeded %d messages for search", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed search messages: %s", e)
+
+    async def _preseed_for_read_scale(self, count: int = 1_000_000) -> None:
+        """Bulk-insert messages concentrated in hot conversations for read scaling chaos."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d messages for read_scale chaos...", count)
+
+        # Use the default user so reads hit these rows
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        # 100 hot conversations with 10K messages each
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('20000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'hot conversation ' || g "
+            f"FROM generate_series(0, 99) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = f"""
+INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+SELECT
+    gen_random_uuid(),
+    ('20000000-0000-0000-0000-' || lpad(((g % 100))::text, 12, '0'))::uuid,
+    'Message number ' || g || ' in a busy conversation thread.',
+    'user',
+    10,
+    now() - interval '1 second' * (g % 7200)
+FROM generate_series(1, {count}) AS g;
+"""
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, "-c", insert_sql,
+            )
+            logger.info("Pre-seeded %d messages for read_scale", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed read_scale messages: %s", e)
+
     async def inject_chaos(
         self, chaos_type: str, **params: Any
     ) -> dict[str, Any]:
@@ -366,9 +508,13 @@ FROM generate_series(1, {count}) AS g;
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
-        # Pre-seed data for missing_index to make sequential scans expensive
+        # Pre-seed data for chaos types that need it
         if resolved_type == "missing_index":
             await self._preseed_messages()
+        elif resolved_type == "fulltext_search":
+            await self._preseed_for_search()
+        elif resolved_type == "read_scale":
+            await self._preseed_for_read_scale()
 
         # Write .env with chaos profile and restart loadgen
         self._write_env(profile)

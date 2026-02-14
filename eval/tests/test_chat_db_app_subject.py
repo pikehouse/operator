@@ -55,7 +55,9 @@ class TestChaosTypes:
         assert "pool_exhaustion" in types
         assert "streaming_txn" in types
         assert "counter_race" in types
-        assert len(types) == 4
+        assert "fulltext_search" in types
+        assert "read_scale" in types
+        assert len(types) == 6
 
 
 class TestSourceDir:

@@ -1,12 +1,5 @@
 """
 Database schema and query functions for the chat application.
-
-INTENTIONALLY NAIVE patterns:
-- No index on messages.conversation_id (full table scan)
-- Read-modify-write for token counters (race condition)
-- No retry on serialization failure (unhandled deadlocks)
-
-Each naive pattern has a localized fix in a single function.
 """
 
 from __future__ import annotations
@@ -18,7 +11,7 @@ import asyncpg
 
 
 async def create_schema(pool: asyncpg.Pool) -> None:
-    """Create database tables. No index on messages.conversation_id."""
+    """Create database tables."""
     async with pool.acquire() as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -48,9 +41,6 @@ async def create_schema(pool: asyncpg.Pool) -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
 
-            -- BUG: No index on messages.conversation_id
-            -- This causes full table scans when fetching conversation history.
-            -- Fix: CREATE INDEX idx_messages_conversation_id ON messages(conversation_id);
         """)
 
 
@@ -101,11 +91,7 @@ async def list_conversations(pool: asyncpg.Pool, user_id: str) -> list[dict]:
 
 
 async def get_messages(pool: asyncpg.Pool, conversation_id: str) -> list[dict]:
-    """
-    Get messages for a conversation.
-
-    NAIVE: No index on messages.conversation_id means full table scan.
-    """
+    """Get messages for a conversation."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
@@ -126,15 +112,7 @@ async def add_message(
     content: str,
     token_count: int,
 ) -> dict:
-    """
-    Add a message to a conversation.
-
-    NAIVE: Uses read-modify-write for token_usage counter (race condition).
-    The entire operation is in a single wide transaction holding a connection.
-
-    Fix for token counter: UPDATE users SET token_usage = token_usage + $1
-    Fix for transaction: narrow scope to just the writes.
-    """
+    """Add a message to a conversation."""
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Insert the message
@@ -161,9 +139,6 @@ async def add_message(
                 uuid.UUID(conversation_id),
             )
 
-            # BUG: Read-modify-write for token counter (race condition)
-            # Under concurrent writes, multiple transactions read the same value
-            # and overwrite each other's increments.
             conv = await conn.fetchrow(
                 "SELECT user_id FROM conversations WHERE id = $1",
                 uuid.UUID(conversation_id),
@@ -180,6 +155,29 @@ async def add_message(
                 )
 
             return dict(row)
+
+
+async def search_messages(
+    pool: asyncpg.Pool, user_id: str, query: str, limit: int = 50
+) -> list[dict]:
+    """Search messages across a user's conversations."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT m.id, m.conversation_id, m.role, m.content,
+                   m.token_count, m.created_at
+            FROM messages m
+            JOIN conversations c ON c.id = m.conversation_id
+            WHERE c.user_id = $1
+              AND m.content ILIKE '%' || $2 || '%'
+            ORDER BY m.created_at DESC
+            LIMIT $3
+            """,
+            uuid.UUID(user_id),
+            query,
+            limit,
+        )
+        return [dict(r) for r in rows]
 
 
 async def delete_conversation(pool: asyncpg.Pool, conversation_id: str) -> bool:
@@ -210,7 +208,6 @@ async def delete_conversation(pool: asyncpg.Pool, conversation_id: str) -> bool:
                 uuid.UUID(conversation_id),
             )
 
-            # BUG: same read-modify-write pattern for token counter
             current = await conn.fetchval(
                 "SELECT token_usage FROM users WHERE id = $1",
                 conv["user_id"],

@@ -59,6 +59,8 @@ services:
       READ_RATIO: "${READ_RATIO:-0.3}"
       BURST_MODE: "${BURST_MODE:-false}"
       BURST_CONCURRENCY: "${BURST_CONCURRENCY:-1}"
+      SEARCH_ENABLED: "${SEARCH_ENABLED:-false}"
+      SEARCH_RATIO: "${SEARCH_RATIO:-0.0}"
     depends_on:
       app:
         condition: service_healthy

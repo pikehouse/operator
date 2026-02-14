@@ -274,19 +274,12 @@ class TestResetFlow:
 
         pool_py = subject.workspace.workspace_dir / "app" / "pool.py"
         content = pool_py.read_text()
-        # Our edit added "min_size=2,\n        max_size=20,\n        command_timeout=5"
-        # The original has just "min_size=2," followed by a comment line.
+        # Our edit added "max_size=20" and "command_timeout=5".
+        # The original has just "min_size=2," with no max_size.
         # After reset, the edit should be reverted.
-        lines = content.splitlines()
-        min_size_lines = [
-            i for i, line in enumerate(lines)
-            if "min_size=2" in line and "BUG" not in line
-        ]
-        assert min_size_lines, "min_size=2 should be in the file"
-        # The line after min_size=2 should be a BUG comment, not max_size
-        next_line = lines[min_size_lines[0] + 1].strip()
-        assert next_line.startswith("# BUG"), (
-            f"Expected BUG comment after min_size, got: {next_line}"
+        assert "min_size=2" in content, "min_size=2 should be in the file"
+        assert "max_size" not in content, (
+            "max_size should not be present in the original pool.py"
         )
 
         snap = subject.workspace.snapshot()

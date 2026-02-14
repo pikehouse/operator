@@ -16,6 +16,8 @@ Environment variables:
     READ_RATIO: Fraction of non-streaming requests that read messages (default: 0.3)
     BURST_MODE: When true, each user fires concurrent writes to same conversation (default: false)
     BURST_CONCURRENCY: Parallel writes per burst when BURST_MODE is true (default: 1)
+    SEARCH_ENABLED: Enable search requests (default: false)
+    SEARCH_RATIO: Fraction of iterations that include a search request (default: 0.0)
 """
 
 from __future__ import annotations
@@ -42,6 +44,16 @@ RAMP_UP_SECONDS = float(os.environ.get("RAMP_UP_SECONDS", "10"))
 READ_RATIO = float(os.environ.get("READ_RATIO", "0.3"))
 BURST_MODE = os.environ.get("BURST_MODE", "false").lower() in ("true", "1", "yes")
 BURST_CONCURRENCY = int(os.environ.get("BURST_CONCURRENCY", "1"))
+SEARCH_ENABLED = os.environ.get("SEARCH_ENABLED", "false").lower() in ("true", "1", "yes")
+SEARCH_RATIO = float(os.environ.get("SEARCH_RATIO", "0.0"))
+
+SEARCH_TERMS = [
+    "quantum", "database", "PostgreSQL", "connection", "deadlock",
+    "ACID", "consistency", "Raft", "consensus", "microservices",
+    "observer", "threads", "garbage", "race", "capital",
+    "connection pool", "CAP theorem", "garbage collection",
+    "kubernetes", "terraform", "monitoring",
+]
 
 SAMPLE_MESSAGES = [
     "What is the capital of France?",
@@ -149,6 +161,22 @@ async def simulate_user(user_id: int, client: httpx.AsyncClient) -> None:
                     timeout=10,
                 )
 
+            if SEARCH_ENABLED and random.random() < SEARCH_RATIO:
+                term = random.choice(SEARCH_TERMS)
+                try:
+                    resp = await client.get(
+                        f"{APP_URL}/api/conversations/search",
+                        params={"q": term},
+                        timeout=30,
+                    )
+                    if resp.status_code == 200:
+                        results = resp.json()
+                        log.info(f"User {user_id}: search '{term}' returned {len(results)} results")
+                    else:
+                        log.warning(f"User {user_id}: search failed {resp.status_code}")
+                except httpx.TimeoutException:
+                    log.warning(f"User {user_id}: search timed out for '{term}'")
+
         except httpx.TimeoutException:
             log.warning(f"User {user_id}: request timed out")
         except httpx.ConnectError:
@@ -227,9 +255,10 @@ async def simulate_user_burst(user_id: int, client: httpx.AsyncClient) -> None:
 
 async def main() -> None:
     mode = "burst" if BURST_MODE else "normal"
+    search_info = f", search={SEARCH_RATIO:.0%}" if SEARCH_ENABLED else ""
     log.info(
         f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, "
-        f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}"
+        f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}{search_info}"
     )
 
     async with httpx.AsyncClient() as client:

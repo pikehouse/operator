@@ -24,6 +24,7 @@ class ChaosSpec(BaseModel):
             "pd_leader_kill", "leader_concentration",
             "load_pressure", "db_kill", "debug_code_edit",  # Chat DB App
             "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",  # Chat DB App per-defect
+            "fulltext_search", "read_scale",  # Chat DB App feature-building
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")

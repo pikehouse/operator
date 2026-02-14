@@ -1,0 +1,21 @@
+name: chatdb-cloud-continuous-evolution
+subjects: [chat-db-app]
+continuous: true
+chaos_types:
+  - type: missing_index
+  - type: pool_exhaustion
+  - type: streaming_txn
+  - type: fulltext_search
+  - type: read_scale
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 15
+
+cloud:
+  provider: gcp
+  project: null
+  zone: us-central1-a
+  machine_type: e2-standard-2
+  operator:
+    enabled: true
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest

@@ -50,6 +50,8 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "READ_RATIO": "0.8",
             "BURST_MODE": "false",
             "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
         },
         "pool_exhaustion": {
             "NUM_USERS": "40",
@@ -59,6 +61,8 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "READ_RATIO": "0.3",
             "BURST_MODE": "false",
             "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
         },
         "streaming_txn": {
             "NUM_USERS": "15",
@@ -68,6 +72,8 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "READ_RATIO": "0.3",
             "BURST_MODE": "false",
             "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
         },
         "counter_race": {
             "NUM_USERS": "15",
@@ -77,11 +83,36 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "READ_RATIO": "0.3",
             "BURST_MODE": "true",
             "BURST_CONCURRENCY": "10",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "fulltext_search": {
+            "NUM_USERS": "20",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.1",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.2",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "true",
+            "SEARCH_RATIO": "0.5",
+        },
+        "read_scale": {
+            "NUM_USERS": "60",
+            "REQUEST_DELAY": "0.2",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "10",
+            "READ_RATIO": "0.9",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
         },
     }
 
     CLOUD_CHAOS_TYPES = [
         "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",
+        "fulltext_search", "read_scale",
         "load_pressure", "debug_code_edit",
     ]
 
@@ -469,9 +500,13 @@ Other useful commands:
         if chaos_type in self.CHAOS_PROFILES:
             resolved_type = chaos_type
             profile = dict(self.CHAOS_PROFILES[resolved_type])
-            # Pre-seed data for missing_index
+            # Pre-seed data for chaos types that need it
             if resolved_type == "missing_index":
                 await self._preseed_messages()
+            elif resolved_type == "fulltext_search":
+                await self._preseed_for_search()
+            elif resolved_type == "read_scale":
+                await self._preseed_for_read_scale()
             return await self._inject_load_pressure(
                 chaos_type=resolved_type, profile=profile, **params
             )
@@ -613,6 +648,142 @@ Other useful commands:
             except TimeoutError:
                 last_err = TimeoutError(f"Preseed timed out after 300s (attempt {attempt + 1})")
                 logger.warning("Preseed attempt %d/%d timed out", attempt + 1, 3)
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_for_search(self, count: int = 500_000) -> None:
+        """Bulk-insert messages with diverse content for fulltext search chaos."""
+        logger.info("Pre-seeding %d messages for fulltext_search chaos...", count)
+
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('10000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'search seed ' || g "
+            f"FROM generate_series(0, 999) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        # Use a single-line array for shell safety
+        templates_array = (
+            "(ARRAY["
+            "'What is the capital of France? Paris is the capital and largest city.',"
+            "'Explain quantum computing in simple terms. Quantum bits enable parallel computation.',"
+            "'How do connection pools work in PostgreSQL? A pool maintains persistent connections.',"
+            "'What are the ACID properties? Atomicity, Consistency, Isolation, Durability.',"
+            "'Describe the difference between SQL and NoSQL database systems.',"
+            "'What is a deadlock and how can it be prevented in concurrent systems?',"
+            "'Explain the CAP theorem and its implications for distributed databases.',"
+            "'What is eventual consistency in distributed systems?',"
+            "'How does the Raft consensus algorithm achieve distributed agreement?',"
+            "'What are the benefits of microservices architecture over monoliths?',"
+            "'Explain the observer pattern and its use in event-driven systems.',"
+            "'What is the difference between threads and processes in operating systems?',"
+            "'How does garbage collection work in managed runtime environments?',"
+            "'What is a race condition and how do you prevent it?',"
+            "'Explain connection pool exhaustion and its impact on database performance.',"
+            "'How does Kubernetes orchestrate container deployments at scale?',"
+            "'What is Terraform and how does it manage infrastructure as code?',"
+            "'Explain monitoring and observability in distributed systems.',"
+            "'What is consensus in distributed computing and why does it matter?',"
+            "'Describe the consistency models used in modern distributed databases.'"
+            "])[1 + (g % 20)]"
+        )
+
+        insert_sql = (
+            "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
+            "SELECT gen_random_uuid(), "
+            "('10000000-0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0'))::uuid, "
+            f"{templates_array}, 'user', 10, "
+            "now() - interval '1 second' * (g % 3600) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\" -c \"{insert_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=300.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d messages for search", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(
+                    f"search preseed psql exited {exit_code}: {output[:200]}"
+                )
+                logger.warning(
+                    "Search preseed attempt %d/%d failed (exit %d): %s",
+                    attempt + 1, 3, exit_code, output[:200],
+                )
+            except TimeoutError:
+                last_err = TimeoutError(f"Search preseed timed out (attempt {attempt + 1})")
+                logger.warning("Search preseed attempt %d/%d timed out", attempt + 1, 3)
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_for_read_scale(self, count: int = 1_000_000) -> None:
+        """Bulk-insert messages concentrated in hot conversations for read scaling chaos."""
+        logger.info("Pre-seeding %d messages for read_scale chaos...", count)
+
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('20000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'hot conversation ' || g "
+            f"FROM generate_series(0, 99) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = (
+            "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
+            "SELECT gen_random_uuid(), "
+            "('20000000-0000-0000-0000-' || lpad(((g % 100))::text, 12, '0'))::uuid, "
+            "'Message number ' || g || ' in a busy conversation thread.', 'user', 10, "
+            "now() - interval '1 second' * (g % 7200) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\" -c \"{insert_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=300.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d messages for read_scale", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(
+                    f"read_scale preseed psql exited {exit_code}: {output[:200]}"
+                )
+                logger.warning(
+                    "Read scale preseed attempt %d/%d failed (exit %d): %s",
+                    attempt + 1, 3, exit_code, output[:200],
+                )
+            except TimeoutError:
+                last_err = TimeoutError(f"Read scale preseed timed out (attempt {attempt + 1})")
+                logger.warning("Read scale preseed attempt %d/%d timed out", attempt + 1, 3)
             if attempt < 2:
                 await asyncio.sleep(5 * (attempt + 1))
         raise last_err  # type: ignore[misc]

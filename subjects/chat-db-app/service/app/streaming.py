@@ -1,15 +1,5 @@
 """
 Streaming response logic for the chat application.
-
-INTENTIONALLY NAIVE: Holds a database transaction open for the entire
-duration of the simulated streaming response (10-30 seconds).
-This ties up a connection from the pool for the entire stream.
-
-Under heavy load with many concurrent streams, this exhausts the
-connection pool and causes pool_exhaustion.
-
-The fix: Write the message first (narrow transaction), then stream
-the response without holding a connection.
 """
 
 from __future__ import annotations
@@ -46,24 +36,12 @@ async def stream_response(
     user_content: str,
     user_token_count: int,
 ) -> list[str]:
-    """
-    Simulate a streaming LLM response while holding a transaction open.
-
-    NAIVE: The entire operation - inserting user message, generating response,
-    inserting assistant message, updating counters - happens in ONE transaction.
-    The connection is held for the full streaming duration (several seconds).
-
-    Fix: Split into two operations:
-    1. Insert user message + start assistant placeholder (narrow transaction)
-    2. Stream response chunks without holding a DB connection
-    3. Update assistant message content when done (narrow transaction)
-    """
+    """Simulate a streaming LLM response."""
     chunks: list[str] = []
     num_chunks = random.randint(5, len(RESPONSE_FRAGMENTS))
     selected = random.sample(RESPONSE_FRAGMENTS, num_chunks)
 
     async with pool.acquire() as conn:
-        # BUG: Transaction wraps the entire streaming response
         async with conn.transaction():
             # Insert user message
             await conn.execute(
@@ -108,7 +86,6 @@ async def stream_response(
                 uuid.UUID(conversation_id),
             )
 
-            # BUG: Read-modify-write for token counter
             conv = await conn.fetchrow(
                 "SELECT user_id FROM conversations WHERE id = $1",
                 uuid.UUID(conversation_id),
