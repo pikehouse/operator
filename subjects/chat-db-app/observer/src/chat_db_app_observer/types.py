@@ -68,3 +68,13 @@ class PgDatabaseStats(BaseModel):
     """Statistics from pg_stat_database."""
 
     deadlocks_total: int = 0
+
+
+class TableBloatStats(BaseModel):
+    """Dead tuple statistics from pg_stat_user_tables."""
+
+    table_name: str
+    live_tuples: int = 0
+    dead_tuples: int = 0
+    last_autovacuum: str | None = None
+    last_vacuum: str | None = None

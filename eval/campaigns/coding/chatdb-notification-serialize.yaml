@@ -1,0 +1,12 @@
+name: chatdb-notification-serialize
+subjects: [chat-db-app]
+
+# Targets: SERIALIZABLE isolation without retry logic
+# Concurrent broadcasts → serialization failures → 500 errors
+chaos_types:
+  - type: notification_serialize
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

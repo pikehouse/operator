@@ -1,0 +1,12 @@
+name: chatdb-notification-payload
+subjects: [chat-db-app]
+
+# Targets: SELECT * with large 5KB JSONB payloads
+# 10K notifications per user → 50MB per listing response
+chaos_types:
+  - type: notification_payload
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

@@ -9,6 +9,11 @@ Endpoints:
 - POST /api/conversations/{id}/stream     Streaming message (holds transaction)
 - GET  /api/conversations/search?q=term  Search messages
 - DELETE /api/conversations/{id}   Delete conversation
+- POST /api/notifications/broadcast       Broadcast notification to all users
+- GET  /api/notifications                 List user's notifications
+- GET  /api/notifications/unread-count    Count unread notifications
+- POST /api/notifications/mark-read       Mark all notifications read
+- GET  /api/notifications/poll            Long-poll for new notifications
 - GET  /health                     Health check
 - GET  /metrics                    Prometheus-format metrics
 """
@@ -25,13 +30,19 @@ from pydantic import BaseModel
 
 from app.models import (
     add_message,
+    broadcast_notification,
+    broadcast_notification_serializable,
     create_conversation,
     create_schema,
     delete_conversation,
     ensure_default_user,
     get_messages,
-    list_conversations,
+    get_unread_count,
+    list_notifications,
+    mark_all_read,
+    poll_notifications,
     search_messages,
+    list_conversations,
 )
 from app.pool import create_pool
 from app.streaming import stream_response
@@ -121,6 +132,21 @@ async def metrics_middleware(request: Request, call_next):
     return response
 
 
+# ---------- Middleware for unread notification count ----------
+
+@app.middleware("http")
+async def unread_count_middleware(request: Request, call_next):
+    """Attach X-Unread-Count header to all /api/ responses."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        try:
+            count = await get_unread_count(_pool, DEFAULT_USER_ID)
+            response.headers["X-Unread-Count"] = str(count)
+        except Exception:
+            pass
+    return response
+
+
 # ---------- Request/Response models ----------
 
 class CreateConversationRequest(BaseModel):
@@ -136,6 +162,15 @@ class AddMessageRequest(BaseModel):
 class StreamRequest(BaseModel):
     content: str
     token_count: int = 0
+
+
+class BroadcastRequest(BaseModel):
+    type: str = "system"
+    payload: dict = {}
+
+
+class PollRequest(BaseModel):
+    since: str | None = None
 
 
 # ---------- Endpoints ----------
@@ -202,6 +237,72 @@ async def api_delete_conversation(conversation_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"deleted": True}
+
+
+# ---------- Notification endpoints ----------
+
+@app.post("/api/notifications/broadcast")
+async def api_broadcast_notification(req: BroadcastRequest):
+    """Broadcast a notification to all users."""
+    try:
+        count = await broadcast_notification(_pool, req.type, req.payload)
+        return {"broadcast": True, "recipients": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notifications/broadcast-serializable")
+async def api_broadcast_notification_serializable(req: BroadcastRequest):
+    """Broadcast with SERIALIZABLE isolation (for serialize chaos type)."""
+    try:
+        count = await broadcast_notification_serializable(_pool, req.type, req.payload)
+        return {"broadcast": True, "recipients": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notifications")
+async def api_list_notifications(user_id: str | None = None):
+    """List notifications for a user."""
+    uid = user_id or DEFAULT_USER_ID
+    try:
+        notifs = await list_notifications(_pool, uid)
+        return [_serialize(n) for n in notifs]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notifications/unread-count")
+async def api_unread_count(user_id: str | None = None):
+    """Get unread notification count."""
+    uid = user_id or DEFAULT_USER_ID
+    try:
+        count = await get_unread_count(_pool, uid)
+        return {"unread_count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/notifications/mark-read")
+async def api_mark_read(user_id: str | None = None):
+    """Mark all notifications as read for a user."""
+    uid = user_id or DEFAULT_USER_ID
+    try:
+        count = await mark_all_read(_pool, uid)
+        return {"marked_read": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notifications/poll")
+async def api_poll_notifications(user_id: str | None = None, since: str | None = None):
+    """Long-poll for new notifications."""
+    uid = user_id or DEFAULT_USER_ID
+    try:
+        notifs = await poll_notifications(_pool, uid, since)
+        return [_serialize(n) for n in notifs]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/health")

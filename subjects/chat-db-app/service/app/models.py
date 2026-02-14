@@ -4,6 +4,8 @@ Database schema and query functions for the chat application.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -41,6 +43,16 @@ async def create_schema(pool: asyncpg.Pool) -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
 
+            CREATE TABLE IF NOT EXISTS notifications (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID NOT NULL REFERENCES users(id),
+                type TEXT NOT NULL DEFAULT 'system',
+                payload JSONB NOT NULL DEFAULT '{}',
+                read BOOLEAN NOT NULL DEFAULT false,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
         """)
 
 
@@ -91,14 +103,17 @@ async def list_conversations(pool: asyncpg.Pool, user_id: str) -> list[dict]:
 
 
 async def get_messages(pool: asyncpg.Pool, conversation_id: str) -> list[dict]:
-    """Get messages for a conversation."""
+    """Get messages for a conversation with running token total."""
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT id, conversation_id, role, content, token_count, created_at
-            FROM messages
-            WHERE conversation_id = $1
-            ORDER BY created_at ASC
+            SELECT m.id, m.conversation_id, m.role, m.content, m.token_count, m.created_at,
+                   (SELECT SUM(token_count) FROM messages
+                    WHERE conversation_id = m.conversation_id AND created_at <= m.created_at)
+                   AS running_total
+            FROM messages m
+            WHERE m.conversation_id = $1
+            ORDER BY m.created_at ASC
             """,
             uuid.UUID(conversation_id),
         )
@@ -220,3 +235,137 @@ async def delete_conversation(pool: asyncpg.Pool, conversation_id: str) -> bool:
             )
 
             return True
+
+
+# ---------- Notification functions ----------
+
+
+async def ensure_notification_users(pool: asyncpg.Pool, count: int) -> list[str]:
+    """Create multiple users for notification load testing. Returns list of user IDs."""
+    user_ids = []
+    async with pool.acquire() as conn:
+        for i in range(count):
+            # Deterministic UUIDs based on index for reproducibility
+            uid = uuid.UUID(f"00000000-0000-4000-9000-{i:012d}")
+            await conn.execute(
+                """
+                INSERT INTO users (id, email, plan_tier)
+                VALUES ($1, $2, 'free')
+                ON CONFLICT (id) DO NOTHING
+                """,
+                uid,
+                f"notif-user-{i}@example.com",
+            )
+            user_ids.append(str(uid))
+    return user_ids
+
+
+async def broadcast_notification(
+    pool: asyncpg.Pool, ntype: str, payload: dict
+) -> int:
+    """Create a notification for every user. Correct but naive."""
+    async with pool.acquire() as conn:
+        users = await conn.fetch("SELECT id FROM users")
+        async with conn.transaction():
+            for user in users:
+                await conn.execute(
+                    "INSERT INTO notifications (user_id, type, payload) VALUES ($1, $2, $3)",
+                    user["id"],
+                    ntype,
+                    json.dumps(payload),
+                )
+    return len(users)
+
+
+async def broadcast_notification_serializable(
+    pool: asyncpg.Pool, ntype: str, payload: dict
+) -> int:
+    """Broadcast with SERIALIZABLE isolation. Correct but fails under concurrency."""
+    async with pool.acquire() as conn:
+        users = await conn.fetch("SELECT id FROM users")
+        async with conn.transaction(isolation="serializable"):
+            for user in users:
+                await conn.execute(
+                    "INSERT INTO notifications (user_id, type, payload) VALUES ($1, $2, $3)",
+                    user["id"],
+                    ntype,
+                    json.dumps(payload),
+                )
+    return len(users)
+
+
+async def list_notifications(pool: asyncpg.Pool, user_id: str) -> list[dict]:
+    """List notifications for a user with conversation titles. N+1 query pattern."""
+    async with pool.acquire() as conn:
+        notifs = await conn.fetch(
+            "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC",
+            uuid.UUID(user_id),
+        )
+        results = []
+        for n in notifs:
+            conv_title = None
+            payload = n["payload"]
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except (json.JSONDecodeError, TypeError):
+                    payload = {}
+            source_conv = payload.get("conversation_id") if payload else None
+            if source_conv:
+                try:
+                    row = await conn.fetchrow(
+                        "SELECT title FROM conversations WHERE id = $1",
+                        uuid.UUID(source_conv),
+                    )
+                    conv_title = row["title"] if row else None
+                except Exception:
+                    pass
+            results.append({**dict(n), "conversation_title": conv_title})
+        return results
+
+
+async def get_unread_count(pool: asyncpg.Pool, user_id: str) -> int:
+    """Count unread notifications. SELECT COUNT(*) — correct but slow at scale."""
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND NOT read",
+            uuid.UUID(user_id),
+        )
+
+
+async def mark_all_read(pool: asyncpg.Pool, user_id: str) -> int:
+    """Mark all notifications as read. Correct but naive — one UPDATE per row."""
+    async with pool.acquire() as conn:
+        unread = await conn.fetch(
+            "SELECT id FROM notifications WHERE user_id = $1 AND NOT read",
+            uuid.UUID(user_id),
+        )
+        for notif in unread:
+            await conn.execute(
+                "UPDATE notifications SET read = true WHERE id = $1",
+                notif["id"],
+            )
+    return len(unread)
+
+
+async def poll_notifications(
+    pool: asyncpg.Pool, user_id: str, since: str | None = None
+) -> list[dict]:
+    """Long-poll for new notifications. Correct but naive — holds transaction open."""
+    since_dt = (
+        datetime.fromisoformat(since)
+        if since
+        else datetime(2000, 1, 1, tzinfo=timezone.utc)
+    )
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for _ in range(30):
+                rows = await conn.fetch(
+                    "SELECT * FROM notifications WHERE user_id = $1 AND created_at > $2",
+                    uuid.UUID(user_id),
+                    since_dt,
+                )
+                if rows:
+                    return [dict(r) for r in rows]
+                await asyncio.sleep(1.0)
+    return []

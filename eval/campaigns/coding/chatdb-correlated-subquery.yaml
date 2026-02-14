@@ -1,0 +1,12 @@
+name: chatdb-correlated-subquery
+subjects: [chat-db-app]
+
+# Targets: O(N^2) correlated subquery in get_messages running_total computation
+# High read ratio + pre-seeded data → each query is O(N^2) causing high latency
+chaos_types:
+  - type: correlated_subquery
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

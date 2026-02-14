@@ -108,11 +108,184 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "SEARCH_ENABLED": "false",
             "SEARCH_RATIO": "0.0",
         },
+        "unbounded_results": {
+            "NUM_USERS": "20",
+            "REQUEST_DELAY": "0.3",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.9",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "write_contention": {
+            "NUM_USERS": "30",
+            "REQUEST_DELAY": "0.2",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "3",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "true",
+            "BURST_CONCURRENCY": "15",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "write_amplification": {
+            "NUM_USERS": "25",
+            "REQUEST_DELAY": "0.3",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.1",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "correlated_subquery": {
+            "NUM_USERS": "15",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.8",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "notification_fanout": {
+            "NUM_USERS": "10",
+            "REQUEST_DELAY": "2.0",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "BROADCAST_ENABLED": "true",
+            "BROADCAST_INTERVAL": "10",
+            "MULTI_USER_COUNT": "1000",
+        },
+        "notification_counter": {
+            "NUM_USERS": "25",
+            "REQUEST_DELAY": "0.3",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.3",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+        },
+        "notification_realtime": {
+            "NUM_USERS": "100",
+            "REQUEST_DELAY": "2.0",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "POLL_ENABLED": "true",
+            "POLL_RATIO": "0.9",
+            "MULTI_USER_COUNT": "100",
+        },
+        "notification_poll_idle": {
+            "NUM_USERS": "30",
+            "REQUEST_DELAY": "1.0",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "POLL_ENABLED": "true",
+            "POLL_RATIO": "0.5",
+            "MULTI_USER_COUNT": "30",
+        },
+        "notification_mark_read": {
+            "NUM_USERS": "20",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "MARK_READ_RATIO": "0.3",
+            "MULTI_USER_COUNT": "20",
+        },
+        "notification_n_plus_one": {
+            "NUM_USERS": "20",
+            "REQUEST_DELAY": "0.5",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "LIST_NOTIFS_RATIO": "0.7",
+            "MULTI_USER_COUNT": "20",
+        },
+        "notification_payload": {
+            "NUM_USERS": "20",
+            "REQUEST_DELAY": "0.3",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "LIST_NOTIFS_RATIO": "0.8",
+            "BROADCAST_ENABLED": "true",
+            "BROADCAST_INTERVAL": "30",
+            "MULTI_USER_COUNT": "20",
+        },
+        "notification_cleanup": {
+            "NUM_USERS": "25",
+            "REQUEST_DELAY": "0.3",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "BROADCAST_ENABLED": "true",
+            "BROADCAST_INTERVAL": "10",
+            "MARK_READ_RATIO": "0.2",
+            "MULTI_USER_COUNT": "200",
+        },
+        "notification_serialize": {
+            "NUM_USERS": "10",
+            "REQUEST_DELAY": "2.0",
+            "STREAM_RATIO": "0.0",
+            "RAMP_UP_SECONDS": "5",
+            "READ_RATIO": "0.0",
+            "BURST_MODE": "false",
+            "BURST_CONCURRENCY": "1",
+            "SEARCH_ENABLED": "false",
+            "SEARCH_RATIO": "0.0",
+            "BROADCAST_ENABLED": "true",
+            "BROADCAST_INTERVAL": "3",
+            "BROADCAST_SERIALIZABLE": "true",
+            "MULTI_USER_COUNT": "500",
+        },
     }
 
     CLOUD_CHAOS_TYPES = [
         "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",
         "fulltext_search", "read_scale",
+        "unbounded_results", "write_contention", "write_amplification",
+        "correlated_subquery",
+        "notification_fanout", "notification_counter", "notification_realtime",
+        "notification_poll_idle", "notification_mark_read", "notification_n_plus_one",
+        "notification_payload", "notification_cleanup", "notification_serialize",
         "load_pressure", "debug_code_edit",
     ]
 
@@ -507,6 +680,35 @@ Other useful commands:
                 await self._preseed_for_search()
             elif resolved_type == "read_scale":
                 await self._preseed_for_read_scale()
+            elif resolved_type == "unbounded_results":
+                await self._preseed_for_unbounded_results()
+            elif resolved_type == "correlated_subquery":
+                await self._preseed_for_correlated_subquery()
+            elif resolved_type == "notification_fanout":
+                await self._preseed_notification_users(1000)
+            elif resolved_type == "notification_counter":
+                await self._preseed_notifications(500_000, 1, "50000000")
+            elif resolved_type == "notification_realtime":
+                await self._preseed_notification_users(100)
+            elif resolved_type == "notification_poll_idle":
+                await self._preseed_notification_users(30)
+            elif resolved_type == "notification_mark_read":
+                await self._preseed_notifications(1_000_000, 20, "80000000")
+            elif resolved_type == "notification_n_plus_one":
+                await self._preseed_notifications(
+                    20_000, 20, "60000000", with_conversations=True
+                )
+            elif resolved_type == "notification_payload":
+                await self._preseed_notifications(
+                    200_000, 20, "70000000",
+                    payload_expr="json_build_object('message', repeat('x', 4000), 'metadata', json_build_object('key', repeat('y', 500)))::text",
+                )
+            elif resolved_type == "notification_cleanup":
+                await self._preseed_notifications(
+                    1_000_000, 200, "A0000000", unread_only=False
+                )
+            elif resolved_type == "notification_serialize":
+                await self._preseed_notification_users(500)
             return await self._inject_load_pressure(
                 chaos_type=resolved_type, profile=profile, **params
             )
@@ -784,6 +986,214 @@ Other useful commands:
             except TimeoutError:
                 last_err = TimeoutError(f"Read scale preseed timed out (attempt {attempt + 1})")
                 logger.warning("Read scale preseed attempt %d/%d timed out", attempt + 1, 3)
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_for_unbounded_results(self, count: int = 500_000) -> None:
+        """Bulk-insert messages into a few hot conversations for unbounded result set chaos."""
+        logger.info("Pre-seeding %d messages for unbounded_results chaos...", count)
+
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('30000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'unbounded conversation ' || g "
+            f"FROM generate_series(0, 9) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = (
+            "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
+            "SELECT gen_random_uuid(), "
+            "('30000000-0000-0000-0000-' || lpad(((g % 10))::text, 12, '0'))::uuid, "
+            "'Message number ' || g || ' in a very large conversation.', 'user', 10, "
+            "now() - interval '1 second' * (g % 7200) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\" -c \"{insert_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=300.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d messages for unbounded_results", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(
+                    f"unbounded_results preseed psql exited {exit_code}: {output[:200]}"
+                )
+                logger.warning(
+                    "Unbounded results preseed attempt %d/%d failed (exit %d): %s",
+                    attempt + 1, 3, exit_code, output[:200],
+                )
+            except TimeoutError:
+                last_err = TimeoutError(f"Unbounded results preseed timed out (attempt {attempt + 1})")
+                logger.warning("Unbounded results preseed attempt %d/%d timed out", attempt + 1, 3)
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_for_correlated_subquery(self, count: int = 500_000) -> None:
+        """Bulk-insert messages for correlated subquery chaos."""
+        logger.info("Pre-seeding %d messages for correlated_subquery chaos...", count)
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('40000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'subquery conversation ' || g "
+            f"FROM generate_series(0, 99) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = (
+            "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
+            "SELECT gen_random_uuid(), "
+            "('40000000-0000-0000-0000-' || lpad(((g % 100))::text, 12, '0'))::uuid, "
+            "'Message number ' || g || ' with token data.', 'user', 10 + (g % 50), "
+            "now() - interval '1 second' * (g % 7200) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\" -c \"{insert_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=300.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d messages for correlated_subquery", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(f"correlated_subquery preseed exited {exit_code}: {output[:200]}")
+            except TimeoutError:
+                last_err = TimeoutError(f"correlated_subquery preseed timed out (attempt {attempt + 1})")
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_notification_users(self, count: int) -> None:
+        """Create notification users in the database."""
+        logger.info("Pre-seeding %d notification users...", count)
+
+        setup_sql = (
+            f"INSERT INTO users (id, email) "
+            f"SELECT "
+            f"('00000000-0000-4000-9000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'notif-user-' || g || '@example.com' "
+            f"FROM generate_series(0, {count - 1}) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{setup_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=120.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d notification users", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(f"notification users preseed exited {exit_code}: {output[:200]}")
+            except TimeoutError:
+                last_err = TimeoutError(f"notification users preseed timed out (attempt {attempt + 1})")
+            if attempt < 2:
+                await asyncio.sleep(5 * (attempt + 1))
+        raise last_err  # type: ignore[misc]
+
+    async def _preseed_notifications(
+        self, count: int, user_count: int, uuid_prefix: str,
+        unread_only: bool = True, with_conversations: bool = False,
+        payload_expr: str = "'{}'",
+    ) -> None:
+        """Bulk-insert notifications for chaos testing."""
+        logger.info("Pre-seeding %d notifications (prefix=%s)...", count, uuid_prefix)
+
+        await self._preseed_notification_users(user_count)
+
+        default_user = "00000000-0000-4000-8000-000000000001"
+        read_expr = "false" if unread_only else "(g % 3 = 0)"
+
+        conv_setup = ""
+        actual_payload = payload_expr
+        if with_conversations:
+            conv_setup = (
+                f"INSERT INTO conversations (id, user_id, title) "
+                f"SELECT "
+                f"('{uuid_prefix}' || '0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+                f"'{default_user}', "
+                f"'notif conversation ' || g "
+                f"FROM generate_series(0, 999) AS g "
+                f"ON CONFLICT DO NOTHING; "
+            )
+            actual_payload = (
+                f"json_build_object('conversation_id', "
+                f"('{uuid_prefix}' || '0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0')))::text"
+            )
+
+        user_expr = (
+            f"('00000000-0000-4000-9000-' || lpad(((g % {user_count}))::text, 12, '0'))::uuid"
+            if user_count > 1
+            else f"'{default_user}'::uuid"
+        )
+
+        insert_sql = (
+            "INSERT INTO notifications (id, user_id, type, payload, read, created_at) "
+            "SELECT gen_random_uuid(), "
+            f"{user_expr}, "
+            f"'system', {actual_payload}::jsonb, {read_expr}, "
+            "now() - interval '1 second' * (g % 86400) "
+            f"FROM generate_series(1, {count}) AS g;"
+        )
+
+        full_sql = conv_setup + insert_sql
+
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
+            f"docker run --rm --network {compose_network} postgres:16 psql "
+            f"'postgresql://chatapp:chatapp@postgres:5432/chatdb' "
+            f"-c \"{full_sql}\""
+        )
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                exit_code, stdout, stderr = await self.vm.run_command(
+                    psql_cmd, timeout_sec=600.0
+                )
+                if exit_code == 0:
+                    logger.info("Pre-seeded %d notifications", count)
+                    return
+                output = stdout.strip() or stderr.strip()
+                last_err = RuntimeError(f"notifications preseed exited {exit_code}: {output[:200]}")
+            except TimeoutError:
+                last_err = TimeoutError(f"notifications preseed timed out (attempt {attempt + 1})")
             if attempt < 2:
                 await asyncio.sleep(5 * (attempt + 1))
         raise last_err  # type: ignore[misc]

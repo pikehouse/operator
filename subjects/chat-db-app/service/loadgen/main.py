@@ -18,6 +18,15 @@ Environment variables:
     BURST_CONCURRENCY: Parallel writes per burst when BURST_MODE is true (default: 1)
     SEARCH_ENABLED: Enable search requests (default: false)
     SEARCH_RATIO: Fraction of iterations that include a search request (default: 0.0)
+    BROADCAST_ENABLED: Enable periodic broadcast notifications (default: false)
+    BROADCAST_INTERVAL: Seconds between broadcasts (default: 30.0)
+    BROADCAST_SERIALIZABLE: Use SERIALIZABLE isolation for broadcasts (default: false)
+    POLL_ENABLED: Enable notification long-polling (default: false)
+    POLL_RATIO: Fraction of users that long-poll (default: 0.0)
+    UNREAD_CHECK_RATIO: Fraction of iterations checking unread count (default: 0.0)
+    MARK_READ_RATIO: Fraction of iterations marking all read (default: 0.0)
+    LIST_NOTIFS_RATIO: Fraction of iterations listing notifications (default: 0.0)
+    MULTI_USER_COUNT: Number of users to create at startup (default: 1)
 """
 
 from __future__ import annotations
@@ -46,6 +55,15 @@ BURST_MODE = os.environ.get("BURST_MODE", "false").lower() in ("true", "1", "yes
 BURST_CONCURRENCY = int(os.environ.get("BURST_CONCURRENCY", "1"))
 SEARCH_ENABLED = os.environ.get("SEARCH_ENABLED", "false").lower() in ("true", "1", "yes")
 SEARCH_RATIO = float(os.environ.get("SEARCH_RATIO", "0.0"))
+BROADCAST_ENABLED = os.environ.get("BROADCAST_ENABLED", "false").lower() in ("true", "1", "yes")
+BROADCAST_INTERVAL = float(os.environ.get("BROADCAST_INTERVAL", "30.0"))
+BROADCAST_SERIALIZABLE = os.environ.get("BROADCAST_SERIALIZABLE", "false").lower() in ("true", "1", "yes")
+POLL_ENABLED = os.environ.get("POLL_ENABLED", "false").lower() in ("true", "1", "yes")
+POLL_RATIO = float(os.environ.get("POLL_RATIO", "0.0"))
+UNREAD_CHECK_RATIO = float(os.environ.get("UNREAD_CHECK_RATIO", "0.0"))
+MARK_READ_RATIO = float(os.environ.get("MARK_READ_RATIO", "0.0"))
+LIST_NOTIFS_RATIO = float(os.environ.get("LIST_NOTIFS_RATIO", "0.0"))
+MULTI_USER_COUNT = int(os.environ.get("MULTI_USER_COUNT", "1"))
 
 SEARCH_TERMS = [
     "quantum", "database", "PostgreSQL", "connection", "deadlock",
@@ -89,8 +107,11 @@ async def wait_for_app(client: httpx.AsyncClient) -> None:
     raise RuntimeError("App did not become healthy in time")
 
 
-async def simulate_user(user_id: int, client: httpx.AsyncClient) -> None:
+async def simulate_user(
+    user_id: int, client: httpx.AsyncClient, assigned_user_ids: list[str] | None = None
+) -> None:
     """Simulate a single user sending messages."""
+    assigned_user_ids = assigned_user_ids or []
     # Stagger start times during ramp-up
     delay = (user_id / max(NUM_USERS, 1)) * RAMP_UP_SECONDS
     await asyncio.sleep(delay)
@@ -177,6 +198,50 @@ async def simulate_user(user_id: int, client: httpx.AsyncClient) -> None:
                 except httpx.TimeoutException:
                     log.warning(f"User {user_id}: search timed out for '{term}'")
 
+            # Notification interactions
+            notif_user_id = assigned_user_ids[user_id % len(assigned_user_ids)] if assigned_user_ids else None
+
+            if notif_user_id and random.random() < UNREAD_CHECK_RATIO:
+                try:
+                    resp = await client.get(
+                        f"{APP_URL}/api/notifications/unread-count",
+                        params={"user_id": notif_user_id},
+                        timeout=30,
+                    )
+                    if resp.status_code == 200:
+                        log.info(f"User {user_id}: unread count = {resp.json().get('unread_count', '?')}")
+                except httpx.TimeoutException:
+                    log.warning(f"User {user_id}: unread-count timed out")
+
+            if notif_user_id and random.random() < MARK_READ_RATIO:
+                try:
+                    resp = await client.post(
+                        f"{APP_URL}/api/notifications/mark-read",
+                        params={"user_id": notif_user_id},
+                        timeout=60,
+                    )
+                    if resp.status_code == 200:
+                        log.info(f"User {user_id}: marked read = {resp.json().get('marked_read', '?')}")
+                except httpx.TimeoutException:
+                    log.warning(f"User {user_id}: mark-read timed out")
+
+            if notif_user_id and random.random() < LIST_NOTIFS_RATIO:
+                try:
+                    start = time.monotonic()
+                    resp = await client.get(
+                        f"{APP_URL}/api/notifications",
+                        params={"user_id": notif_user_id},
+                        timeout=60,
+                    )
+                    elapsed = time.monotonic() - start
+                    if resp.status_code == 200:
+                        notifs = resp.json()
+                        log.info(f"User {user_id}: listed {len(notifs)} notifications ({elapsed:.1f}s)")
+                    else:
+                        log.warning(f"User {user_id}: list-notifications failed {resp.status_code}")
+                except httpx.TimeoutException:
+                    log.warning(f"User {user_id}: list-notifications timed out")
+
         except httpx.TimeoutException:
             log.warning(f"User {user_id}: request timed out")
         except httpx.ConnectError:
@@ -253,23 +318,137 @@ async def simulate_user_burst(user_id: int, client: httpx.AsyncClient) -> None:
         await asyncio.sleep(REQUEST_DELAY * jitter)
 
 
+async def broadcast_loop(client: httpx.AsyncClient) -> None:
+    """Periodically broadcast notifications to all users."""
+    endpoint = (
+        f"{APP_URL}/api/notifications/broadcast-serializable"
+        if BROADCAST_SERIALIZABLE
+        else f"{APP_URL}/api/notifications/broadcast"
+    )
+    while True:
+        try:
+            start = time.monotonic()
+            resp = await client.post(
+                endpoint,
+                json={"type": "system", "payload": {"message": f"broadcast at {time.time():.0f}"}},
+                timeout=120,
+            )
+            elapsed = time.monotonic() - start
+            if resp.status_code == 200:
+                data = resp.json()
+                log.info(f"Broadcast sent to {data.get('recipients', '?')} users ({elapsed:.1f}s)")
+            else:
+                log.warning(f"Broadcast failed: {resp.status_code} ({elapsed:.1f}s)")
+        except httpx.TimeoutException:
+            log.warning("Broadcast timed out")
+        except Exception as e:
+            log.error(f"Broadcast error: {e}")
+        await asyncio.sleep(BROADCAST_INTERVAL)
+
+
+async def poll_loop(
+    poller_id: int, client: httpx.AsyncClient, user_id: str
+) -> None:
+    """Long-poll for notifications for a specific user."""
+    since = None
+    while True:
+        try:
+            params: dict[str, str] = {"user_id": user_id}
+            if since:
+                params["since"] = since
+            start = time.monotonic()
+            resp = await client.get(
+                f"{APP_URL}/api/notifications/poll",
+                params=params,
+                timeout=60,
+            )
+            elapsed = time.monotonic() - start
+            if resp.status_code == 200:
+                notifs = resp.json()
+                if notifs:
+                    log.info(f"Poller {poller_id}: got {len(notifs)} notifications ({elapsed:.1f}s)")
+                    # Update since to latest notification timestamp
+                    since = notifs[-1].get("created_at", since)
+                else:
+                    log.info(f"Poller {poller_id}: poll timeout, no new notifications ({elapsed:.1f}s)")
+            else:
+                log.warning(f"Poller {poller_id}: poll failed {resp.status_code}")
+        except httpx.TimeoutException:
+            log.info(f"Poller {poller_id}: poll HTTP timeout")
+        except httpx.ConnectError:
+            log.warning(f"Poller {poller_id}: connection error, retrying...")
+            await asyncio.sleep(5)
+        except Exception as e:
+            log.error(f"Poller {poller_id}: error: {e}")
+        await asyncio.sleep(0.5)
+
+
+async def setup_multi_users(client: httpx.AsyncClient) -> list[str]:
+    """Create multiple users for notification testing. Returns list of user IDs."""
+    if MULTI_USER_COUNT <= 1:
+        return []
+    log.info(f"Creating {MULTI_USER_COUNT} users for multi-user mode...")
+    user_ids = []
+    for i in range(MULTI_USER_COUNT):
+        uid = f"00000000-0000-4000-9000-{i:012d}"
+        try:
+            # Use a direct POST to create user via the app's default user endpoint
+            # Actually, users are created via ensure_notification_users in the app
+            # We just need to know the IDs — the preseed handles creation
+            user_ids.append(uid)
+        except Exception as e:
+            log.warning(f"Failed to register user {i}: {e}")
+    log.info(f"Registered {len(user_ids)} user IDs")
+    return user_ids
+
+
 async def main() -> None:
     mode = "burst" if BURST_MODE else "normal"
     search_info = f", search={SEARCH_RATIO:.0%}" if SEARCH_ENABLED else ""
+    broadcast_info = f", broadcast every {BROADCAST_INTERVAL}s" if BROADCAST_ENABLED else ""
+    poll_info = f", poll_ratio={POLL_RATIO}" if POLL_ENABLED else ""
+    notif_info = ""
+    if LIST_NOTIFS_RATIO > 0:
+        notif_info += f", list_notifs={LIST_NOTIFS_RATIO}"
+    if MARK_READ_RATIO > 0:
+        notif_info += f", mark_read={MARK_READ_RATIO}"
+    if UNREAD_CHECK_RATIO > 0:
+        notif_info += f", unread_check={UNREAD_CHECK_RATIO}"
+    multi_info = f", multi_user={MULTI_USER_COUNT}" if MULTI_USER_COUNT > 1 else ""
     log.info(
         f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, "
-        f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}{search_info}"
+        f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}"
+        f"{search_info}{broadcast_info}{poll_info}{notif_info}{multi_info}"
     )
 
     async with httpx.AsyncClient() as client:
         await wait_for_app(client)
 
+        # Setup multi-user IDs
+        assigned_user_ids = await setup_multi_users(client)
+
+        tasks: list[asyncio.Task] = []
+
         # Choose user simulation function based on mode
-        user_fn = simulate_user_burst if BURST_MODE else simulate_user
-        tasks = [
-            asyncio.create_task(user_fn(i, client))
-            for i in range(NUM_USERS)
-        ]
+        if BURST_MODE:
+            for i in range(NUM_USERS):
+                tasks.append(asyncio.create_task(simulate_user_burst(i, client)))
+        else:
+            for i in range(NUM_USERS):
+                tasks.append(asyncio.create_task(
+                    simulate_user(i, client, assigned_user_ids=assigned_user_ids)
+                ))
+
+        # Broadcast coroutine
+        if BROADCAST_ENABLED:
+            tasks.append(asyncio.create_task(broadcast_loop(client)))
+
+        # Poll coroutines
+        if POLL_ENABLED and assigned_user_ids:
+            num_pollers = max(1, int(len(assigned_user_ids) * POLL_RATIO))
+            for i in range(num_pollers):
+                uid = assigned_user_ids[i % len(assigned_user_ids)]
+                tasks.append(asyncio.create_task(poll_loop(i, client, uid)))
 
         # Run until cancelled
         try:

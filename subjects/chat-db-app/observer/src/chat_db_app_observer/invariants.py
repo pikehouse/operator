@@ -74,6 +74,13 @@ HIGH_ERROR_RATE_CONFIG = InvariantConfig(
     severity="critical",
 )
 
+TABLE_BLOAT_CONFIG = InvariantConfig(
+    name="table_bloat",
+    grace_period=timedelta(seconds=30),
+    threshold=2.0,  # dead_tuples / live_tuples > 2.0 for any table
+    severity="warning",
+)
+
 
 class ChatDBAppInvariantChecker:
     """
@@ -131,6 +138,11 @@ class ChatDBAppInvariantChecker:
 
         # 6. High error rate
         v = self._check_high_error_rate(app)
+        if v:
+            violations.append(v)
+
+        # 7. Table bloat (write amplification)
+        v = self._check_table_bloat(db)
         if v:
             violations.append(v)
 
@@ -217,6 +229,31 @@ class ChatDBAppInvariantChecker:
             config=config,
             is_violated=is_violated,
             message=f"Error rate {error_rate:.1f}% exceeds threshold {config.threshold:.0f}%",
+        )
+
+    def _check_table_bloat(self, db: dict) -> InvariantViolation | None:
+        """Check for excessive dead tuple accumulation (write amplification)."""
+        config = TABLE_BLOAT_CONFIG
+        table_bloat = db.get("table_bloat", [])
+
+        worst_ratio = 0.0
+        worst_table = ""
+        worst_dead = 0
+        for t in table_bloat:
+            dead = t.get("dead_tuples", 0)
+            live = t.get("live_tuples", 0)
+            ratio = dead / max(live, 1)
+            if ratio > worst_ratio:
+                worst_ratio = ratio
+                worst_table = t.get("table_name", "")
+                worst_dead = dead
+
+        is_violated = worst_ratio > config.threshold and worst_dead > 100
+
+        return self._check_with_grace_period(
+            config=config,
+            is_violated=is_violated,
+            message=f"Table '{worst_table}' has {worst_dead} dead tuples ({worst_ratio:.1f}x live ratio, threshold: {config.threshold:.1f}x)",
         )
 
     def _check_with_grace_period(

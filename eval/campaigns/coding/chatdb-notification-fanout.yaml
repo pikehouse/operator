@@ -1,0 +1,12 @@
+name: chatdb-notification-fanout
+subjects: [chat-db-app]
+
+# Targets: Synchronous INSERT loop in broadcast endpoint
+# 1000 users + frequent broadcasts → each broadcast takes 30+ seconds
+chaos_types:
+  - type: notification_fanout
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

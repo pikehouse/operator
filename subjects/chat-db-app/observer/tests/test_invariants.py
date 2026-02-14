@@ -20,6 +20,7 @@ from chat_db_app_observer.invariants import (
     IDLE_IN_TRANSACTION_CONFIG,
     LOCK_CONTENTION_CONFIG,
     POOL_EXHAUSTION_CONFIG,
+    TABLE_BLOAT_CONFIG,
     ChatDBAppInvariantChecker,
 )
 
@@ -38,6 +39,7 @@ def _make_observation(
     waiting_on_lock: int = 0,
     long_running_queries: list | None = None,
     deadlocks_total: int = 0,
+    table_bloat: list | None = None,
     latency_p99_ms: float = 10.0,
     latency_p50_ms: float = 5.0,
     requests_per_sec: float = 100.0,
@@ -68,6 +70,7 @@ def _make_observation(
             "waiting_on_lock": waiting_on_lock,
             "long_running_queries": long_running_queries or [],
             "deadlocks_total": deadlocks_total,
+            "table_bloat": table_bloat or [],
         },
         "endpoint_metrics": {
             "latency_p99_ms": latency_p99_ms,
@@ -263,6 +266,74 @@ class TestHighErrorRate:
         assert error_violations[0].severity == "critical"
 
 
+class TestTableBloat:
+    """Tests for table_bloat invariant."""
+
+    def test_no_violation_when_healthy(self):
+        checker = ChatDBAppInvariantChecker()
+        obs = _make_observation(table_bloat=[
+            {"table_name": "users", "live_tuples": 100, "dead_tuples": 10},
+        ])
+        violations = checker.check(obs)
+        assert not any(v.invariant_name == "table_bloat" for v in violations)
+
+    def test_violation_when_ratio_exceeds_threshold(self):
+        checker = ChatDBAppInvariantChecker()
+        obs = _make_observation(table_bloat=[
+            {"table_name": "users", "live_tuples": 50, "dead_tuples": 200},
+        ])
+
+        # First check: within grace period (30s)
+        violations = checker.check(obs)
+        assert not any(v.invariant_name == "table_bloat" for v in violations)
+
+        # After grace period
+        checker._first_seen["table_bloat"] = checker._first_seen[
+            "table_bloat"
+        ] - timedelta(seconds=31)
+        violations = checker.check(obs)
+        bloat_violations = [v for v in violations if v.invariant_name == "table_bloat"]
+        assert len(bloat_violations) == 1
+        assert bloat_violations[0].severity == "warning"
+        assert "users" in bloat_violations[0].message
+
+    def test_clears_when_resolved(self):
+        checker = ChatDBAppInvariantChecker()
+        obs_bad = _make_observation(table_bloat=[
+            {"table_name": "users", "live_tuples": 50, "dead_tuples": 200},
+        ])
+        checker.check(obs_bad)
+
+        obs_good = _make_observation(table_bloat=[
+            {"table_name": "users", "live_tuples": 100, "dead_tuples": 10},
+        ])
+        violations = checker.check(obs_good)
+        assert not any(v.invariant_name == "table_bloat" for v in violations)
+        assert "table_bloat" not in checker._first_seen
+
+    def test_minimum_dead_tuple_floor(self):
+        """High ratio but tiny dead count should not trigger."""
+        checker = ChatDBAppInvariantChecker()
+        # Ratio is 10x but only 50 dead tuples (below 100 floor)
+        obs = _make_observation(table_bloat=[
+            {"table_name": "users", "live_tuples": 5, "dead_tuples": 50},
+        ])
+        checker.check(obs)
+        # Even after grace period, should not fire
+        if "table_bloat" in checker._first_seen:
+            checker._first_seen["table_bloat"] = checker._first_seen[
+                "table_bloat"
+            ] - timedelta(seconds=31)
+        violations = checker.check(obs)
+        assert not any(v.invariant_name == "table_bloat" for v in violations)
+
+    def test_empty_table_bloat_no_violation(self):
+        checker = ChatDBAppInvariantChecker()
+        obs = _make_observation(table_bloat=[])
+        violations = checker.check(obs)
+        assert not any(v.invariant_name == "table_bloat" for v in violations)
+
+
 class TestClearState:
     """Tests for clear_state method."""
 
@@ -289,6 +360,9 @@ class TestMultipleViolations:
             waiting_on_lock=10,
             latency_p99_ms=1000.0,
             error_rate_pct=20.0,
+            table_bloat=[
+                {"table_name": "users", "live_tuples": 50, "dead_tuples": 200},
+            ],
         )
 
         # db_unreachable fires immediately (0 grace)
@@ -307,3 +381,4 @@ class TestMultipleViolations:
         assert "lock_contention" in names
         assert "high_latency" in names
         assert "high_error_rate" in names
+        assert "table_bloat" in names

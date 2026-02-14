@@ -57,7 +57,20 @@ class TestChaosTypes:
         assert "counter_race" in types
         assert "fulltext_search" in types
         assert "read_scale" in types
-        assert len(types) == 6
+        assert "unbounded_results" in types
+        assert "write_contention" in types
+        assert "write_amplification" in types
+        assert "correlated_subquery" in types
+        assert "notification_fanout" in types
+        assert "notification_counter" in types
+        assert "notification_realtime" in types
+        assert "notification_poll_idle" in types
+        assert "notification_mark_read" in types
+        assert "notification_n_plus_one" in types
+        assert "notification_payload" in types
+        assert "notification_cleanup" in types
+        assert "notification_serialize" in types
+        assert len(types) == 19
 
 
 class TestSourceDir:

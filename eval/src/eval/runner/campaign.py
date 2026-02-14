@@ -25,6 +25,11 @@ class ChaosSpec(BaseModel):
             "load_pressure", "db_kill", "debug_code_edit",  # Chat DB App
             "missing_index", "pool_exhaustion", "streaming_txn", "counter_race",  # Chat DB App per-defect
             "fulltext_search", "read_scale",  # Chat DB App feature-building
+            "unbounded_results", "write_contention", "write_amplification",  # Chat DB App scaling
+            "correlated_subquery",  # Chat DB App O(N^2) query
+            "notification_fanout", "notification_counter", "notification_realtime",  # Chat DB App notification
+            "notification_poll_idle", "notification_mark_read", "notification_n_plus_one",  # Chat DB App notification
+            "notification_payload", "notification_cleanup", "notification_serialize",  # Chat DB App notification
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")

@@ -61,6 +61,7 @@ class ChatDBAppSubject:
             max_connections = await self._pg.get_max_connections()
             long_queries = await self._pg.get_long_running_queries(threshold_sec=10.0)
             deadlocks = await self._pg.get_deadlock_count()
+            table_bloat = await self._pg.get_table_bloat_stats()
         else:
             from chat_db_app_observer.types import PgSessionStats
 
@@ -68,6 +69,7 @@ class ChatDBAppSubject:
             max_connections = 100
             long_queries = []
             deadlocks = 0
+            table_bloat = []
 
         # Compute waiting from pool metrics (if pool reports a max and we're at it)
         pool_waiting = max(0, pool_metrics.total - pool_metrics.max_size) if pool_metrics.max_size > 0 else 0
@@ -101,6 +103,16 @@ class ChatDBAppSubject:
                     for q in long_queries
                 ],
                 "deadlocks_total": deadlocks,
+                "table_bloat": [
+                    {
+                        "table_name": t.table_name,
+                        "live_tuples": t.live_tuples,
+                        "dead_tuples": t.dead_tuples,
+                        "dead_ratio": t.dead_tuples / max(t.live_tuples, 1),
+                        "last_autovacuum": t.last_autovacuum,
+                    }
+                    for t in table_bloat
+                ],
             },
             "endpoint_metrics": {
                 "latency_p99_ms": endpoint_metrics.latency_p99_ms,

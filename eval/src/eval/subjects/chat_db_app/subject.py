@@ -35,6 +35,15 @@ LIGHT_LOAD = {
     "BURST_CONCURRENCY": "1",
     "SEARCH_ENABLED": "false",
     "SEARCH_RATIO": "0.0",
+    "BROADCAST_ENABLED": "false",
+    "BROADCAST_INTERVAL": "30.0",
+    "BROADCAST_SERIALIZABLE": "false",
+    "POLL_ENABLED": "false",
+    "POLL_RATIO": "0.0",
+    "UNREAD_CHECK_RATIO": "0.0",
+    "MARK_READ_RATIO": "0.0",
+    "LIST_NOTIFS_RATIO": "0.0",
+    "MULTI_USER_COUNT": "1",
 }
 
 # Per-defect chaos profiles — each targets a specific app bug
@@ -111,11 +120,309 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "SEARCH_ENABLED": "false",
         "SEARCH_RATIO": "0.0",
     },
+    # No LIMIT on get_messages() — 50K rows per read crushes the app
+    "unbounded_results": {
+        "NUM_USERS": "20",
+        "REQUEST_DELAY": "0.3",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.9",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # Hot row contention — burst writes on same user row create lock convoy
+    "write_contention": {
+        "NUM_USERS": "30",
+        "REQUEST_DELAY": "0.2",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "3",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "true",
+        "BURST_CONCURRENCY": "15",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # Sustained writes accumulate MVCC dead tuples faster than autovacuum
+    "write_amplification": {
+        "NUM_USERS": "25",
+        "REQUEST_DELAY": "0.3",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.1",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # O(N^2) correlated subquery in get_messages running_total computation
+    "correlated_subquery": {
+        "NUM_USERS": "15",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.8",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # Broadcast notification fanout — synchronous INSERT loop can't keep up
+    "notification_fanout": {
+        "NUM_USERS": "10",
+        "REQUEST_DELAY": "2.0",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "BROADCAST_ENABLED": "true",
+        "BROADCAST_INTERVAL": "10",
+        "MULTI_USER_COUNT": "1000",
+    },
+    # Unread count middleware — SELECT COUNT(*) on every request with 500K notifications
+    "notification_counter": {
+        "NUM_USERS": "25",
+        "REQUEST_DELAY": "0.3",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.3",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+    # Poll endpoint holds DB connections for 30s — starves regular requests
+    "notification_realtime": {
+        "NUM_USERS": "100",
+        "REQUEST_DELAY": "2.0",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "POLL_ENABLED": "true",
+        "POLL_RATIO": "0.9",
+        "MULTI_USER_COUNT": "100",
+    },
+    # Poll holds transactions open for 30s — blocks autovacuum
+    "notification_poll_idle": {
+        "NUM_USERS": "30",
+        "REQUEST_DELAY": "1.0",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "POLL_ENABLED": "true",
+        "POLL_RATIO": "0.5",
+        "MULTI_USER_COUNT": "30",
+    },
+    # Mark-all-read fires N individual UPDATEs with 50K unread per user
+    "notification_mark_read": {
+        "NUM_USERS": "20",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "MARK_READ_RATIO": "0.3",
+        "MULTI_USER_COUNT": "20",
+    },
+    # N+1 query: list_notifications fires 1 SELECT per notification for conversation title
+    "notification_n_plus_one": {
+        "NUM_USERS": "20",
+        "REQUEST_DELAY": "0.5",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "LIST_NOTIFS_RATIO": "0.7",
+        "MULTI_USER_COUNT": "20",
+    },
+    # Large JSONB payloads — SELECT * transfers 5KB per notification
+    "notification_payload": {
+        "NUM_USERS": "20",
+        "REQUEST_DELAY": "0.3",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "LIST_NOTIFS_RATIO": "0.8",
+        "BROADCAST_ENABLED": "true",
+        "BROADCAST_INTERVAL": "30",
+        "MULTI_USER_COUNT": "20",
+    },
+    # Notifications accumulate forever — dead tuples from mark-read outpace autovacuum
+    "notification_cleanup": {
+        "NUM_USERS": "25",
+        "REQUEST_DELAY": "0.3",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "BROADCAST_ENABLED": "true",
+        "BROADCAST_INTERVAL": "10",
+        "MARK_READ_RATIO": "0.2",
+        "MULTI_USER_COUNT": "200",
+    },
+    # Concurrent SERIALIZABLE broadcasts cause serialization failures
+    "notification_serialize": {
+        "NUM_USERS": "10",
+        "REQUEST_DELAY": "2.0",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.0",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+        "BROADCAST_ENABLED": "true",
+        "BROADCAST_INTERVAL": "3",
+        "BROADCAST_SERIALIZABLE": "true",
+        "MULTI_USER_COUNT": "500",
+    },
 }
 
 # Backward compatibility: load_pressure maps to pool_exhaustion
 CHAOS_PROFILE_ALIASES: dict[str, str] = {
     "load_pressure": "pool_exhaustion",
+}
+
+CHAOS_CATALOG: dict[str, dict[str, str]] = {
+    "missing_index": {
+        "description": "No index on messages.conversation_id. Sequential scans on every message lookup.",
+        "anti_pattern": "Missing index on high-cardinality foreign key column",
+        "expected_fix": "CREATE INDEX idx_messages_conversation_id ON messages(conversation_id)",
+        "reference": "https://www.postgresql.org/docs/current/indexes.html",
+    },
+    "pool_exhaustion": {
+        "description": "asyncpg pool created with no max_size. Under load, opens unlimited connections until PostgreSQL hits max_connections.",
+        "anti_pattern": "Unbounded connection pool",
+        "expected_fix": "Set max_size on create_pool() (e.g., max_size=20)",
+        "reference": "https://magicstack.github.io/asyncpg/current/api/#connection-pools",
+    },
+    "streaming_txn": {
+        "description": "Streaming response holds a database transaction open for the entire simulated generation time (1-10s). Connections stuck idle-in-transaction.",
+        "anti_pattern": "Long-held transactions during I/O-bound operations",
+        "expected_fix": "Split into two transactions: one for the user message insert, one for the assistant response after generation completes",
+        "reference": "https://www.postgresql.org/docs/current/mvcc.html",
+    },
+    "counter_race": {
+        "description": "Token counter uses read-modify-write (SELECT then UPDATE) instead of atomic increment. Concurrent writes lose increments.",
+        "anti_pattern": "Read-modify-write race condition on counters",
+        "expected_fix": "Use UPDATE users SET token_usage = token_usage + $1 (atomic increment)",
+        "reference": "https://www.postgresql.org/docs/current/transaction-iso.html",
+    },
+    "fulltext_search": {
+        "description": "Search uses ILIKE '%term%' which forces sequential scan on every query. Cannot use B-tree indexes.",
+        "anti_pattern": "ILIKE pattern matching for fulltext search",
+        "expected_fix": "Use to_tsvector/to_tsquery with GIN index for PostgreSQL full-text search",
+        "reference": "https://www.postgresql.org/docs/current/textsearch.html",
+    },
+    "read_scale": {
+        "description": "60+ concurrent users doing 90% reads on conversations with 10K+ messages each. Single PostgreSQL can't serve this read volume.",
+        "anti_pattern": "No caching layer for read-heavy workloads",
+        "expected_fix": "Add Redis cache-aside pattern: cache message lists, invalidate on write",
+        "reference": "https://redis.io/docs/latest/develop/data-types/strings/",
+    },
+    "unbounded_results": {
+        "description": "get_messages() returns ALL messages with no LIMIT clause. Conversations with 50K+ messages return multi-MB responses, exhausting memory and bandwidth.",
+        "anti_pattern": "No pagination on unbounded result sets",
+        "expected_fix": "Add LIMIT/OFFSET or cursor-based pagination to get_messages()",
+        "reference": "https://www.postgresql.org/docs/current/queries-limit.html",
+    },
+    "write_contention": {
+        "description": "Every message insert UPDATEs conversations.message_count and users.token_usage. Under high burst concurrency, all writers contend on the same user row, creating lock convoy.",
+        "anti_pattern": "Hot row updates on shared counters under concurrent writes",
+        "expected_fix": "Use atomic increments (SET x = x + 1), decouple counting from writes, or batch counter updates asynchronously",
+        "reference": "https://www.postgresql.org/docs/current/explicit-locking.html",
+    },
+    "write_amplification": {
+        "description": "PostgreSQL MVCC creates a dead tuple on every UPDATE. The read-modify-write pattern on users.token_usage (1 row, updated on every message) generates dead tuples faster than autovacuum can clean them. Table bloat degrades scan performance.",
+        "anti_pattern": "Frequent UPDATEs to hot rows causing MVCC dead tuple accumulation",
+        "expected_fix": "Tune autovacuum (lower thresholds, more workers), use atomic increments to reduce update frequency, or batch counter updates",
+        "reference": "https://www.postgresql.org/docs/current/routine-vacuuming.html",
+    },
+    "correlated_subquery": {
+        "description": "get_messages() uses a correlated subquery to compute running token total per message. Each row triggers a SUM over all preceding rows — O(N^2) for N messages.",
+        "anti_pattern": "Correlated subquery for running aggregates",
+        "expected_fix": "Use window function: SUM(token_count) OVER (ORDER BY created_at)",
+        "reference": "https://www.postgresql.org/docs/current/tutorial-window.html",
+    },
+    "notification_fanout": {
+        "description": "Broadcast endpoint inserts one notification per user in a synchronous loop. At 1000+ users with broadcasts every 10s, each broadcast takes 30+ seconds, blocking the connection.",
+        "anti_pattern": "Synchronous fan-out writes in the request path",
+        "expected_fix": "Accept broadcast immediately (202 Accepted), add a Redis queue + background worker service to process broadcasts asynchronously with batch INSERTs",
+        "reference": "https://redis.io/docs/latest/develop/interact/pubsub/",
+    },
+    "notification_counter": {
+        "description": "Middleware runs SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND NOT read on every /api/ request. With 500K+ unread notifications, each count takes ~200ms.",
+        "anti_pattern": "COUNT(*) on large table in hot path (middleware)",
+        "expected_fix": "Maintain a materialized unread counter: add unread_count column to users table maintained by a trigger, or use Redis INCR/DECR",
+        "reference": "https://www.postgresql.org/docs/current/sql-createtrigger.html",
+    },
+    "notification_realtime": {
+        "description": "Poll endpoint holds a DB connection for 30 seconds waiting for new notifications. With 90 concurrent pollers, the pool is consumed — regular API requests starve.",
+        "anti_pattern": "Database connection held during long-poll",
+        "expected_fix": "Replace DB polling with Redis pub/sub. Add Redis to docker-compose.yaml. Publish on broadcast, subscribe with timeout in poll endpoint.",
+        "reference": "https://redis.io/docs/latest/develop/interact/pubsub/",
+    },
+    "notification_poll_idle": {
+        "description": "Poll endpoint holds a database TRANSACTION open for 30 seconds. Idle-in-transaction sessions prevent autovacuum and hold MVCC snapshots.",
+        "anti_pattern": "Long-held transactions during polling",
+        "expected_fix": "Remove the transaction wrapper from poll, or use PostgreSQL LISTEN/NOTIFY instead of polling the DB",
+        "reference": "https://www.postgresql.org/docs/current/sql-listen.html",
+    },
+    "notification_mark_read": {
+        "description": "mark_all_read() fires one UPDATE per notification. With 50K+ unread per user, each call fires 50K individual UPDATEs in sequence, taking 30+ seconds.",
+        "anti_pattern": "Row-by-row UPDATE instead of batch",
+        "expected_fix": "Replace the loop with a single batch statement: UPDATE notifications SET read = true WHERE user_id = $1 AND NOT read",
+        "reference": "https://www.postgresql.org/docs/current/sql-update.html",
+    },
+    "notification_n_plus_one": {
+        "description": "list_notifications() fetches each notification's conversation title with a separate SELECT. With 1000 notifications per user, each listing fires 1001 queries.",
+        "anti_pattern": "N+1 query pattern for related data",
+        "expected_fix": "Rewrite as a single query with LEFT JOIN: SELECT n.*, c.title FROM notifications n LEFT JOIN conversations c ON c.id = (n.payload->>'conversation_id')::uuid",
+        "reference": "https://www.postgresql.org/docs/current/queries-table-expressions.html",
+    },
+    "notification_payload": {
+        "description": "Broadcast stores ~5KB JSONB payload per notification. list_notifications does SELECT *, transferring all payload data. With 10K notifications per user, each listing is ~50MB.",
+        "anti_pattern": "SELECT * with large JSONB columns",
+        "expected_fix": "Use explicit column list excluding payload: SELECT id, user_id, type, read, created_at. Add separate detail endpoint for individual payloads.",
+        "reference": "https://www.postgresql.org/docs/current/datatype-json.html",
+    },
+    "notification_cleanup": {
+        "description": "Notifications accumulate forever. Ongoing broadcasts add rows, mark-read creates dead tuples. Autovacuum can't keep pace with the dead tuple rate, causing table bloat.",
+        "anti_pattern": "Unbounded data accumulation without retention policy",
+        "expected_fix": "Add retention policy: DELETE notifications WHERE read AND created_at < now() - interval '7 days'. Or add a cron service to docker-compose, or implement table partitioning.",
+        "reference": "https://www.postgresql.org/docs/current/ddl-partitioning.html",
+    },
+    "notification_serialize": {
+        "description": "Broadcast uses SERIALIZABLE isolation. Under concurrent broadcasts, PostgreSQL detects serialization conflicts and aborts with error 40001. The app doesn't catch SerializationError, causing 500s.",
+        "anti_pattern": "SERIALIZABLE isolation without retry logic",
+        "expected_fix": "Catch asyncpg.SerializationError and retry with exponential backoff, or downgrade to READ COMMITTED isolation",
+        "reference": "https://www.postgresql.org/docs/current/transaction-iso.html",
+    },
 }
 
 # Number of messages to pre-seed for missing_index chaos
@@ -179,8 +486,13 @@ class ChatDBAppEvalSubject:
             "NUM_USERS", "REQUEST_DELAY", "STREAM_RATIO", "RAMP_UP_SECONDS",
             "READ_RATIO", "BURST_MODE", "BURST_CONCURRENCY",
             "SEARCH_ENABLED", "SEARCH_RATIO",
+            "BROADCAST_ENABLED", "BROADCAST_INTERVAL", "BROADCAST_SERIALIZABLE",
+            "POLL_ENABLED", "POLL_RATIO",
+            "UNREAD_CHECK_RATIO", "MARK_READ_RATIO", "LIST_NOTIFS_RATIO",
+            "MULTI_USER_COUNT",
         ):
-            lines.append(f"{key}={profile[key]}")
+            if key in profile:
+                lines.append(f"{key}={profile[key]}")
         env_file.write_text("\n".join(lines) + "\n")
 
     async def _ensure_workspace(self) -> CodeWorkspace:
@@ -479,6 +791,176 @@ FROM generate_series(1, {count}) AS g;
         except Exception as e:
             logger.warning("Failed to pre-seed read_scale messages: %s", e)
 
+    async def _preseed_for_unbounded_results(self, count: int = 500_000) -> None:
+        """Bulk-insert messages into a few hot conversations for unbounded result set chaos."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d messages for unbounded_results chaos...", count)
+
+        # Use the default user
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        # 10 conversations × 50K messages each
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('30000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'unbounded conversation ' || g "
+            f"FROM generate_series(0, 9) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = f"""
+INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+SELECT
+    gen_random_uuid(),
+    ('30000000-0000-0000-0000-' || lpad(((g % 10))::text, 12, '0'))::uuid,
+    'Message number ' || g || ' in a very large conversation.',
+    'user',
+    10,
+    now() - interval '1 second' * (g % 7200)
+FROM generate_series(1, {count}) AS g;
+"""
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, "-c", insert_sql,
+            )
+            logger.info("Pre-seeded %d messages for unbounded_results", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed unbounded_results messages: %s", e)
+
+    async def _preseed_for_correlated_subquery(self, count: int = 500_000) -> None:
+        """Bulk-insert messages into conversations for correlated subquery chaos."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d messages for correlated_subquery chaos...", count)
+
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        # 100 conversations × 5K messages each
+        setup_sql = (
+            f"INSERT INTO conversations (id, user_id, title) "
+            f"SELECT "
+            f"('40000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'{default_user}', "
+            f"'subquery conversation ' || g "
+            f"FROM generate_series(0, 99) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+
+        insert_sql = f"""
+INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+SELECT
+    gen_random_uuid(),
+    ('40000000-0000-0000-0000-' || lpad(((g % 100))::text, 12, '0'))::uuid,
+    'Message number ' || g || ' with token data.',
+    'user',
+    10 + (g % 50),
+    now() - interval '1 second' * (g % 7200)
+FROM generate_series(1, {count}) AS g;
+"""
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, "-c", insert_sql,
+            )
+            logger.info("Pre-seeded %d messages for correlated_subquery", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed correlated_subquery messages: %s", e)
+
+    async def _preseed_notification_users(self, count: int) -> None:
+        """Create notification users in the database."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d notification users...", count)
+
+        setup_sql = (
+            f"INSERT INTO users (id, email) "
+            f"SELECT "
+            f"('00000000-0000-4000-9000-' || lpad(g::text, 12, '0'))::uuid, "
+            f"'notif-user-' || g || '@example.com' "
+            f"FROM generate_series(0, {count - 1}) AS g "
+            f"ON CONFLICT DO NOTHING;"
+        )
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql,
+            )
+            logger.info("Pre-seeded %d notification users", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed notification users: %s", e)
+
+    async def _preseed_notifications(
+        self, count: int, user_count: int, uuid_prefix: str = "50000000",
+        payload_size: str = "'{}'", unread_only: bool = True,
+        with_conversations: bool = False,
+    ) -> None:
+        """Bulk-insert notifications for chaos testing."""
+        ws = await self._ensure_workspace()
+        logger.info("Pre-seeding %d notifications (prefix=%s)...", count, uuid_prefix)
+
+        # Ensure notification users exist
+        await self._preseed_notification_users(user_count)
+
+        # Also ensure default user exists for non-multi-user scenarios
+        default_user = "00000000-0000-4000-8000-000000000001"
+
+        read_expr = "false" if unread_only else "(g % 3 = 0)"
+
+        # Optionally create conversations for N+1 chaos type
+        conv_setup = ""
+        payload_expr = payload_size
+        if with_conversations:
+            conv_setup = (
+                f"INSERT INTO conversations (id, user_id, title) "
+                f"SELECT "
+                f"('{uuid_prefix}' || '0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
+                f"'{default_user}', "
+                f"'notif conversation ' || g "
+                f"FROM generate_series(0, 999) AS g "
+                f"ON CONFLICT DO NOTHING;"
+            )
+            # Payload with conversation_id reference
+            payload_expr = (
+                f"json_build_object('conversation_id', "
+                f"('{uuid_prefix}' || '0000-0000-0000-' || lpad(((g % 1000))::text, 12, '0')))::text"
+            )
+
+        user_expr = (
+            f"('00000000-0000-4000-9000-' || lpad(((g % {user_count}))::text, 12, '0'))::uuid"
+            if user_count > 1
+            else f"'{default_user}'::uuid"
+        )
+
+        insert_sql = f"""
+INSERT INTO notifications (id, user_id, type, payload, read, created_at)
+SELECT
+    gen_random_uuid(),
+    {user_expr},
+    'system',
+    {payload_expr}::jsonb,
+    {read_expr},
+    now() - interval '1 second' * (g % 86400)
+FROM generate_series(1, {count}) AS g;
+"""
+        full_sql = conv_setup + insert_sql if conv_setup else insert_sql
+        try:
+            await asyncio.to_thread(
+                ws._run_compose,
+                "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", full_sql,
+            )
+            logger.info("Pre-seeded %d notifications", count)
+        except Exception as e:
+            logger.warning("Failed to pre-seed notifications: %s", e)
+
     async def inject_chaos(
         self, chaos_type: str, **params: Any
     ) -> dict[str, Any]:
@@ -515,6 +997,48 @@ FROM generate_series(1, {count}) AS g;
             await self._preseed_for_search()
         elif resolved_type == "read_scale":
             await self._preseed_for_read_scale()
+        elif resolved_type == "unbounded_results":
+            await self._preseed_for_unbounded_results()
+        elif resolved_type == "correlated_subquery":
+            await self._preseed_for_correlated_subquery()
+        elif resolved_type == "notification_fanout":
+            await self._preseed_notification_users(1000)
+        elif resolved_type == "notification_counter":
+            await self._preseed_notifications(
+                count=500_000, user_count=1, uuid_prefix="50000000"
+            )
+        elif resolved_type == "notification_realtime":
+            await self._preseed_notification_users(100)
+        elif resolved_type == "notification_poll_idle":
+            await self._preseed_notification_users(30)
+        elif resolved_type == "notification_mark_read":
+            await self._preseed_notifications(
+                count=1_000_000, user_count=20, uuid_prefix="80000000"
+            )
+        elif resolved_type == "notification_n_plus_one":
+            await self._preseed_notifications(
+                count=20_000, user_count=20, uuid_prefix="60000000",
+                with_conversations=True,
+            )
+        elif resolved_type == "notification_payload":
+            # 5KB JSONB payloads
+            payload_expr = (
+                "json_build_object("
+                "'message', repeat('x', 4000), "
+                "'metadata', json_build_object('key', repeat('y', 500))"
+                ")::text"
+            )
+            await self._preseed_notifications(
+                count=200_000, user_count=20, uuid_prefix="70000000",
+                payload_size=payload_expr,
+            )
+        elif resolved_type == "notification_cleanup":
+            await self._preseed_notifications(
+                count=1_000_000, user_count=200, uuid_prefix="A0000000",
+                unread_only=False,
+            )
+        elif resolved_type == "notification_serialize":
+            await self._preseed_notification_users(500)
 
         # Write .env with chaos profile and restart loadgen
         self._write_env(profile)

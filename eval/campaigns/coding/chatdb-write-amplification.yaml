@@ -1,0 +1,7 @@
+name: chatdb-write-amplification
+subjects: [chat-db-app]
+chaos_types:
+  - type: write_amplification
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10

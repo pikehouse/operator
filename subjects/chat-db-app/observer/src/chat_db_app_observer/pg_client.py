@@ -13,6 +13,7 @@ from chat_db_app_observer.types import (
     LongRunningQuery,
     PgDatabaseStats,
     PgSessionStats,
+    TableBloatStats,
 )
 
 
@@ -132,6 +133,27 @@ class PgClient:
                 duration_sec=round(row["duration_sec"], 1),
                 state=row["state"],
                 query_preview=row["query_preview"],
+            )
+            for row in rows
+        ]
+
+    async def get_table_bloat_stats(self) -> list[TableBloatStats]:
+        """Get dead tuple counts from pg_stat_user_tables."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT relname, n_live_tup, n_dead_tup,
+                       last_autovacuum, last_vacuum
+                FROM pg_stat_user_tables
+                WHERE schemaname = 'public'
+                ORDER BY n_dead_tup DESC
+            """)
+        return [
+            TableBloatStats(
+                table_name=row["relname"],
+                live_tuples=row["n_live_tup"],
+                dead_tuples=row["n_dead_tup"],
+                last_autovacuum=str(row["last_autovacuum"]) if row["last_autovacuum"] else None,
+                last_vacuum=str(row["last_vacuum"]) if row["last_vacuum"] else None,
             )
             for row in rows
         ]

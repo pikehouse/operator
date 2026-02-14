@@ -1,0 +1,12 @@
+name: chatdb-notification-n-plus-one
+subjects: [chat-db-app]
+
+# Targets: N+1 query in list_notifications() fetching conversation titles
+# 1000 notifications per user → 1001 queries per listing request
+chaos_types:
+  - type: notification_n_plus_one
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true

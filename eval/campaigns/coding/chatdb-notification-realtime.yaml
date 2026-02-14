@@ -1,0 +1,12 @@
+name: chatdb-notification-realtime
+subjects: [chat-db-app]
+
+# Targets: Poll endpoint holds DB connections for 30 seconds
+# 90 concurrent pollers consume the pool → regular requests starve
+chaos_types:
+  - type: notification_realtime
+
+trials_per_combination: 3
+parallel: 1
+cooldown_seconds: 10
+include_baseline: true
