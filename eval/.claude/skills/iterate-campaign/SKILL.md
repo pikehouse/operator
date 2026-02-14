@@ -1,7 +1,6 @@
 ---
 name: iterate-campaign
 description: Analyze campaign failures, diagnose root causes, fix, rebuild, and retry until win rate improves
-disable-model-invocation: true
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep, TaskCreate, TaskUpdate, TaskList, TaskOutput
 argument-hint: <campaign-id> [--target-rate N%]
 ---
@@ -218,6 +217,22 @@ git add <changed-files>
 git commit -m "fix(eval): <description>"
 git push
 ```
+
+## Success Criteria
+
+A trial succeeds when the **infrastructure and eval pipeline work correctly**, regardless of whether the agent itself performs well. The agent may fail to resolve the issue — that's a valid (low-scoring) outcome, not a broken trial.
+
+A trial is successful if:
+
+1. **Trial runs to completion on GCP infra** — the worker picks up the trial, provisions a VM, deploys the subject, and the trial reaches its `ended_at` without crashing or erroring out
+2. **Deployment becomes healthy** — `wait_healthy()` passes before chaos injection begins; the subject cluster is fully operational
+3. **Chaos is successfully injected** (non-baseline trials) — `inject_chaos()` returns valid metadata and the chaos actually takes effect on the target system
+4. **Monitor detects the chaos and files a ticket** — an invariant violation fires and creates a ticket with a positive `time_to_detect`
+5. **Agent recognizes the ticket** — the agent reads the ticket and begins reasoning about it (commands appear in `commands_json`)
+
+A trial with all of the above but where the agent fails to resolve the issue is a **valid FAILURE** — the eval pipeline worked, the agent just didn't succeed. This is expected data.
+
+A trial is **broken** (and needs iteration) if any of the above don't hold — e.g., VM provisioning fails, deployment never becomes healthy, chaos injection errors out, no ticket is created despite real chaos, or commands_json is empty because the agent never saw the ticket.
 
 ## Environment
 
