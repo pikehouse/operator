@@ -263,7 +263,7 @@ async def ensure_notification_users(pool: asyncpg.Pool, count: int) -> list[str]
 async def broadcast_notification(
     pool: asyncpg.Pool, ntype: str, payload: dict
 ) -> int:
-    """Create a notification for every user. Correct but naive."""
+    """Create a notification for every user."""
     async with pool.acquire() as conn:
         users = await conn.fetch("SELECT id FROM users")
         async with conn.transaction():
@@ -280,7 +280,7 @@ async def broadcast_notification(
 async def broadcast_notification_serializable(
     pool: asyncpg.Pool, ntype: str, payload: dict
 ) -> int:
-    """Broadcast with SERIALIZABLE isolation. Correct but fails under concurrency."""
+    """Broadcast with SERIALIZABLE isolation."""
     async with pool.acquire() as conn:
         users = await conn.fetch("SELECT id FROM users")
         async with conn.transaction(isolation="serializable"):
@@ -295,7 +295,7 @@ async def broadcast_notification_serializable(
 
 
 async def list_notifications(pool: asyncpg.Pool, user_id: str) -> list[dict]:
-    """List notifications for a user with conversation titles. N+1 query pattern."""
+    """List notifications for a user with conversation titles."""
     async with pool.acquire() as conn:
         notifs = await conn.fetch(
             "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC",
@@ -325,7 +325,7 @@ async def list_notifications(pool: asyncpg.Pool, user_id: str) -> list[dict]:
 
 
 async def get_unread_count(pool: asyncpg.Pool, user_id: str) -> int:
-    """Count unread notifications. SELECT COUNT(*) — correct but slow at scale."""
+    """Count unread notifications."""
     async with pool.acquire() as conn:
         return await conn.fetchval(
             "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND NOT read",
@@ -334,7 +334,7 @@ async def get_unread_count(pool: asyncpg.Pool, user_id: str) -> int:
 
 
 async def mark_all_read(pool: asyncpg.Pool, user_id: str) -> int:
-    """Mark all notifications as read. Correct but naive — one UPDATE per row."""
+    """Mark all notifications as read."""
     async with pool.acquire() as conn:
         unread = await conn.fetch(
             "SELECT id FROM notifications WHERE user_id = $1 AND NOT read",
@@ -351,7 +351,7 @@ async def mark_all_read(pool: asyncpg.Pool, user_id: str) -> int:
 async def poll_notifications(
     pool: asyncpg.Pool, user_id: str, since: str | None = None
 ) -> list[dict]:
-    """Long-poll for new notifications. Correct but naive — holds transaction open."""
+    """Long-poll for new notifications."""
     since_dt = (
         datetime.fromisoformat(since)
         if since
