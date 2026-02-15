@@ -15,17 +15,47 @@ Run a GCP eval campaign end-to-end: clean up, rebuild stale images, enqueue, and
 - `$1` (required): Campaign YAML path relative to eval/, e.g. `campaigns/operations/tikv-all-chaos-cloud.yaml`
 - `$2` (optional): Number of workers to start (default: auto, based on quota)
 
+## Session Isolation
+
+Each campaign run is scoped by its campaign ID (CID) to avoid conflicts with concurrent sessions. The scope key is `c${CID}` — used in Docker image tags, worker IDs, worker logs, and cleanup commands. This ensures two simultaneous `run-campaign` or `iterate-campaign` invocations don't stomp on each other.
+
 ## Steps
 
 Execute these steps in order. Use TaskCreate to track progress.
 
-### 1. Clean Up
+### 1. Clean Up Previous Campaign Workers
 
-- Kill all local `eval worker` processes: `ps aux | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9`
-- List and delete all GCP compute instances: `gcloud compute instances list`, then `gcloud compute instances delete <names> --zone=<zone> --quiet`
-- Release stale work queue items: `source $PROJECT_ROOT/.env && uv run eval worker release-stale --remote --timeout 1`
+**Scoped cleanup** (default): Kill only workers from a specific previous campaign:
+```bash
+# Kill workers from a previous campaign (replace PREV_CID with the old campaign ID)
+ps aux | grep "c${PREV_CID}-" | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+```
 
-### 2. Check & Rebuild Docker Images
+Release stale work queue items (this is global and safe):
+```bash
+source $PROJECT_ROOT/.env && uv run eval worker release-stale --remote --timeout 1
+```
+
+**Full cleanup** (only when explicitly requested or no other campaigns are running):
+```bash
+# Kill ALL local eval worker processes
+ps aux | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9
+# Delete ALL GCP compute instances
+gcloud compute instances list --format="value(name,zone)" | while read name zone; do gcloud compute instances delete "$name" --zone="$zone" --quiet; done
+```
+
+### 2. Enqueue Campaign
+
+Enqueue first to get the campaign ID, which is needed for image tagging and worker scoping:
+
+```bash
+source $PROJECT_ROOT/.env
+uv run eval run campaign $1 --cloud=gcp
+```
+
+Note the campaign ID (CID) from output. All subsequent steps use `c${CID}` as the scope key.
+
+### 3. Check & Rebuild Docker Images
 
 The rebuild decision matrix (from CLOUD.md):
 
@@ -42,17 +72,17 @@ docker images --format "{{.Repository}}:{{.Tag}}\t{{.CreatedSince}}" | grep <ima
 git log --oneline --since="<image-date>" -- <trigger-paths>
 ```
 
-If there are commits newer than the image, rebuild and push:
+If there are commits newer than the image, rebuild and push. Tag with `:c${CID}` instead of `:latest`:
 ```bash
 # Operator
 docker build --platform linux/amd64 -t operator-eval -f subjects/tikv/Dockerfile.operator .
-docker tag operator-eval us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
+docker tag operator-eval us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
 
 # Worker
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:latest
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:latest
+docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
 
 # tikv-chaos (rarely needed)
 docker build --platform linux/amd64 -t tikv-chaos:v8.5.5 -f subjects/tikv/Dockerfile.tikv-chaos subjects/tikv/
@@ -69,15 +99,6 @@ All builds MUST use `--platform linux/amd64` (GCP VMs are amd64, dev machines ma
 All builds use project root as context (except tikv-chaos and ycsb which use `subjects/tikv/`).
 
 Build stale images in parallel when possible. Push sequentially after builds complete.
-
-### 3. Enqueue Campaign
-
-```bash
-source $PROJECT_ROOT/.env
-uv run eval run campaign $1 --cloud=gcp
-```
-
-Note the campaign ID from output.
 
 ### 4. Determine Worker Count & Start Workers
 
@@ -108,12 +129,13 @@ Report the quota situation to the user before starting workers:
 - Show E2_CPUS limit, current usage, and how many workers will be started
 - If the requested count would exceed quota, warn and cap at the safe maximum
 
-Start each worker as a separate background Bash command with `run_in_background: true`:
+Start each worker as a separate background Bash command with `run_in_background: true`. Use campaign-scoped worker IDs and the `--campaign` flag:
 ```bash
 source $PROJECT_ROOT/.env
 for i in $(seq 1 ${NUM_WORKERS}); do
-  uv run eval worker start --cloud=gcp --id=worker-$i \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
+  uv run eval worker start --cloud=gcp --id=c${CID}-$i \
+    --campaign=${CID} \
+    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
 done
 ```
 

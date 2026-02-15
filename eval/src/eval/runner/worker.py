@@ -42,6 +42,7 @@ class Worker:
         mode: str = "cloud-gcp",
         poll_interval: float = 5.0,
         operator_image: str = "",
+        campaign_id: int | None = None,
     ):
         """Initialize worker.
 
@@ -51,6 +52,7 @@ class Worker:
             mode: Subject execution mode (e.g., "cloud-gcp")
             poll_interval: Seconds between queue polls
             operator_image: Docker image URL for operator (empty = disabled)
+            campaign_id: If provided, only claim work from this campaign
         """
         self.worker_id = worker_id or f"worker-{uuid.uuid4().hex[:8]}"
         self.mode = mode
@@ -60,6 +62,7 @@ class Worker:
         self._running = False
         self._current_subject = None
         self._operator_image = operator_image
+        self._campaign_id = campaign_id
 
         # VM pooling: reuse a single subject (and its VM) across trials
         self._pooled_subject = None
@@ -74,6 +77,8 @@ class Worker:
         self._running = True
         console.log(f"[bold green]Worker {self.worker_id} starting[/bold green]")
         console.log(f"Mode: {self.mode}")
+        if self._campaign_id is not None:
+            console.log(f"Campaign filter: {self._campaign_id}")
 
         # Ensure schema exists
         await self.db.ensure_schema()
@@ -87,7 +92,9 @@ class Worker:
             while self._running:
                 try:
                     # Try to claim work
-                    work_item = await self.queue.claim_next(self.worker_id)
+                    work_item = await self.queue.claim_next(
+                        self.worker_id, campaign_id=self._campaign_id
+                    )
 
                     if work_item:
                         console.log(
@@ -556,6 +563,7 @@ async def run_worker(
     worker_id: str | None = None,
     mode: str = "cloud-gcp",
     operator_image: str = "",
+    campaign_id: int | None = None,
 ) -> None:
     """Run a worker process.
 
@@ -566,11 +574,13 @@ async def run_worker(
         worker_id: Optional worker ID
         mode: Subject execution mode
         operator_image: Docker image URL for operator (empty = disabled)
+        campaign_id: If provided, only claim work from this campaign
     """
     worker = Worker(
         db_url=db_url,
         worker_id=worker_id,
         mode=mode,
         operator_image=operator_image,
+        campaign_id=campaign_id,
     )
     await worker.start()

@@ -14,6 +14,10 @@ Diagnose and fix campaign failures through targeted investigation and iterative 
 - `$1` (required): Campaign ID to analyze (e.g. `100`)
 - `$2` (optional): Target win rate to aim for (default: 90%)
 
+## Session Isolation
+
+Each retry campaign is scoped by its campaign ID (CID) to avoid conflicts with concurrent sessions. The scope key is `c${CID}` — used in Docker image tags, worker IDs, worker logs, and cleanup commands. This ensures two simultaneous `iterate-campaign` or `run-campaign` invocations don't stomp on each other.
+
 ## Overview
 
 The iteration loop:
@@ -54,7 +58,7 @@ For each failing chaos type, investigate systematically:
 #### Check worker logs
 If worker logs are available locally:
 ```bash
-tail -100 /tmp/worker-*.log
+tail -100 /tmp/c*-*.log
 ```
 
 #### Check trial details
@@ -127,21 +131,23 @@ Determine which images need rebuilding based on what changed:
 | `eval/src/eval/` | Worker image |
 | Both | Both images |
 
+Tag with `:c${CID}` (where CID is the new campaign ID from step 6):
+
 ```bash
 # Operator (invariant/observer changes)
 cd $PROJECT_ROOT
-docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/operator-486214/eval/operator:latest .
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
+docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID} .
+docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
 
 # Worker (eval code changes)
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:latest
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:latest
+docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
 ```
 
 All builds MUST use `--platform linux/amd64` on ARM Macs.
 
-### 6. Create Targeted Retry Campaign
+### 6. Create Targeted Retry Campaign & Start Workers
 
 Create a campaign YAML with just the failing chaos types:
 
@@ -160,20 +166,26 @@ cloud:
   provider: gcp
   operator:
     enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
 ```
 
-Enqueue and start workers:
+Enqueue first to get the CID, then rebuild images (step 5) with that CID, then start workers:
 
 ```bash
 source $PROJECT_ROOT/.env
-uv run eval run campaign campaigns/debug/tikv-retry-<chaos>.yaml --cloud=gcp --parallel 3
 
-# Start local workers (3 is typical)
+# Enqueue to get campaign ID
+uv run eval run campaign campaigns/debug/tikv-retry-<chaos>.yaml --cloud=gcp --parallel 3
+# Note the CID from output
+
+# Rebuild images with :c${CID} tag (see step 5)
+
+# Start campaign-scoped workers
 for i in 1 2 3; do
-  nohup uv run eval worker start --cloud=gcp --id=worker-$i \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:latest \
-    > /tmp/worker-$i.log 2>&1 &
+  nohup uv run eval worker start --cloud=gcp --id=c${CID}-$i \
+    --campaign=${CID} \
+    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID} \
+    > /tmp/c${CID}-$i.log 2>&1 &
 done
 ```
 
@@ -202,11 +214,14 @@ When complete, compare results against the previous campaign:
 uv run eval run campaign campaigns/operations/tikv-all-chaos-cloud.yaml --cloud=gcp --parallel 3
 ```
 
-**When done**: Kill workers, mark notable campaigns, commit fixes:
+**When done**: Kill scoped workers, mark notable campaigns, commit fixes:
 
 ```bash
-# Kill workers
-ps aux | grep 'eval worker' | grep -v grep | awk '{print $2}' | xargs kill -9
+# Kill workers for this campaign
+ps aux | grep "c${CID}-" | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9 2>/dev/null || true
+
+# Full cleanup (only if no other campaigns running)
+# ps aux | grep 'eval worker' | grep -v grep | awk '{print $2}' | xargs kill -9
 
 # Mark campaign as notable
 uv run eval notable <campaign_id> --remote

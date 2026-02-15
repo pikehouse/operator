@@ -96,7 +96,9 @@ class WorkQueue:
 
         return work_ids
 
-    async def claim_next(self, worker_id: str) -> WorkItem | None:
+    async def claim_next(
+        self, worker_id: str, campaign_id: int | None = None
+    ) -> WorkItem | None:
         """Atomically claim the next pending work item.
 
         Uses FOR UPDATE SKIP LOCKED to prevent multiple workers from
@@ -110,15 +112,24 @@ class WorkQueue:
 
         Args:
             worker_id: Unique identifier for this worker
+            campaign_id: If provided, only claim items from this campaign
 
         Returns:
             WorkItem if one was claimed, None if queue is empty
         """
         pool = await self.db._get_pool()
 
+        # Build campaign filter and parameter list
+        if campaign_id is not None:
+            campaign_filter = "AND w.campaign_id = $2"
+            params = [worker_id, campaign_id]
+        else:
+            campaign_filter = ""
+            params = [worker_id]
+
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                """
+                f"""
                 UPDATE work_queue
                 SET status = 'running',
                     worker_id = $1,
@@ -126,6 +137,7 @@ class WorkQueue:
                 WHERE id = (
                     SELECT w.id FROM work_queue w
                     WHERE w.status = 'pending'
+                      {campaign_filter}
                       AND (
                         w.sequence_number IS NULL
                         OR w.sequence_number = 0
@@ -143,7 +155,7 @@ class WorkQueue:
                 )
                 RETURNING *
                 """,
-                worker_id,
+                *params,
             )
 
             if row:

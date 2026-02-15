@@ -1809,6 +1809,11 @@ def worker_start(
         "--operator-image",
         help="Docker image for operator (enables operator on VMs)",
     ),
+    campaign_id: Optional[int] = typer.Option(
+        None,
+        "--campaign",
+        help="Only claim work from this campaign ID",
+    ),
 ) -> None:
     """Start a distributed worker process.
 
@@ -1819,11 +1824,14 @@ def worker_start(
     each VM, enabling time-to-detect, time-to-resolve, and command
     history metrics.
 
+    Use --campaign to scope this worker to a specific campaign. Without
+    it, the worker claims any pending work item (backward compatible).
+
     Requires EVAL_DATABASE_URL environment variable.
 
     Examples:
         eval worker start --cloud=gcp
-        eval worker start --cloud=gcp --id=worker-1
+        eval worker start --cloud=gcp --id=worker-1 --campaign=105
         eval worker start --cloud=gcp --operator-image=us-central1-docker.pkg.dev/PROJECT/eval/operator:latest
     """
     import os
@@ -1841,6 +1849,8 @@ def worker_start(
     console.log(f"Database: {db_url.split('@')[-1] if '@' in db_url else db_url}")
     if operator_image:
         console.log(f"Operator: {operator_image}")
+    if campaign_id is not None:
+        console.log(f"Campaign: {campaign_id}")
 
     asyncio.run(
         run_worker(
@@ -1848,6 +1858,7 @@ def worker_start(
             worker_id=worker_id,
             mode=f"cloud-{cloud}",
             operator_image=operator_image or "",
+            campaign_id=campaign_id,
         )
     )
 
