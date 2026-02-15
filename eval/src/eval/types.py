@@ -61,6 +61,7 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
         Human-readable description
     """
     descriptions = {
+        # TiKV / infrastructure chaos
         "node_kill": "Container killed with SIGKILL",
         "latency": "Network latency injection",
         "disk_pressure": "Disk space exhaustion",
@@ -75,6 +76,27 @@ def get_chaos_description(chaos_type: str, chaos_meta: dict | None = None) -> st
         "load_pressure": "Load pressure test",
         "debug_code_edit": "Bugs injected into app code",
         "none": "Baseline (no chaos)",
+        # Chat-DB-App coding chaos
+        "missing_index": "No index on messages.conversation_id — sequential scans on every lookup",
+        "pool_exhaustion": "Unbounded connection pool — unlimited connections until max_connections hit",
+        "streaming_txn": "Streaming response holds transaction open for entire generation time — connections stuck idle-in-transaction",
+        "counter_race": "Token counter uses read-modify-write instead of atomic increment — concurrent writes lose increments",
+        "fulltext_search": "Search uses ILIKE '%term%' forcing sequential scan — cannot use indexes",
+        "read_scale": "60+ concurrent users doing 90% reads on 10K+ message conversations — single PostgreSQL can't serve the volume",
+        "unbounded_results": "get_messages() returns ALL messages with no LIMIT — 50K+ message conversations exhaust memory",
+        "write_contention": "Every insert UPDATEs conversation and user rows — high concurrency creates lock convoy",
+        "write_amplification": "Read-modify-write on single user row generates dead tuples faster than autovacuum can clean",
+        "correlated_subquery": "Correlated subquery computes running token total per message — O(N^2) for N messages",
+        # Chat-DB-App notification chaos
+        "notification_fanout": "Broadcast inserts one notification per user in a sync loop — 1000+ users blocks for 30+ seconds",
+        "notification_counter": "Middleware runs COUNT(*) on unread notifications on every API request — 500K+ rows = ~200ms per request",
+        "notification_realtime": "Poll endpoint holds DB connection for 30s — 90 pollers consume entire pool",
+        "notification_poll_idle": "Poll endpoint holds transaction open for 30s — blocks autovacuum and holds MVCC snapshots",
+        "notification_mark_read": "mark_all_read() fires one UPDATE per notification — 50K+ unread = 50K individual UPDATEs",
+        "notification_n_plus_one": "list_notifications() fetches each conversation title with separate SELECT — 1000 notifications = 1001 queries",
+        "notification_payload": "Broadcast stores ~5KB JSONB per notification, SELECT * transfers all — 10K notifications = ~50MB per listing",
+        "notification_cleanup": "Notifications accumulate forever — dead tuple rate outpaces autovacuum, causing table bloat",
+        "notification_serialize": "Broadcast uses SERIALIZABLE isolation — concurrent broadcasts cause serialization conflicts and 500s",
     }
     desc = descriptions.get(chaos_type, chaos_type)
 
