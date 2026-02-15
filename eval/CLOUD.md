@@ -59,11 +59,15 @@ Key details:
 
 All images are pushed to Artifact Registry at `us-central1-docker.pkg.dev/PROJECT/eval/`.
 
+### Image Tagging
+
+Images are tagged with the **git commit SHA** (`git rev-parse --short HEAD`), not `:latest`. This enables concurrent sessions — two sessions on different commits use different images without overwriting each other. If the code hasn't changed (same commit), the image already exists and no rebuild/push is needed.
+
 ### 1. Worker (`eval/Dockerfile`)
 
 | | |
 |---|---|
-| **Registry path** | `.../eval/worker:latest` |
+| **Registry path** | `.../eval/worker:${GIT_SHA}` |
 | **Base** | `python:3.12-slim` |
 | **Contains** | Eval CLI + cloud deps, gcloud CLI, SSH client, subject compose files |
 | **Runs on** | Worker VMs |
@@ -71,16 +75,17 @@ All images are pushed to Artifact Registry at `us-central1-docker.pkg.dev/PROJEC
 Build and push:
 ```bash
 cd $PROJECT_ROOT
+GIT_SHA=$(git rev-parse --short HEAD)
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/PROJECT/eval/worker:latest
-docker push us-central1-docker.pkg.dev/PROJECT/eval/worker:latest
+docker tag eval-worker us-central1-docker.pkg.dev/PROJECT/eval/worker:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/PROJECT/eval/worker:${GIT_SHA}
 ```
 
 ### 2. Operator (`subjects/tikv/Dockerfile.operator`)
 
 | | |
 |---|---|
-| **Registry path** | `.../eval/operator:latest` |
+| **Registry path** | `.../eval/operator:${GIT_SHA}` |
 | **Base** | `python:3.11-slim` |
 | **Contains** | operator-core, operator-protocols, all subject observers, Docker CLI, Node.js 22, uv |
 | **Runs on** | Trial VMs (as `operator-monitor` and `operator-agent` containers) |
@@ -88,9 +93,10 @@ docker push us-central1-docker.pkg.dev/PROJECT/eval/worker:latest
 Build and push:
 ```bash
 cd $PROJECT_ROOT
+GIT_SHA=$(git rev-parse --short HEAD)
 docker build --platform linux/amd64 -t operator-eval -f subjects/tikv/Dockerfile.operator .
-docker tag operator-eval us-central1-docker.pkg.dev/PROJECT/eval/operator:latest
-docker push us-central1-docker.pkg.dev/PROJECT/eval/operator:latest
+docker tag operator-eval us-central1-docker.pkg.dev/PROJECT/eval/operator:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/PROJECT/eval/operator:${GIT_SHA}
 ```
 
 ### 3. TiKV Chaos (`subjects/tikv/Dockerfile.tikv-chaos`)
@@ -147,6 +153,39 @@ docker push us-central1-docker.pkg.dev/PROJECT/eval/ycsb:latest
 
 **Rebuilding the worker requires restarting worker VMs** (or re-pulling inside them). The operator image is pulled fresh on each trial by the worker, so operator rebuilds take effect on the next trial without restarting workers.
 
+## Concurrent Sessions
+
+Multiple `run-campaign` or `iterate-campaign` sessions can run simultaneously without conflicts. Isolation is split across two scoping keys:
+
+| Resource | Scoped by | Why |
+|----------|-----------|-----|
+| Docker images | Git commit SHA | Same code = same image; different code = different tag. No overwrites. |
+| Worker IDs | Campaign ID (`c${CID}-$i`) | Each campaign's workers are distinguishable in `ps` output. |
+| Work claiming | Campaign ID (`--campaign=${CID}`) | Workers only claim work items from their campaign. |
+| Worker logs | Campaign ID (`/tmp/c${CID}-$i.log`) | No log file collisions. |
+| Cleanup (kill) | Campaign ID (`grep "c${CID}-"`) | Only kills one campaign's workers. |
+
+Workers started **without** `--campaign` claim any pending work (backward compatible). Use `--campaign` when running concurrent sessions.
+
+### Example: two campaigns in parallel
+
+```bash
+GIT_SHA=$(git rev-parse --short HEAD)
+
+# Session A
+eval run campaign campaigns/operations/tikv-all-chaos-cloud.yaml --cloud=gcp  # → campaign 109
+eval worker start --cloud=gcp --id=c109-1 --campaign=109 \
+  --operator-image=.../operator:${GIT_SHA}
+
+# Session B (different terminal)
+eval run campaign campaigns/coding/chatdb-cloud-all-defects.yaml --cloud=gcp  # → campaign 110
+eval worker start --cloud=gcp --id=c110-1 --campaign=110 \
+  --operator-image=.../operator:${GIT_SHA}
+
+# Cleanup only session A
+ps aux | grep "c109-" | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9
+```
+
 ## Runtime vs Baked-in
 
 ### Configured at runtime (no rebuild needed)
@@ -177,7 +216,7 @@ source .env
 eval run campaign campaigns/operations/tikv-full-chaos.yaml --cloud=gcp
 
 # With operator (agent diagnoses + resolves)
-eval run campaign config.yaml --cloud=gcp --operator-image=us-central1-docker.pkg.dev/PROJECT/eval/operator:latest
+eval run campaign config.yaml --cloud=gcp --operator-image=us-central1-docker.pkg.dev/PROJECT/eval/operator:$(git rev-parse --short HEAD)
 
 # Override model
 eval run campaign config.yaml --cloud=gcp --model claude-sonnet-4-5-20250929

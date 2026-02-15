@@ -245,6 +245,15 @@ class EvalSubject(Protocol):
     async def cleanup_chaos(self, chaos_metadata: dict[str, Any]) -> None: ...
 ```
 
+## Concurrent Cloud Sessions
+
+Multiple `run-campaign` / `iterate-campaign` sessions can run simultaneously. Isolation uses two scoping keys:
+
+- **Docker images** tagged by git SHA (`git rev-parse --short HEAD`) — same code shares images, different code gets different tags
+- **Workers** scoped by campaign ID — worker IDs (`c${CID}-$i`), `--campaign=${CID}` flag (only claims that campaign's work), logs (`/tmp/c${CID}-$i.log`), cleanup (`grep "c${CID}-"`)
+
+Key files: `runner/queue.py` (`claim_next` campaign filter), `runner/worker.py` (campaign_id threading), `cli.py` (`--campaign` option).
+
 ## Parallel Execution
 
 `SubjectPool` enables parallel trials with isolated Docker Compose projects:
