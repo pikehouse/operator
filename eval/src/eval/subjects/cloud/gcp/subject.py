@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import random
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -98,10 +99,24 @@ class GCPTiKVSubject(CloudSubjectBase):
         await self.vm.run_command(f"mkdir -p {self.compose_dir}/config")
 
         # Upload cloud compose file (uses pre-built images from Artifact Registry)
-        await self.vm.upload_file(
-            str(self._local_compose),
-            f"{self.compose_dir}/docker-compose.yaml",
-        )
+        # Resolve ${GCP_PROJECT} env var in the compose file before uploading
+        gcp_project = os.environ.get("GCP_PROJECT", "")
+        compose_content = self._local_compose.read_text()
+        if "${GCP_PROJECT}" in compose_content and gcp_project:
+            compose_content = compose_content.replace("${GCP_PROJECT}", gcp_project)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+                f.write(compose_content)
+                resolved_compose = f.name
+            await self.vm.upload_file(
+                resolved_compose,
+                f"{self.compose_dir}/docker-compose.yaml",
+            )
+            os.unlink(resolved_compose)
+        else:
+            await self.vm.upload_file(
+                str(self._local_compose),
+                f"{self.compose_dir}/docker-compose.yaml",
+            )
 
         # Upload Prometheus config (needed for metrics collection)
         prom_config = self._local_compose.parent / "config" / "prometheus.yml"
