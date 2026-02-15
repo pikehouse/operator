@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -1054,6 +1055,73 @@ def export_cmd(
     out_path.write_text(html)
     size_kb = out_path.stat().st_size / 1024
     console.print(f"[green]Exported campaign {campaign_id} to {out_path} ({size_kb:.0f} KB)[/green]")
+
+
+@app.command("publish")
+def publish_cmd(
+    campaign_id: int = typer.Argument(..., help="Campaign ID to publish"),
+    db_path: Path = typer.Option(Path("eval.db"), "--db", help="Path to eval database"),
+    remote: bool = typer.Option(False, "--remote", help="Query cloud PostgreSQL (uses EVAL_DATABASE_URL)"),
+    skip_behavior: bool = typer.Option(False, "--skip-behavior", help="Skip behavior classification"),
+    force_behavior: bool = typer.Option(False, "--force-behavior", help="Re-classify behavior even if already done"),
+    skip_source: bool = typer.Option(False, "--skip-source", help="Skip source code branch creation"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Commit locally but don't push"),
+) -> None:
+    """Publish a campaign to the operator-campaigns results repo.
+
+    Exports HTML, captures subject source code as an orphan branch,
+    generates a README with links, and pushes to GitHub.
+
+    Requires OPERATOR_RESULTS_REPO_LOCATION in .env.
+
+    Examples:
+        eval publish 70 --remote
+        eval publish 70 --remote --dry-run
+        eval publish 70 --remote --skip-source
+    """
+    from eval.publish import publish_campaign
+
+    async def run():
+        db = await _get_db_or_exit(remote, db_path)
+        try:
+            return await publish_campaign(
+                db,
+                campaign_id,
+                skip_behavior=skip_behavior,
+                force_behavior=force_behavior,
+                skip_source=skip_source,
+                dry_run=dry_run,
+            )
+        finally:
+            if hasattr(db, 'close'):
+                await db.close()
+
+    try:
+        result = asyncio.run(run())
+    except (ValueError, RuntimeError) as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1)
+
+    # Print results
+    verb = "Updated" if result["is_update"] else "Published"
+    dry = " (dry run)" if result["dry_run"] else ""
+    console.print(f"[green]{verb} campaign {campaign_id}{dry}[/green]")
+    console.print(f"  HTML: {result['html_file']}")
+    console.print(f"  Preview: {result['preview_url']}")
+    if result["source_branch"]:
+        console.print(f"  Source branch: {result['source_branch']}")
+        console.print(f"  Source URL: {result['source_url']}")
+
+    # Copy preview URL to clipboard (macOS, silent fail elsewhere)
+    if not result["dry_run"]:
+        try:
+            subprocess.run(
+                ["pbcopy"], input=result["preview_url"].encode(), check=False,
+                capture_output=True,
+            )
+            console.print("[dim]Preview URL copied to clipboard[/dim]")
+        except FileNotFoundError:
+            pass
 
 
 @app.command("show")

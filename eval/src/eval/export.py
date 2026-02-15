@@ -212,8 +212,12 @@ async def build_export_data(
     # Enrich trials
     enriched = [_enrich_trial(t) for t in trials]
 
-    # Sort: non-baselines first by group_key then trial id, baselines last
-    enriched.sort(key=lambda x: (x["is_baseline"], x["group_key"], x["id"]))
+    # Sort: continuous campaigns by ID (order is the story);
+    # normal campaigns group by chaos type with baselines last
+    if campaign.continuous:
+        enriched.sort(key=lambda x: x["id"])
+    else:
+        enriched.sort(key=lambda x: (x["is_baseline"], x["group_key"], x["id"]))
 
     # Group metadata
     group_counts = Counter(t["group_key"] for t in enriched)
@@ -262,6 +266,7 @@ async def build_export_data(
             "baseline": campaign.baseline,
             "trial_count": campaign.trial_count,
             "created_at": campaign.created_at,
+            "notes": campaign.notes,
         },
         "trials": enriched,
         "summary": summary,
@@ -506,6 +511,7 @@ _JS = """\
       Variant: ${esc(campaign.variant_name)} &middot;
       ${formatTs(campaign.created_at)}
     </div>
+    ${campaign.notes ? `<div class="meta" style="margin-top:8px;color:#d6d3d1">${esc(campaign.notes)}</div>` : ''}
   `;
 
   // Summary stats

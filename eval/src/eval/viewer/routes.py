@@ -164,8 +164,12 @@ async def get_campaign(request: Request, campaign_id: int):
                 "behavior_phases": behavior_phases,
             })
 
-        # Sort trials by group (baselines last), then by trial ID within group
-        trial_data.sort(key=lambda x: (x["is_baseline"], x["group_key"], x["trial"].id))
+        # Sort: continuous campaigns by ID (order is the story);
+        # normal campaigns group by chaos type with baselines last
+        if campaign.continuous:
+            trial_data.sort(key=lambda x: x["trial"].id)
+        else:
+            trial_data.sort(key=lambda x: (x["is_baseline"], x["group_key"], x["trial"].id))
 
         # Assign group colors (consistent palette)
         group_colors = [
