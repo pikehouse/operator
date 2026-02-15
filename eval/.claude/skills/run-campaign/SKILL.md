@@ -17,7 +17,9 @@ Run a GCP eval campaign end-to-end: clean up, rebuild stale images, enqueue, and
 
 ## Session Isolation
 
-Each campaign run is scoped by its campaign ID (CID) to avoid conflicts with concurrent sessions. The scope key is `c${CID}` — used in Docker image tags, worker IDs, worker logs, and cleanup commands. This ensures two simultaneous `run-campaign` or `iterate-campaign` invocations don't stomp on each other.
+Each campaign run is scoped to avoid conflicts with concurrent sessions:
+- **Worker IDs, logs, cleanup**: scoped by campaign ID (`c${CID}`) — each campaign's workers only claim its work items
+- **Docker images**: tagged by git commit SHA — if code hasn't changed, images are already in the registry and no rebuild/push is needed. Different sessions on different commits get different images without overwriting each other.
 
 ## Steps
 
@@ -44,18 +46,12 @@ ps aux | grep "eval worker" | grep -v grep | awk '{print $2}' | xargs kill -9
 gcloud compute instances list --format="value(name,zone)" | while read name zone; do gcloud compute instances delete "$name" --zone="$zone" --quiet; done
 ```
 
-### 2. Enqueue Campaign
+### 2. Check & Rebuild Docker Images
 
-Enqueue first to get the campaign ID, which is needed for image tagging and worker scoping:
-
+Get the current git SHA for image tagging:
 ```bash
-source $PROJECT_ROOT/.env
-uv run eval run campaign $1 --cloud=gcp
+GIT_SHA=$(git rev-parse --short HEAD)
 ```
-
-Note the campaign ID (CID) from output. All subsequent steps use `c${CID}` as the scope key.
-
-### 3. Check & Rebuild Docker Images
 
 The rebuild decision matrix (from CLOUD.md):
 
@@ -72,17 +68,17 @@ docker images --format "{{.Repository}}:{{.Tag}}\t{{.CreatedSince}}" | grep <ima
 git log --oneline --since="<image-date>" -- <trigger-paths>
 ```
 
-If there are commits newer than the image, rebuild and push. Tag with `:c${CID}` instead of `:latest`:
+If there are commits newer than the image, rebuild and push. Tag with `:${GIT_SHA}`:
 ```bash
 # Operator
 docker build --platform linux/amd64 -t operator-eval -f subjects/tikv/Dockerfile.operator .
-docker tag operator-eval us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
+docker tag operator-eval us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
 
 # Worker
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
+docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
 
 # tikv-chaos (rarely needed)
 docker build --platform linux/amd64 -t tikv-chaos:v8.5.5 -f subjects/tikv/Dockerfile.tikv-chaos subjects/tikv/
@@ -99,6 +95,17 @@ All builds MUST use `--platform linux/amd64` (GCP VMs are amd64, dev machines ma
 All builds use project root as context (except tikv-chaos and ycsb which use `subjects/tikv/`).
 
 Build stale images in parallel when possible. Push sequentially after builds complete.
+
+If the image for `${GIT_SHA}` already exists in the registry (same commit, no code changes), skip the rebuild entirely.
+
+### 3. Enqueue Campaign
+
+```bash
+source $PROJECT_ROOT/.env
+uv run eval run campaign $1 --cloud=gcp
+```
+
+Note the campaign ID (CID) from output. Worker IDs and cleanup use `c${CID}` as the scope key.
 
 ### 4. Determine Worker Count & Start Workers
 
@@ -135,7 +142,7 @@ source $PROJECT_ROOT/.env
 for i in $(seq 1 ${NUM_WORKERS}); do
   uv run eval worker start --cloud=gcp --id=c${CID}-$i \
     --campaign=${CID} \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
+    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
 done
 ```
 

@@ -16,7 +16,9 @@ Diagnose and fix campaign failures through targeted investigation and iterative 
 
 ## Session Isolation
 
-Each retry campaign is scoped by its campaign ID (CID) to avoid conflicts with concurrent sessions. The scope key is `c${CID}` — used in Docker image tags, worker IDs, worker logs, and cleanup commands. This ensures two simultaneous `iterate-campaign` or `run-campaign` invocations don't stomp on each other.
+Each retry campaign is scoped to avoid conflicts with concurrent sessions:
+- **Worker IDs, logs, cleanup**: scoped by campaign ID (`c${CID}`) — each campaign's workers only claim its work items
+- **Docker images**: tagged by git commit SHA — if code hasn't changed, images are already in the registry and no rebuild/push is needed. Different sessions on different commits get different images without overwriting each other.
 
 ## Overview
 
@@ -131,19 +133,23 @@ Determine which images need rebuilding based on what changed:
 | `eval/src/eval/` | Worker image |
 | Both | Both images |
 
-Tag with `:c${CID}` (where CID is the new campaign ID from step 6):
+Tag with the current git commit SHA:
 
 ```bash
+GIT_SHA=$(git rev-parse --short HEAD)
+
 # Operator (invariant/observer changes)
 cd $PROJECT_ROOT
-docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID} .
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
+docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA} .
+docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
 
 # Worker (eval code changes)
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:c${CID}
+docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
 ```
+
+If the image for `${GIT_SHA}` already exists in the registry (same commit, no code changes since last push), skip the rebuild entirely.
 
 All builds MUST use `--platform linux/amd64` on ARM Macs.
 
@@ -166,25 +172,24 @@ cloud:
   provider: gcp
   operator:
     enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID}
+    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
 ```
 
-Enqueue first to get the CID, then rebuild images (step 5) with that CID, then start workers:
+Enqueue to get the CID, then start workers:
 
 ```bash
 source $PROJECT_ROOT/.env
+GIT_SHA=$(git rev-parse --short HEAD)
 
 # Enqueue to get campaign ID
 uv run eval run campaign campaigns/debug/tikv-retry-<chaos>.yaml --cloud=gcp --parallel 3
 # Note the CID from output
 
-# Rebuild images with :c${CID} tag (see step 5)
-
 # Start campaign-scoped workers
 for i in 1 2 3; do
   nohup uv run eval worker start --cloud=gcp --id=c${CID}-$i \
     --campaign=${CID} \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:c${CID} \
+    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA} \
     > /tmp/c${CID}-$i.log 2>&1 &
 done
 ```
