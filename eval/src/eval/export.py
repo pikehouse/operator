@@ -511,8 +511,14 @@ _JS = """\
       Variant: ${esc(campaign.variant_name)} &middot;
       ${formatTs(campaign.created_at)}
     </div>
-    ${campaign.notes ? `<div class="meta" style="margin-top:8px;color:#d6d3d1">${esc(campaign.notes)}</div>` : ''}
   `;
+
+  // Campaign notes
+  if (campaign.notes) {
+    const notesEl = document.getElementById('campaign-notes');
+    notesEl.innerHTML = `<details><summary>Campaign Notes</summary><div style="white-space:pre-wrap;font-size:0.85rem;color:var(--text-secondary);padding:8px 0">${esc(campaign.notes)}</div></details>`;
+    notesEl.style.display = 'block';
+  }
 
   // Summary stats
   const statsEl = document.getElementById('summary-stats');
@@ -764,6 +770,7 @@ def render_html(data: dict[str, Any]) -> str:
 </div>
 
 <div class="page-body">
+<div id="campaign-notes" style="display:none"></div>
 <div id="summary-stats" class="stats-bar"></div>
 <div id="topology" class="topology-svg"></div>
 <div id="behavior-swimlane" style="display:none"></div>

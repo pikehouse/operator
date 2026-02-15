@@ -186,6 +186,26 @@ uv run eval export <campaign_id> --remote
 
 The exported HTML includes campaign summary, trial table, reasoning timelines, code diffs, DB config changes, and topology diagrams — all embedded with no external dependencies.
 
+## Publishing Results
+
+Publish a campaign to the [operator-campaigns](https://github.com/pikehouse/operator-campaigns) repo with a single command. This exports the HTML, captures the subject's source code as an orphan branch, generates a README with links, and pushes to GitHub:
+
+```bash
+cd eval
+
+# Publish from cloud database
+uv run eval publish <campaign_id> --remote
+
+# Dry run (commit locally, don't push)
+uv run eval publish <campaign_id> --remote --dry-run
+
+# Skip source branch or behavior classification
+uv run eval publish <campaign_id> --remote --skip-source
+uv run eval publish <campaign_id> --remote --skip-behavior
+```
+
+Requires `OPERATOR_RESULTS_REPO_LOCATION` in your `.env` (path to a local clone of the results repo). Re-publishing the same campaign updates the existing HTML and recreates the source branch.
+
 ## Campaign Config Reference
 
 Campaign YAML files live in `eval/campaigns/` organized by category (`smoke-tests/`, `coding/`, `operations/`). Key fields:
