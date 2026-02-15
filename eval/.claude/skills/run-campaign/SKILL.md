@@ -72,23 +72,23 @@ If there are commits newer than the image, rebuild and push. Tag with `:${GIT_SH
 ```bash
 # Operator
 docker build --platform linux/amd64 -t operator-eval -f subjects/tikv/Dockerfile.operator .
-docker tag operator-eval us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+docker tag operator-eval us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 
 # Worker
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
+docker tag eval-worker us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/worker:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/worker:${GIT_SHA}
 
 # tikv-chaos (rarely needed)
 docker build --platform linux/amd64 -t tikv-chaos:v8.5.5 -f subjects/tikv/Dockerfile.tikv-chaos subjects/tikv/
-docker tag tikv-chaos:v8.5.5 us-central1-docker.pkg.dev/operator-486214/eval/tikv-chaos:v8.5.5
-docker push us-central1-docker.pkg.dev/operator-486214/eval/tikv-chaos:v8.5.5
+docker tag tikv-chaos:v8.5.5 us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/tikv-chaos:v8.5.5
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/tikv-chaos:v8.5.5
 
 # ycsb (rarely needed)
 docker build --platform linux/amd64 -t ycsb -f subjects/tikv/Dockerfile.ycsb subjects/tikv/
-docker tag ycsb us-central1-docker.pkg.dev/operator-486214/eval/ycsb:latest
-docker push us-central1-docker.pkg.dev/operator-486214/eval/ycsb:latest
+docker tag ycsb us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/ycsb:latest
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/ycsb:latest
 ```
 
 All builds MUST use `--platform linux/amd64` (GCP VMs are amd64, dev machines may be ARM).
@@ -142,7 +142,7 @@ source $PROJECT_ROOT/.env
 for i in $(seq 1 ${NUM_WORKERS}); do
   uv run eval worker start --cloud=gcp --id=c${CID}-$i \
     --campaign=${CID} \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+    --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 done
 ```
 

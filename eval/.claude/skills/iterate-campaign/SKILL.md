@@ -140,13 +140,13 @@ GIT_SHA=$(git rev-parse --short HEAD)
 
 # Operator (invariant/observer changes)
 cd $PROJECT_ROOT
-docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA} .
-docker push us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+docker build --platform linux/amd64 -f subjects/tikv/Dockerfile.operator -t us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA} .
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 
 # Worker (eval code changes)
 docker build --platform linux/amd64 -t eval-worker -f eval/Dockerfile .
-docker tag eval-worker us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
-docker push us-central1-docker.pkg.dev/operator-486214/eval/worker:${GIT_SHA}
+docker tag eval-worker us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/worker:${GIT_SHA}
+docker push us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/worker:${GIT_SHA}
 ```
 
 If the image for `${GIT_SHA}` already exists in the registry (same commit, no code changes since last push), skip the rebuild entirely.
@@ -172,7 +172,7 @@ cloud:
   provider: gcp
   operator:
     enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+    image: us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 ```
 
 Enqueue to get the CID, then start workers:
@@ -189,7 +189,7 @@ uv run eval run campaign campaigns/debug/tikv-retry-<chaos>.yaml --cloud=gcp --p
 for i in 1 2 3; do
   nohup uv run eval worker start --cloud=gcp --id=c${CID}-$i \
     --campaign=${CID} \
-    --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA} \
+    --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA} \
     > /tmp/c${CID}-$i.log 2>&1 &
 done
 ```

@@ -72,7 +72,7 @@ services:
 
   # TiKV Cluster (3 nodes) - pre-built chaos image from Artifact Registry
   tikv0:
-    image: us-central1-docker.pkg.dev/operator-486214/eval/tikv-chaos:v8.5.5
+    image: us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/tikv-chaos:v8.5.5
     ports:
       - "20160:20160"
       - "20180:20180"
@@ -105,7 +105,7 @@ services:
     restart: on-failure
 
   tikv1:
-    image: us-central1-docker.pkg.dev/operator-486214/eval/tikv-chaos:v8.5.5
+    image: us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/tikv-chaos:v8.5.5
     volumes:
       - tikv1-data:/data
       - ./config/tikv.toml:/etc/tikv/tikv.toml:ro
@@ -135,7 +135,7 @@ services:
     restart: on-failure
 
   tikv2:
-    image: us-central1-docker.pkg.dev/operator-486214/eval/tikv-chaos:v8.5.5
+    image: us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/tikv-chaos:v8.5.5
     volumes:
       - tikv2-data:/data
       - ./config/tikv.toml:/etc/tikv/tikv.toml:ro
@@ -166,7 +166,7 @@ services:
 
   # YCSB load generator (continuous background traffic for latency metrics)
   ycsb:
-    image: us-central1-docker.pkg.dev/operator-486214/eval/ycsb:latest
+    image: us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/ycsb:latest
     entrypoint: ["sh", "-c"]
     command:
       - >-

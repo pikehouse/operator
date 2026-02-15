@@ -444,10 +444,13 @@ def run_campaign_cmd(
 
             # Show operator status
             if config.cloud and config.cloud.operator and config.cloud.operator.enabled:
-                console.print(
-                    f"[green]Operator enabled: {config.cloud.operator.image}[/green]"
-                )
-                operator_flag = f" --operator-image={config.cloud.operator.image}"
+                op_image = config.cloud.operator.image
+                if op_image:
+                    console.print(f"[green]Operator enabled: {op_image}[/green]")
+                    operator_flag = f" --operator-image={op_image}"
+                else:
+                    console.print("[yellow]Operator enabled but no image resolved (set GCP_PROJECT env var)[/yellow]")
+                    operator_flag = ""
             else:
                 operator_flag = ""
 
@@ -1523,7 +1526,7 @@ def logs_cmd(
     Looks up the trial's VM instance name from the work queue, then queries
     GCP Cloud Logging for container logs from that VM.
 
-    Requires `gcloud` CLI to be configured with access to operator-486214 project.
+    Requires `gcloud` CLI configured and GCP_PROJECT env var set.
 
     Examples:
         eval logs 278 --remote
@@ -1588,10 +1591,15 @@ def logs_cmd(
     vm_name, log_filter = asyncio.run(run())
 
     # Run gcloud logging read
+    gcp_project = os.environ.get("GCP_PROJECT")
+    if not gcp_project:
+        console.print("[red]Error: GCP_PROJECT environment variable required[/red]")
+        raise typer.Exit(1)
+
     cmd = [
         "gcloud", "logging", "read",
         log_filter,
-        "--project=operator-486214",
+        f"--project={gcp_project}",
         f"--limit={lines}",
         "--format=value(timestamp,jsonPayload.container.name,textPayload)",
         "--order=asc",

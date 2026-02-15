@@ -1,5 +1,6 @@
 """Campaign YAML configuration loading and matrix expansion."""
 
+import os
 from itertools import product
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,16 @@ class ChaosSpec(BaseModel):
 class OperatorConfig(BaseModel):
     """Operator configuration for cloud eval trials."""
     enabled: bool = Field(default=False, description="Enable operator on cloud VMs")
-    image: str = Field(default="", description="Artifact Registry image URL for operator")
+    image: str = Field(default="", description="Artifact Registry image URL for operator (derived from GCP_PROJECT if empty)")
+
+    @model_validator(mode="after")
+    def resolve_image(self) -> "OperatorConfig":
+        """Derive image URL from GCP_PROJECT env var when not explicitly set."""
+        if self.enabled and not self.image:
+            project = os.environ.get("GCP_PROJECT", "")
+            if project:
+                self.image = f"us-central1-docker.pkg.dev/{project}/eval/operator:latest"
+        return self
 
 
 class CloudConfig(BaseModel):

@@ -14,4 +14,3 @@ cloud:
   provider: gcp
   operator:
     enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:latest

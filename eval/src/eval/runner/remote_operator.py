@@ -18,6 +18,7 @@ depends_on rather than polling loops.
 import asyncio
 import json
 import logging
+import shlex
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -124,7 +125,7 @@ class RemoteOperatorProcesses:
             f" --interval 5"
         )
         if self.subject_context_extra:
-            monitor_cmd += f" --subject-context-extra '{self.subject_context_extra}'"
+            monitor_cmd += f" --subject-context-extra {shlex.quote(self.subject_context_extra)}"
 
         # Monitor service — runs as root, has healthcheck
         monitor_service: dict[str, Any] = {
@@ -149,11 +150,9 @@ class RemoteOperatorProcesses:
             **shared_env,
             "HOME": "/home/appuser",
             # Git safe.directory config via env vars
-            "GIT_CONFIG_COUNT": "2",
+            "GIT_CONFIG_COUNT": "1",
             "GIT_CONFIG_KEY_0": "safe.directory",
-            "GIT_CONFIG_VALUE_0": "/",
-            "GIT_CONFIG_KEY_1": "safe.directory",
-            "GIT_CONFIG_VALUE_1": "/var/lib/workspace",
+            "GIT_CONFIG_VALUE_0": "/var/lib/workspace",
             # Git identity via env vars (no .gitconfig file needed)
             "GIT_AUTHOR_NAME": "eval",
             "GIT_AUTHOR_EMAIL": "eval@operator",
@@ -413,21 +412,32 @@ class RemoteOperatorProcesses:
 
         return stdout.strip()
 
-    async def _run_db_execute(self, statement: str) -> int:
+    async def _run_db_execute(self, statement: str, params: list | None = None) -> int:
         """Execute a SQLite write statement on operator.db via SSH.
 
+        Uses base64-encoded JSON to avoid shell/SQL escaping issues.
+
         Args:
-            statement: SQL statement to execute
+            statement: SQL statement with ? placeholders for params
+            params: Optional list of parameter values for ? placeholders
 
         Returns:
             Number of rows affected
         """
-        escaped_stmt = statement.replace("'", "\\'")
+        import base64
+
+        payload = {
+            "sql": statement,
+            "params": params or [],
+            "db_path": OPERATOR_DB_PATH,
+        }
+        payload_b64 = base64.b64encode(json.dumps(payload).encode()).decode()
 
         python_script = (
-            "import sqlite3; "
-            f"conn = sqlite3.connect('{OPERATOR_DB_PATH}'); "
-            f"cur = conn.execute('{escaped_stmt}'); "
+            "import sqlite3, json, base64; "
+            f"p = json.loads(base64.b64decode('{payload_b64}')); "
+            "conn = sqlite3.connect(p['db_path']); "
+            "cur = conn.execute(p['sql'], p['params']); "
             "conn.commit(); "
             "print(cur.rowcount); "
             "conn.close()"
@@ -524,9 +534,9 @@ class RemoteOperatorProcesses:
             Number of tickets resolved
         """
         count = await self._run_db_execute(
-            "UPDATE tickets SET status = \\'resolved\\', "
-            "resolved_at = datetime(\\'now\\'), held = 0 "
-            "WHERE status != \\'resolved\\'"
+            "UPDATE tickets SET status = 'resolved', "
+            "resolved_at = datetime('now'), held = 0 "
+            "WHERE status != 'resolved'"
         )
         if count > 0:
             console.print(f"[dim]Force-resolved {count} startup ticket(s)[/dim]")
@@ -628,16 +638,15 @@ class RemoteOperatorProcesses:
                 rows = json.loads(result)
                 if rows and rows[0].get("max_id") is not None:
                     # Ticket exists - update it
-                    tools_json = json.dumps(variant_config.tools_config).replace("'", "\\'")
-                    model = variant_config.model.replace("'", "\\'")
-                    prompt = variant_config.system_prompt.replace("'", "\\'")
+                    tools_json = json.dumps(variant_config.tools_config)
 
                     await self._run_db_execute(
-                        f"UPDATE tickets SET "
-                        f"variant_model = \\'{model}\\', "
-                        f"variant_system_prompt = \\'{prompt}\\', "
-                        f"variant_tools_config = \\'{tools_json}\\' "
-                        f"WHERE id = (SELECT MAX(id) FROM tickets)"
+                        "UPDATE tickets SET "
+                        "variant_model = ?, "
+                        "variant_system_prompt = ?, "
+                        "variant_tools_config = ? "
+                        "WHERE id = (SELECT MAX(id) FROM tickets)",
+                        [variant_config.model, variant_config.system_prompt, tools_json],
                     )
                     return True
             except (json.JSONDecodeError, IndexError, KeyError):

@@ -98,7 +98,7 @@ uv run eval run campaign campaigns/coding/chatdb-cloud-load-stress.yaml --cloud=
 cd eval
 GIT_SHA=$(git rev-parse --short HEAD)
 uv run eval worker start --cloud=gcp \
-  --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+  --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 ```
 
 The worker claims items from the queue, provisions VMs, runs trials, and records results.
@@ -111,12 +111,12 @@ Use `--campaign` to scope workers to a specific campaign. This prevents workers 
 # Campaign A (terminal 1)
 uv run eval run campaign campaigns/operations/tikv-all-chaos-cloud.yaml --cloud=gcp  # → campaign 109
 uv run eval worker start --cloud=gcp --id=c109-1 --campaign=109 \
-  --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+  --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 
 # Campaign B (terminal 2)
 uv run eval run campaign campaigns/coding/chatdb-cloud-all-defects.yaml --cloud=gcp  # → campaign 110
 uv run eval worker start --cloud=gcp --id=c110-1 --campaign=110 \
-  --operator-image=us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+  --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 ```
 
 Without `--campaign`, workers claim any pending work item (backward compatible for single-campaign use).
@@ -246,7 +246,7 @@ cloud:                           # Omit for local campaigns
   provider: gcp
   operator:
     enabled: true
-    image: us-central1-docker.pkg.dev/operator-486214/eval/operator:${GIT_SHA}
+    image: us-central1-docker.pkg.dev/$GCP_PROJECT/eval/operator:${GIT_SHA}
 ```
 
 ## Chat-DB-App Chaos Types

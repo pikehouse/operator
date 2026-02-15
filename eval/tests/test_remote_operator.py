@@ -348,8 +348,9 @@ class TestBuildComposeConfig:
         """Agent should have GIT_CONFIG_* and GIT_AUTHOR/COMMITTER env vars."""
         config = self._make_op()._build_compose_config()
         env = config["services"]["agent"]["environment"]
-        assert env["GIT_CONFIG_COUNT"] == "2"
+        assert env["GIT_CONFIG_COUNT"] == "1"
         assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
+        assert env["GIT_CONFIG_VALUE_0"] == "/var/lib/workspace"
         assert env["GIT_AUTHOR_NAME"] == "eval"
         assert env["GIT_COMMITTER_EMAIL"] == "eval@operator"
 
