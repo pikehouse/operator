@@ -27,6 +27,8 @@ Environment variables:
     MARK_READ_RATIO: Fraction of iterations marking all read (default: 0.0)
     LIST_NOTIFS_RATIO: Fraction of iterations listing notifications (default: 0.0)
     MULTI_USER_COUNT: Number of users to create at startup (default: 1)
+    BROADCAST_PAYLOAD_SIZE: Bytes of padding data in broadcast payloads (default: 0 = none)
+    PAGINATE_NOTIFICATIONS: Walk all notification pages via offset (default: false)
 """
 
 from __future__ import annotations
@@ -64,6 +66,8 @@ UNREAD_CHECK_RATIO = float(os.environ.get("UNREAD_CHECK_RATIO", "0.0"))
 MARK_READ_RATIO = float(os.environ.get("MARK_READ_RATIO", "0.0"))
 LIST_NOTIFS_RATIO = float(os.environ.get("LIST_NOTIFS_RATIO", "0.0"))
 MULTI_USER_COUNT = int(os.environ.get("MULTI_USER_COUNT", "1"))
+BROADCAST_PAYLOAD_SIZE = int(os.environ.get("BROADCAST_PAYLOAD_SIZE", "0"))
+PAGINATE_NOTIFICATIONS = os.environ.get("PAGINATE_NOTIFICATIONS", "false").lower() in ("true", "1", "yes")
 
 SEARCH_TERMS = [
     "quantum", "database", "PostgreSQL", "connection", "deadlock",
@@ -228,17 +232,39 @@ async def simulate_user(
             if notif_user_id and random.random() < LIST_NOTIFS_RATIO:
                 try:
                     start = time.monotonic()
-                    resp = await client.get(
-                        f"{APP_URL}/api/notifications",
-                        params={"user_id": notif_user_id},
-                        timeout=60,
-                    )
-                    elapsed = time.monotonic() - start
-                    if resp.status_code == 200:
-                        notifs = resp.json()
-                        log.info(f"User {user_id}: listed {len(notifs)} notifications ({elapsed:.1f}s)")
+                    if PAGINATE_NOTIFICATIONS:
+                        # Walk all pages via offset to force full table scan
+                        page_size = 50
+                        page_offset = 0
+                        total_fetched = 0
+                        while True:
+                            resp = await client.get(
+                                f"{APP_URL}/api/notifications",
+                                params={"user_id": notif_user_id, "limit": page_size, "offset": page_offset},
+                                timeout=60,
+                            )
+                            if resp.status_code != 200:
+                                log.warning(f"User {user_id}: list-notifications page failed {resp.status_code}")
+                                break
+                            batch = resp.json()
+                            total_fetched += len(batch)
+                            if len(batch) < page_size:
+                                break
+                            page_offset += page_size
+                        elapsed = time.monotonic() - start
+                        log.info(f"User {user_id}: paginated {total_fetched} notifications ({elapsed:.1f}s)")
                     else:
-                        log.warning(f"User {user_id}: list-notifications failed {resp.status_code}")
+                        resp = await client.get(
+                            f"{APP_URL}/api/notifications",
+                            params={"user_id": notif_user_id},
+                            timeout=60,
+                        )
+                        elapsed = time.monotonic() - start
+                        if resp.status_code == 200:
+                            notifs = resp.json()
+                            log.info(f"User {user_id}: listed {len(notifs)} notifications ({elapsed:.1f}s)")
+                        else:
+                            log.warning(f"User {user_id}: list-notifications failed {resp.status_code}")
                 except httpx.TimeoutException:
                     log.warning(f"User {user_id}: list-notifications timed out")
 
@@ -327,10 +353,13 @@ async def broadcast_loop(client: httpx.AsyncClient) -> None:
     )
     while True:
         try:
+            payload: dict = {"message": f"broadcast at {time.time():.0f}"}
+            if BROADCAST_PAYLOAD_SIZE > 0:
+                payload["data"] = "x" * BROADCAST_PAYLOAD_SIZE
             start = time.monotonic()
             resp = await client.post(
                 endpoint,
-                json={"type": "system", "payload": {"message": f"broadcast at {time.time():.0f}"}},
+                json={"type": "system", "payload": payload},
                 timeout=120,
             )
             elapsed = time.monotonic() - start
@@ -415,10 +444,13 @@ async def main() -> None:
     if UNREAD_CHECK_RATIO > 0:
         notif_info += f", unread_check={UNREAD_CHECK_RATIO}"
     multi_info = f", multi_user={MULTI_USER_COUNT}" if MULTI_USER_COUNT > 1 else ""
+    payload_info = f", broadcast_payload={BROADCAST_PAYLOAD_SIZE}B" if BROADCAST_PAYLOAD_SIZE > 0 else ""
+    paginate_info = ", paginate_notifications" if PAGINATE_NOTIFICATIONS else ""
     log.info(
         f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, "
         f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}"
         f"{search_info}{broadcast_info}{poll_info}{notif_info}{multi_info}"
+        f"{payload_info}{paginate_info}"
     )
 
     async with httpx.AsyncClient() as client:

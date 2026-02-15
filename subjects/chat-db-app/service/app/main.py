@@ -262,11 +262,13 @@ async def api_broadcast_notification_serializable(req: BroadcastRequest):
 
 
 @app.get("/api/notifications")
-async def api_list_notifications(user_id: str | None = None):
+async def api_list_notifications(
+    user_id: str | None = None, limit: int | None = None, offset: int = 0
+):
     """List notifications for a user."""
     uid = user_id or DEFAULT_USER_ID
     try:
-        notifs = await list_notifications(_pool, uid)
+        notifs = await list_notifications(_pool, uid, limit=limit, offset=offset)
         return [_serialize(n) for n in notifs]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

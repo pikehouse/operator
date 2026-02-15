@@ -70,6 +70,8 @@ services:
       MARK_READ_RATIO: "${MARK_READ_RATIO:-0.0}"
       LIST_NOTIFS_RATIO: "${LIST_NOTIFS_RATIO:-0.0}"
       MULTI_USER_COUNT: "${MULTI_USER_COUNT:-1}"
+      BROADCAST_PAYLOAD_SIZE: "${BROADCAST_PAYLOAD_SIZE:-0}"
+      PAGINATE_NOTIFICATIONS: "${PAGINATE_NOTIFICATIONS:-false}"
     depends_on:
       app:
         condition: service_healthy

@@ -243,7 +243,9 @@ class GCPChatDBAppSubject(CloudSubjectBase):
             "SEARCH_RATIO": "0.0",
             "LIST_NOTIFS_RATIO": "0.8",
             "BROADCAST_ENABLED": "true",
-            "BROADCAST_INTERVAL": "30",
+            "BROADCAST_INTERVAL": "10",
+            "BROADCAST_PAYLOAD_SIZE": "50000",
+            "PAGINATE_NOTIFICATIONS": "true",
             "MULTI_USER_COUNT": "20",
         },
         "notification_cleanup": {
@@ -700,8 +702,8 @@ Other useful commands:
                 )
             elif resolved_type == "notification_payload":
                 await self._preseed_notifications(
-                    200_000, 20, "70000000",
-                    payload_expr="json_build_object('message', repeat('x', 4000), 'metadata', json_build_object('key', repeat('y', 500)))::text",
+                    50_000, 20, "70000000",
+                    payload_expr="json_build_object('message', repeat('x', 40000), 'metadata', json_build_object('key', repeat('y', 5000)))::text",
                 )
             elif resolved_type == "notification_cleanup":
                 await self._preseed_notifications(

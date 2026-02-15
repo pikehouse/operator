@@ -1,8 +1,8 @@
 name: chatdb-notification-payload
 subjects: [chat-db-app]
 
-# Targets: SELECT * with large 5KB JSONB payloads
-# 10K notifications per user → 50MB per listing response
+# Targets: SELECT * with large 50KB JSONB payloads + pagination walks all rows
+# 50K notifications × 50KB = 2.5GB total, TOAST decompression dominates
 chaos_types:
   - type: notification_payload
 

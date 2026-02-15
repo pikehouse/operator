@@ -294,13 +294,17 @@ async def broadcast_notification_serializable(
     return len(users)
 
 
-async def list_notifications(pool: asyncpg.Pool, user_id: str) -> list[dict]:
+async def list_notifications(
+    pool: asyncpg.Pool, user_id: str, limit: int | None = None, offset: int = 0
+) -> list[dict]:
     """List notifications for a user with conversation titles."""
     async with pool.acquire() as conn:
-        notifs = await conn.fetch(
-            "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC",
-            uuid.UUID(user_id),
-        )
+        query = "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC"
+        params: list = [uuid.UUID(user_id)]
+        if limit is not None:
+            query += f" LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}"
+            params.extend([limit, offset])
+        notifs = await conn.fetch(query, *params)
         results = []
         for n in notifs:
             conv_title = None

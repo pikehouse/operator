@@ -253,7 +253,7 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "LIST_NOTIFS_RATIO": "0.7",
         "MULTI_USER_COUNT": "20",
     },
-    # Large JSONB payloads — SELECT * transfers 5KB per notification
+    # Large JSONB payloads — SELECT * transfers 50KB per notification
     "notification_payload": {
         "NUM_USERS": "20",
         "REQUEST_DELAY": "0.3",
@@ -266,7 +266,9 @@ CHAOS_PROFILES: dict[str, dict[str, str]] = {
         "SEARCH_RATIO": "0.0",
         "LIST_NOTIFS_RATIO": "0.8",
         "BROADCAST_ENABLED": "true",
-        "BROADCAST_INTERVAL": "30",
+        "BROADCAST_INTERVAL": "10",
+        "BROADCAST_PAYLOAD_SIZE": "50000",
+        "PAGINATE_NOTIFICATIONS": "true",
         "MULTI_USER_COUNT": "20",
     },
     # Notifications accumulate forever — dead tuples from mark-read outpace autovacuum
@@ -406,7 +408,7 @@ CHAOS_CATALOG: dict[str, dict[str, str]] = {
         "reference": "https://www.postgresql.org/docs/current/queries-table-expressions.html",
     },
     "notification_payload": {
-        "description": "Broadcast stores ~5KB JSONB payload per notification. list_notifications does SELECT *, transferring all payload data. With 10K notifications per user, each listing is ~50MB.",
+        "description": "Broadcast stores ~50KB JSONB payload per notification. list_notifications does SELECT *, transferring all payload data including TOAST-compressed blobs. Pagination walks all rows. Each page of 50 decompresses 2.5MB of JSONB.",
         "anti_pattern": "SELECT * with large JSONB columns",
         "expected_fix": "Use explicit column list excluding payload: SELECT id, user_id, type, read, created_at. Add separate detail endpoint for individual payloads.",
         "reference": "https://www.postgresql.org/docs/current/datatype-json.html",
@@ -487,6 +489,7 @@ class ChatDBAppEvalSubject:
             "READ_RATIO", "BURST_MODE", "BURST_CONCURRENCY",
             "SEARCH_ENABLED", "SEARCH_RATIO",
             "BROADCAST_ENABLED", "BROADCAST_INTERVAL", "BROADCAST_SERIALIZABLE",
+            "BROADCAST_PAYLOAD_SIZE", "PAGINATE_NOTIFICATIONS",
             "POLL_ENABLED", "POLL_RATIO",
             "UNREAD_CHECK_RATIO", "MARK_READ_RATIO", "LIST_NOTIFS_RATIO",
             "MULTI_USER_COUNT",
@@ -1021,15 +1024,15 @@ FROM generate_series(1, {count}) AS g;
                 with_conversations=True,
             )
         elif resolved_type == "notification_payload":
-            # 5KB JSONB payloads
+            # 50KB JSONB payloads — TOAST decompression dominates even with LIMIT
             payload_expr = (
                 "json_build_object("
-                "'message', repeat('x', 4000), "
-                "'metadata', json_build_object('key', repeat('y', 500))"
+                "'message', repeat('x', 40000), "
+                "'metadata', json_build_object('key', repeat('y', 5000))"
                 ")::text"
             )
             await self._preseed_notifications(
-                count=200_000, user_count=20, uuid_prefix="70000000",
+                count=50_000, user_count=20, uuid_prefix="70000000",
                 payload_size=payload_expr,
             )
         elif resolved_type == "notification_cleanup":
