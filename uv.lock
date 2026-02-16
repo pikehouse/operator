@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 members = [
     "chat-db-app-observer",
     "chat-db-app-service",
+    "chat-db-app-shard-service",
     "operator",
     "operator-core",
     "operator-protocols",
@@ -295,6 +296,25 @@ requires-dist = [
 name = "chat-db-app-service"
 version = "0.1.0"
 source = { editable = "subjects/chat-db-app/service" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "uvicorn", specifier = ">=0.34.0" },
+]
+
+[[package]]
+name = "chat-db-app-shard-service"
+version = "0.1.0"
+source = { editable = "subjects/chat-db-app-shard/service" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },

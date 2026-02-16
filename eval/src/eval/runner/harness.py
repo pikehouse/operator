@@ -443,6 +443,7 @@ async def run_trial(
     chaos_params: dict[str, Any] | None = None,
     variant_config: VariantConfig | None = None,
     skip_reset: bool = False,
+    resolution_timeout: int | None = None,
 ) -> Trial:
     """Execute single trial with precise timing capture.
 
@@ -522,11 +523,12 @@ async def run_trial(
             await subject.wait_healthy(timeout_sec=300.0)
         else:
             # Normal trial: wait for agent to resolve
-            console.print("[bold cyan]Waiting for agent resolution...[/bold cyan]")
+            timeout = float(resolution_timeout) if resolution_timeout else 300.0
+            console.print(f"[bold cyan]Waiting for agent resolution (timeout={timeout}s)...[/bold cyan]")
             if operator_db_path:
                 ticket_created_at, resolved_at = await wait_for_ticket_resolution(
                     operator_db_path,
-                    timeout_sec=300.0,
+                    timeout_sec=timeout,
                     min_ticket_id=pre_chaos_max_ticket_id,  # Filter to tickets after chaos
                 )
 
@@ -899,6 +901,7 @@ async def run_campaign_from_config(
                 operator_db_path=operator_db_path,
                 chaos_params=spec["chaos_params"],
                 variant_config=variant_config,
+                resolution_timeout=spec.get("resolution_timeout"),
             )
 
             trial_id = await db.insert_trial(trial)
@@ -943,6 +946,7 @@ async def run_campaign_from_config(
                         chaos_params=spec["chaos_params"],
                         variant_config=variant_config,
                         skip_reset=skip_reset,
+                        resolution_timeout=spec.get("resolution_timeout"),
                     )
                     trial_id = await db.insert_trial(trial)
                     console.print(f"[green]Trial {trial_id} completed (instance {instance_id})[/green]")

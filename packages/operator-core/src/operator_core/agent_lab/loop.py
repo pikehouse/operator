@@ -57,7 +57,7 @@ async def process_ticket(
     options = ClaudeAgentOptions(
         model=effective_model,
         system_prompt=effective_system_prompt,
-        allowed_tools=["Bash", "Read", "Edit", "Write", "Glob", "Grep"],
+        allowed_tools=["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebSearch", "WebFetch"],
         permission_mode="bypassPermissions",
         max_turns=50,
     )

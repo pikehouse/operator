@@ -59,6 +59,12 @@ def is_final_state_healthy(final_state_json: str, subject_name: str) -> bool:
             return False
         return all(s.get("state_name") == "Up" for s in stores)
 
+    if subject_name.lower() in ("chat-db-app", "chat-db-app-shard"):
+        app = state.get("app", {})
+        if isinstance(app, dict) and app.get("error"):
+            return False
+        return isinstance(app, dict) and app.get("status") == "healthy"
+
     # Default: if we have state, assume healthy (baseline may not have ticket)
     return bool(state)
 

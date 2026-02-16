@@ -59,11 +59,35 @@ WHERE name IN ({placeholders})
 ORDER BY name
 """
 
+PARTITIONS_SQL = """
+SELECT c.relname AS table_name,
+       p.partstrat AS partition_strategy,
+       pg_get_partkeydef(c.oid) AS partition_key,
+       (SELECT count(*) FROM pg_inherits WHERE inhparent = c.oid) AS partition_count
+FROM pg_class c
+JOIN pg_partitioned_table p ON p.partrelid = c.oid
+WHERE c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+ORDER BY c.relname
+"""
+
+TABLE_SIZES_SQL = """
+SELECT relname AS table_name,
+       pg_total_relation_size(c.oid) AS total_bytes,
+       n_live_tup AS live_rows
+FROM pg_class c
+JOIN pg_stat_user_tables s ON s.relid = c.oid
+WHERE c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+  AND c.relkind IN ('r', 'p')
+ORDER BY pg_total_relation_size(c.oid) DESC
+"""
+
 
 def _build_state_dict(
     schema_rows: list[dict],
     index_rows: list[dict],
     settings_rows: list[dict],
+    partition_rows: list[dict] | None = None,
+    table_size_rows: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Build the canonical pg_state dict from raw query results."""
     # Tables: group columns by table_name
@@ -92,10 +116,33 @@ def _build_state_dict(
     # Settings: flat dict
     settings = {row["name"]: row["setting"] for row in settings_rows}
 
+    # Partitions: list of partitioned tables
+    partitions = [
+        {
+            "table_name": row["table_name"],
+            "partition_strategy": row["partition_strategy"],
+            "partition_key": row["partition_key"],
+            "partition_count": row["partition_count"],
+        }
+        for row in (partition_rows or [])
+    ]
+
+    # Table sizes: list sorted by size descending
+    table_sizes = [
+        {
+            "table_name": row["table_name"],
+            "total_bytes": row["total_bytes"],
+            "live_rows": row["live_rows"],
+        }
+        for row in (table_size_rows or [])
+    ]
+
     return {
         "tables": tables,
         "indexes": indexes,
         "settings": settings,
+        "partitions": partitions,
+        "table_sizes": table_sizes,
     }
 
 
@@ -117,10 +164,14 @@ async def capture_pg_state_asyncpg(dsn: str) -> dict[str, Any]:
         settings_rows = [
             dict(r) for r in await conn.fetch(SETTINGS_SQL, CURATED_SETTINGS)
         ]
+        partition_rows = [dict(r) for r in await conn.fetch(PARTITIONS_SQL)]
+        table_size_rows = [dict(r) for r in await conn.fetch(TABLE_SIZES_SQL)]
     finally:
         await conn.close()
 
-    return _build_state_dict(schema_rows, index_rows, settings_rows)
+    return _build_state_dict(
+        schema_rows, index_rows, settings_rows, partition_rows, table_size_rows
+    )
 
 
 async def capture_pg_state_psql(
@@ -164,6 +215,32 @@ SELECT json_build_object(
             WHERE name IN ({settings_in})
             ORDER BY name
         ) g
+    ),
+    'partitions', (
+        SELECT json_agg(row_to_json(p))
+        FROM (
+            SELECT c.relname AS table_name,
+                   pt.partstrat AS partition_strategy,
+                   pg_get_partkeydef(c.oid) AS partition_key,
+                   (SELECT count(*) FROM pg_inherits WHERE inhparent = c.oid) AS partition_count
+            FROM pg_class c
+            JOIN pg_partitioned_table pt ON pt.partrelid = c.oid
+            WHERE c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+            ORDER BY c.relname
+        ) p
+    ),
+    'table_sizes', (
+        SELECT json_agg(row_to_json(ts))
+        FROM (
+            SELECT relname AS table_name,
+                   pg_total_relation_size(c.oid) AS total_bytes,
+                   n_live_tup AS live_rows
+            FROM pg_class c
+            JOIN pg_stat_user_tables st ON st.relid = c.oid
+            WHERE c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+              AND c.relkind IN ('r', 'p')
+            ORDER BY pg_total_relation_size(c.oid) DESC
+        ) ts
     )
 )
 """
@@ -191,5 +268,9 @@ SELECT json_build_object(
     schema_rows = raw.get("schema") or []
     index_rows = raw.get("indexes") or []
     settings_rows = raw.get("settings") or []
+    partition_rows = raw.get("partitions") or []
+    table_size_rows = raw.get("table_sizes") or []
 
-    return _build_state_dict(schema_rows, index_rows, settings_rows)
+    return _build_state_dict(
+        schema_rows, index_rows, settings_rows, partition_rows, table_size_rows
+    )

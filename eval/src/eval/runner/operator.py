@@ -117,7 +117,7 @@ class OperatorProcesses:
         ]
 
         # Add subject-specific CLI args
-        if self.subject_name == "chat-db-app" and self.eval_subject is not None:
+        if self.subject_name in ("chat-db-app", "chat-db-app-shard") and self.eval_subject is not None:
             subj = self.eval_subject
             if hasattr(subj, "app_port"):
                 monitor_cmd.extend(["--app-url", f"http://localhost:{subj.app_port}"])

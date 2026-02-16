@@ -39,6 +39,7 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 | `coding/chatdb-counter-race.yaml` | chat-db-app | counter_race (3 trials) |
 | `coding/chatdb-all-defects.yaml` | chat-db-app | all 4 per-defect types (3 trials each) |
 | `coding/chatdb-continuous-defects.yaml` | chat-db-app | missing_index, pool_exhaustion, streaming_txn — continuous mode (no reset between trials) |
+| `coding/chatdb-db-sharding.yaml` | chat-db-app-shard | db_sharding — 5M messages on constrained PG, requires horizontal sharding (2 trials, 15min timeout) |
 
 ### Running any local campaign
 

@@ -34,6 +34,8 @@ RUN pip install --no-cache-dir ".[cloud]"
 COPY subjects/tikv/docker-compose.cloud.yaml /usr/local/lib/subjects/tikv/docker-compose.cloud.yaml
 COPY subjects/chat-db-app/docker-compose.cloud.yaml /usr/local/lib/subjects/chat-db-app/docker-compose.cloud.yaml
 COPY subjects/chat-db-app/service/ /usr/local/lib/subjects/chat-db-app/service/
+COPY subjects/chat-db-app-shard/docker-compose.cloud.yaml /usr/local/lib/subjects/chat-db-app-shard/docker-compose.cloud.yaml
+COPY subjects/chat-db-app-shard/service/ /usr/local/lib/subjects/chat-db-app-shard/service/
 
 # Default command: start worker
 ENTRYPOINT ["eval"]

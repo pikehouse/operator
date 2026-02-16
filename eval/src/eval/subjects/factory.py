@@ -144,6 +144,21 @@ def _create_local_tikv(instance_id: int = 0, **kwargs) -> EvalSubject:
     return TiKVEvalSubject(instance_id=instance_id, **kwargs)
 
 
+@SubjectRegistry.register("chat-db-app-shard", "local")
+def _create_local_chat_db_app_shard(instance_id: int = 0, **kwargs) -> EvalSubject:
+    """Create a local chat-db-app-shard eval subject.
+
+    Args:
+        instance_id: Instance number for parallel execution (0, 1, 2, ...)
+        **kwargs: Additional arguments (workspace_base, etc.)
+
+    Returns:
+        ChatDBAppShardEvalSubject instance
+    """
+    from eval.subjects.chat_db_app_shard import ChatDBAppShardEvalSubject
+    return ChatDBAppShardEvalSubject(instance_id=instance_id, **kwargs)
+
+
 @SubjectRegistry.register("chat-db-app", "local")
 def _create_local_chat_db_app(instance_id: int = 0, **kwargs) -> EvalSubject:
     """Create a local chat-db-app eval subject.
@@ -205,6 +220,34 @@ def _create_gcp_chatdb(instance_id: int = 0, **kwargs) -> EvalSubject:
     try:
         from eval.subjects.cloud.gcp.chatdb_subject import GCPChatDBAppSubject
         return GCPChatDBAppSubject(
+            instance_id=instance_id,
+            project=kwargs.get("project"),
+            zone=kwargs.get("zone", "us-central1-a"),
+            machine_type=kwargs.get("machine_type", "e2-standard-2"),
+        )
+    except ImportError as e:
+        raise ImportError(
+            "Cloud dependencies not installed. Install with: pip install 'eval[cloud]'"
+        ) from e
+
+
+@SubjectRegistry.register("chat-db-app-shard", "cloud-gcp")
+def _create_gcp_chatdb_shard(instance_id: int = 0, **kwargs) -> EvalSubject:
+    """Create a GCP Chat DB App Shard eval subject.
+
+    Args:
+        instance_id: Instance number for parallel execution
+        **kwargs: Additional arguments (project, zone, machine_type)
+
+    Returns:
+        GCPChatDBAppShardSubject instance
+
+    Raises:
+        ImportError: If cloud dependencies not installed
+    """
+    try:
+        from eval.subjects.cloud.gcp.chatdb_shard_subject import GCPChatDBAppShardSubject
+        return GCPChatDBAppShardSubject(
             instance_id=instance_id,
             project=kwargs.get("project"),
             zone=kwargs.get("zone", "us-central1-a"),

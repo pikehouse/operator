@@ -109,7 +109,7 @@ def run_monitor(
         print(f"  Rate limiter: {ratelimiter_url}")
         print(f"  Redis: {redis_url}")
         print(f"  Prometheus: {prometheus_url}")
-    elif subject == "chat-db-app":
+    elif subject in ("chat-db-app", "chat-db-app-shard"):
         if not app_url:
             app_url = os.environ.get("APP_URL", "http://localhost:8000")
         if not db_dsn:

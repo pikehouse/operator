@@ -1,0 +1,90 @@
+# Chat DB App Shard for Cloud Eval (GCP with constrained local PostgreSQL)
+#
+# Same as chat-db-app cloud compose, but with PostgreSQL resource constraints:
+# 256MB memory, 30 max_connections, reduced buffer settings.
+# App code is pre-optimized (all code bugs fixed). The challenge is architectural.
+
+services:
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: chatapp
+      POSTGRES_PASSWORD: chatapp
+      POSTGRES_DB: chatdb
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    command:
+      - postgres
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=64MB
+      - -c
+      - max_connections=30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatapp -d chatdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: on-failure
+
+  app:
+    build:
+      context: /var/lib/workspace/app
+    ports:
+      - "${APP_HOST_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: "postgresql://chatapp:chatapp@postgres:5432/chatdb"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: on-failure
+
+  loadgen:
+    image: ${LOADGEN_IMAGE}
+    environment:
+      APP_URL: "http://app:8000"
+      NUM_USERS: "${NUM_USERS:-3}"
+      REQUEST_DELAY: "${REQUEST_DELAY:-2.0}"
+      STREAM_RATIO: "${STREAM_RATIO:-0.3}"
+      RAMP_UP_SECONDS: "${RAMP_UP_SECONDS:-10}"
+      READ_RATIO: "${READ_RATIO:-0.3}"
+      BURST_MODE: "${BURST_MODE:-false}"
+      BURST_CONCURRENCY: "${BURST_CONCURRENCY:-1}"
+      SEARCH_ENABLED: "${SEARCH_ENABLED:-false}"
+      SEARCH_RATIO: "${SEARCH_RATIO:-0.0}"
+      BROADCAST_ENABLED: "${BROADCAST_ENABLED:-false}"
+      BROADCAST_INTERVAL: "${BROADCAST_INTERVAL:-30.0}"
+      BROADCAST_SERIALIZABLE: "${BROADCAST_SERIALIZABLE:-false}"
+      POLL_ENABLED: "${POLL_ENABLED:-false}"
+      POLL_RATIO: "${POLL_RATIO:-0.0}"
+      UNREAD_CHECK_RATIO: "${UNREAD_CHECK_RATIO:-0.0}"
+      MARK_READ_RATIO: "${MARK_READ_RATIO:-0.0}"
+      LIST_NOTIFS_RATIO: "${LIST_NOTIFS_RATIO:-0.0}"
+      MULTI_USER_COUNT: "${MULTI_USER_COUNT:-1}"
+      BROADCAST_PAYLOAD_SIZE: "${BROADCAST_PAYLOAD_SIZE:-0}"
+      PAGINATE_NOTIFICATIONS: "${PAGINATE_NOTIFICATIONS:-false}"
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  postgres-data:

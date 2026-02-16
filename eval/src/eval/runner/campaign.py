@@ -13,6 +13,7 @@ class ChaosSpec(BaseModel):
     """Per-chaos-type configuration."""
     type: str  # "node_kill", "latency", "disk_pressure", "network_partition", etc.
     params: dict[str, Any] = Field(default_factory=dict)
+    resolution_timeout: int | None = Field(default=None, description="Override default resolution timeout (seconds)")
 
     @field_validator("type")
     @classmethod
@@ -31,6 +32,7 @@ class ChaosSpec(BaseModel):
             "notification_fanout", "notification_counter", "notification_realtime",  # Chat DB App notification
             "notification_poll_idle", "notification_mark_read", "notification_n_plus_one",  # Chat DB App notification
             "notification_payload", "notification_cleanup", "notification_serialize",  # Chat DB App notification
+            "db_sharding",  # Chat DB App Shard
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")
@@ -107,7 +109,7 @@ class CampaignConfig(BaseModel):
     @field_validator("subjects")
     @classmethod
     def validate_subjects(cls, v: list[str]) -> list[str]:
-        valid_subjects = ["tikv", "chat-db-app"]
+        valid_subjects = ["tikv", "chat-db-app", "chat-db-app-shard"]
         for s in v:
             if s not in valid_subjects:
                 raise ValueError(f"Invalid subject: {s}. Must be one of {valid_subjects}")
@@ -139,6 +141,7 @@ def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
                 "trial_index": trial_idx,
                 "baseline": False,
                 "variant": config.variant,
+                "resolution_timeout": chaos.resolution_timeout,
             })
 
     # Optional baseline trials (one per subject, no chaos)
@@ -151,6 +154,7 @@ def expand_campaign_matrix(config: CampaignConfig) -> list[dict[str, Any]]:
                 "trial_index": 0,
                 "baseline": True,
                 "variant": config.variant,
+                "resolution_timeout": None,
             })
 
     # Assign sequence numbers for continuous mode

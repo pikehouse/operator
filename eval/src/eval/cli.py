@@ -503,7 +503,7 @@ def run_campaign_cmd(
             # so we can pass workspace context to the operator
             eval_subject = None
             subject_context_extra = None
-            if subject_name == "chat-db-app":
+            if subject_name in ("chat-db-app", "chat-db-app-shard"):
                 from eval.subjects.factory import SubjectRegistry
                 eval_subject = SubjectRegistry.create(subject_name, instance_id=0)
                 # Ensure workspace is set up

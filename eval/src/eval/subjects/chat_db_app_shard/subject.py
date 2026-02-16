@@ -1,0 +1,218 @@
+"""Chat DB App Shard evaluation subject.
+
+Variant of chat-db-app with all code-level bugs pre-fixed.
+The challenge is architectural: a single constrained PostgreSQL
+instance can't handle 2M messages under load. The only viable
+fix is horizontal database sharding.
+"""
+
+import asyncio
+import logging
+from pathlib import Path
+from typing import Any
+
+from eval.subjects.chat_db_app.subject import ChatDBAppEvalSubject
+
+logger = logging.getLogger(__name__)
+
+# Load profile for db_sharding chaos
+SHARD_CHAOS_PROFILES = {
+    "db_sharding": {
+        "NUM_USERS": "40",
+        "REQUEST_DELAY": "0.2",
+        "STREAM_RATIO": "0.0",
+        "RAMP_UP_SECONDS": "5",
+        "READ_RATIO": "0.7",
+        "BURST_MODE": "false",
+        "BURST_CONCURRENCY": "1",
+        "SEARCH_ENABLED": "false",
+        "SEARCH_RATIO": "0.0",
+    },
+}
+
+SHARD_CHAOS_CATALOG = {
+    "db_sharding": {
+        "description": (
+            "2 million messages on a memory-constrained PostgreSQL (256MB, 30 max_connections). "
+            "App code is already optimized (indexes, bounded pool, window functions). "
+            "The single PG instance is the bottleneck."
+        ),
+        "anti_pattern": "Single database instance at scale without horizontal sharding",
+        "expected_fix": (
+            "Add additional PostgreSQL instances to docker-compose.yaml. "
+            "Implement application-level shard routing (hash conversation_id to pick shard). "
+            "Create schema on each shard, migrate data, update app to use multiple connection pools."
+        ),
+    },
+}
+
+
+class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
+    """Chat DB App variant with pre-fixed code for database sharding trials.
+
+    All code-level bugs are pre-fixed. The challenge is architectural:
+    the single constrained PG can't handle 2M messages under load.
+    """
+
+    def __init__(self, instance_id: int = 0, workspace_base: Path | None = None) -> None:
+        super().__init__(instance_id, workspace_base)
+        # Override source to point to the shard variant
+        self.source_dir = (
+            Path(__file__).parents[5] / "subjects" / "chat-db-app-shard" / "service"
+        )
+        # Override workspace dir to avoid collision with regular chat-db-app
+        if workspace_base is None:
+            workspace_base = Path("/tmp/eval-workspaces")
+        self.workspace_dir = workspace_base / f"chat-db-app-shard-{instance_id}"
+        self.project_name = (
+            f"chatdb-shard-eval-{instance_id}" if instance_id > 0 else "chat-db-app-shard"
+        )
+
+    def get_chaos_types(self) -> list[str]:
+        """Return supported chaos types — only db_sharding."""
+        return list(SHARD_CHAOS_PROFILES.keys())
+
+    async def inject_chaos(self, chaos_type: str, **params: Any) -> dict[str, Any]:
+        """Inject db_sharding chaos: preseed 2M messages then start heavy load."""
+        if chaos_type != "db_sharding":
+            raise ValueError(
+                f"Unknown chaos type: {chaos_type}. "
+                f"Supported: {self.get_chaos_types()}"
+            )
+
+        ws = await self._ensure_workspace()
+
+        # Merge profile defaults with overrides
+        profile = dict(SHARD_CHAOS_PROFILES["db_sharding"])
+        for key, value in params.items():
+            upper_key = key.upper()
+            if upper_key in profile:
+                profile[upper_key] = str(value)
+
+        # Pre-seed 5M messages
+        await self._preseed_for_db_sharding()
+
+        # Write .env with chaos profile and restart loadgen
+        self._write_env(profile)
+
+        try:
+            await asyncio.to_thread(
+                ws._run_compose, "up", "-d", "--force-recreate", "loadgen"
+            )
+        except Exception as e:
+            logger.warning("Failed to restart loadgen: %s", e)
+
+        self._chaos_load_active = True
+
+        return {
+            "chaos_type": "db_sharding",
+            "original_chaos_type": chaos_type,
+            "load_params": profile,
+        }
+
+    async def _preseed_for_db_sharding(self, count: int = 2_000_000) -> None:
+        """Bulk-insert messages across 5,000 conversations.
+
+        Uses 50K-row batches to stay within the 256MB PG memory limit.
+        If PG OOMs during a batch, restarts it and continues.
+        """
+        ws = await self._ensure_workspace()
+        batch_size_rows = 50_000
+        logger.info("Pre-seeding %d messages for db_sharding chaos...", count)
+
+        # Create seed user and 5,000 conversations
+        setup_sql = """
+        INSERT INTO users (id, email) VALUES ('00000000-0000-0000-0000-000000000000', 'seed@eval.test')
+        ON CONFLICT DO NOTHING;
+        INSERT INTO conversations (id, user_id, title)
+        SELECT ('C0000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid,
+               '00000000-0000-4000-8000-000000000001', 'conv ' || g
+        FROM generate_series(0, 4999) AS g
+        ON CONFLICT DO NOTHING;
+        """
+        try:
+            await asyncio.to_thread(
+                ws._run_compose, "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", setup_sql, timeout=120,
+            )
+        except Exception as e:
+            logger.warning("Failed to create seed conversations: %s", e)
+
+        # Batch insert messages in small chunks to avoid OOM on constrained PG
+        inserted = 0
+        for batch_start in range(0, count, batch_size_rows):
+            batch_size = min(batch_size_rows, count - batch_start)
+            insert_sql = f"""
+            INSERT INTO messages (id, conversation_id, content, role, token_count, created_at)
+            SELECT gen_random_uuid(),
+                   ('C0000000-0000-0000-0000-' || lpad(((g % 5000))::text, 12, '0'))::uuid,
+                   'Message ' || g || ' content padding.',
+                   CASE WHEN g % 2 = 0 THEN 'user' ELSE 'assistant' END,
+                   10 + (g % 100),
+                   now() - interval '1 second' * ({batch_start} + g % 2592000)
+            FROM generate_series(1, {batch_size}) AS g;
+            """
+            try:
+                await asyncio.to_thread(
+                    ws._run_compose, "exec", "-T", "postgres",
+                    "psql", "-U", "chatapp", "-d", "chatdb",
+                    "-c", insert_sql, timeout=120,
+                )
+                inserted += batch_size
+                if inserted % 500_000 == 0:
+                    logger.info("Pre-seeded %d / %d messages", inserted, count)
+            except Exception as e:
+                logger.warning("Failed to pre-seed batch at %d: %s", batch_start, e)
+                # PG may have OOM'd — restart it and continue
+                try:
+                    await asyncio.to_thread(
+                        ws._run_compose, "up", "-d", "postgres"
+                    )
+                    await asyncio.sleep(3)
+                except Exception:
+                    pass
+
+        # ANALYZE so PG knows the true table stats
+        try:
+            await asyncio.to_thread(
+                ws._run_compose, "exec", "-T", "postgres",
+                "psql", "-U", "chatapp", "-d", "chatdb",
+                "-c", "ANALYZE messages;", timeout=120,
+            )
+        except Exception as e:
+            logger.warning("Failed to ANALYZE messages: %s", e)
+
+        logger.info("Pre-seeded %d / %d messages for db_sharding", inserted, count)
+
+    def get_agent_context(self) -> str:
+        """Return prompt context with infrastructure constraints."""
+        base = super().get_agent_context()
+        constraint = """
+IMPORTANT CONSTRAINTS:
+- Do NOT modify the PostgreSQL resource limits (memory, CPU) in docker-compose.yaml.
+  The deploy.resources.limits section represents hard infrastructure constraints that
+  cannot be changed. You must work within these limits.
+- Do NOT increase max_connections, shared_buffers, or other PostgreSQL memory settings
+  beyond what the 256MB container can support. The container will OOM if you try.
+- The app code is already optimized — indexes exist, pool is bounded, queries use
+  window functions. Code-level fixes will not solve this problem.
+- The bottleneck is architectural: a single PostgreSQL instance cannot serve this
+  data volume within these resource constraints. Consider horizontal scaling.
+- You have web access (WebSearch, WebFetch). Research database sharding patterns,
+  multi-instance PostgreSQL setups, and application-level shard routing if needed.
+"""
+        return base + constraint
+
+    async def capture_state(self) -> dict[str, Any]:
+        """Capture state including docker service inventory."""
+        state = await super().capture_state()
+        ws = await self._ensure_workspace()
+        try:
+            ps_output = await asyncio.to_thread(
+                ws._run_compose, "ps", "--format", "json"
+            )
+            state["docker_services"] = ps_output
+        except Exception:
+            state["docker_services"] = {}
+        return state
