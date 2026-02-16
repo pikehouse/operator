@@ -301,6 +301,65 @@ class TestMonitorLoopAutoResolve:
             assert tickets[0].status == TicketStatus.RESOLVED
 
 
+class TestMonitorLoopFailedObserve:
+    """Tests that failed observe() does NOT auto-resolve existing tickets."""
+
+    @pytest.mark.asyncio
+    async def test_failed_observe_does_not_resolve_tickets(self, tmp_path):
+        """When observe() raises, existing open tickets must stay open."""
+        # Phase 1: create a ticket with a working subject
+        subject = MockSubject()
+        now = datetime.now()
+        violation = InvariantViolation(
+            invariant_name="test_invariant",
+            message="Something is wrong",
+            first_seen=now,
+            last_seen=now,
+            store_id="node-1",
+            severity="warning",
+        )
+        checker = MockChecker(violations=[violation])
+        db_path = tmp_path / "test.db"
+
+        loop = MonitorLoop(
+            subject=subject,
+            checker=checker,
+            db_path=db_path,
+            interval_seconds=1.0,
+        )
+
+        from operator_core.db.tickets import TicketDB
+        from operator_core.monitor.types import TicketStatus
+
+        async with TicketDB(db_path) as db:
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.OPEN
+
+        # Phase 2: swap in a failing subject and run another cycle
+        class FailingSubject:
+            async def observe(self) -> dict[str, Any]:
+                raise RuntimeError("PD API unreachable")
+
+            def get_action_definitions(self):
+                return []
+
+        failing_loop = MonitorLoop(
+            subject=FailingSubject(),
+            checker=MockChecker(violations=[]),
+            db_path=db_path,
+            interval_seconds=1.0,
+        )
+
+        async with TicketDB(db_path) as db:
+            await failing_loop._check_cycle(db)
+            # Ticket must still be OPEN — failed observe should NOT resolve it
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.OPEN
+
+
 class TestMonitorLoopSubjectContext:
     """Tests that subject_context is passed through to tickets."""
 

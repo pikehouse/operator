@@ -145,12 +145,14 @@ class MonitorLoop:
 
             # Generic check pattern - checker handles all invariant checking
             violations = self.checker.check(observation)
+            observe_ok = True
         except Exception as e:
             # Log but don't crash on observation/check failure
             print(f"Check cycle failed: {e}")
             import traceback
             traceback.print_exc()
             violations = []
+            observe_ok = False
 
         # Track stats
         self._violation_count = len(violations)
@@ -167,11 +169,13 @@ class MonitorLoop:
                 if ticket.occurrence_count == 1:
                     print(f"Created ticket {ticket.id}: {ticket.invariant_name}")
 
-        # Auto-resolve cleared violations (per CONTEXT.md)
-        current_keys = {make_violation_key(v) for v in violations}
-        resolved_count = await db.auto_resolve_cleared(current_keys)
-        if resolved_count > 0:
-            print(f"Auto-resolved {resolved_count} ticket(s)")
+        # Auto-resolve cleared violations only when we have a valid observation.
+        # A failed observe must NOT resolve tickets — we simply don't know.
+        if observe_ok:
+            current_keys = {make_violation_key(v) for v in violations}
+            resolved_count = await db.auto_resolve_cleared(current_keys)
+            if resolved_count > 0:
+                print(f"Auto-resolved {resolved_count} ticket(s)")
 
     def _log_heartbeat(self) -> None:
         """Output periodic status message per CONTEXT.md."""

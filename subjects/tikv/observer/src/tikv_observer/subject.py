@@ -105,7 +105,10 @@ class TiKVSubject:
             pd_health = {}
 
         # Get cluster-level metrics
-        cluster_metrics = await self.get_cluster_metrics()
+        try:
+            cluster_metrics = await self.get_cluster_metrics()
+        except Exception:
+            cluster_metrics = ClusterMetrics(store_count=0, region_count=0, leader_count={})
 
         # Get per-store metrics for up stores
         store_metrics: dict[str, dict[str, Any]] = {}
