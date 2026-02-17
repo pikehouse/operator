@@ -60,7 +60,8 @@ def is_final_state_healthy(final_state_json: str, subject_name: str) -> bool:
         return all(s.get("state_name") == "Up" for s in stores)
 
     if subject_name.lower() in ("chat-db-app", "chat-db-app-shard"):
-        app = state.get("app", {})
+        # GCP capture_state uses "health" key; local uses "app"
+        app = state.get("app") or state.get("health") or {}
         if isinstance(app, dict) and app.get("error"):
             return False
         return isinstance(app, dict) and app.get("status") == "healthy"
