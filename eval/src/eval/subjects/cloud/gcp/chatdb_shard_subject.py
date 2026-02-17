@@ -115,9 +115,11 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
-        return await self._inject_load_pressure(
+        result = await self._inject_load_pressure(
             chaos_type="db_sharding", profile=profile, **params
         )
+        result["original_chaos_type"] = chaos_type
+        return result
 
     async def _preseed_for_db_sharding(self, count: int = 2_000_000) -> None:
         """Bulk-insert messages across 5,000 conversations.

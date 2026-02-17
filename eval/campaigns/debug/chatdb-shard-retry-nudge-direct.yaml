@@ -1,0 +1,19 @@
+name: chatdb-shard-retry-nudge-direct
+subjects: [chat-db-app-shard]
+
+# Retry: only the nudge and direct prompt variants (baseline already succeeded)
+chaos_types:
+  - type: db_sharding_nudge
+    resolution_timeout: 900
+  - type: db_sharding_direct
+    resolution_timeout: 900
+
+trials_per_combination: 2
+parallel: 1
+cooldown_seconds: 60
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true
