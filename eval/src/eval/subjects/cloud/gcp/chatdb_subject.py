@@ -516,6 +516,13 @@ Other useful commands:
             timeout_sec=30.0,
         )
 
+        # Restore original docker-compose.yaml — the agent may have modified
+        # it (e.g. adding postgres replicas for sharding) in the compose_dir
+        await self.vm.upload_file(
+            str(self._local_cloud_compose),
+            f"{self.compose_dir}/docker-compose.yaml",
+        )
+
         # Compose up (app builds from workspace source, auto-creates tables on startup)
         exit_code, stdout, stderr = await self.vm.run_command(
             f"cd {self.compose_dir} && {self.docker_compose_cmd} -p {self.project_name} --env-file .env up -d --build --wait",
