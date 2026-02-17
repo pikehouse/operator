@@ -143,9 +143,11 @@ async def force_resolve_all_tickets(operator_db_path: Path) -> int:
 async def extract_commands_from_operator_db(
     operator_db_path: Path,
 ) -> list[dict[str, Any]]:
-    """Extract agent commands from operator.db for the most recent session.
+    """Extract agent commands from operator.db across all sessions.
 
     This implements RUN-04: Commands extracted from agent session for post-hoc analysis.
+    Queries all sessions because the operator may start a new session for a second
+    ticket while the db is downloaded, and the latest session may have no commands yet.
 
     Args:
         operator_db_path: Path to operator.db
@@ -159,9 +161,6 @@ async def extract_commands_from_operator_db(
             SELECT tool_name, tool_params, exit_code, timestamp
             FROM agent_log_entries
             WHERE entry_type = 'tool_call'
-              AND session_id = (
-                  SELECT session_id FROM agent_sessions ORDER BY started_at DESC LIMIT 1
-              )
             ORDER BY timestamp
             """
         )

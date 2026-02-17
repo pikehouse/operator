@@ -56,12 +56,16 @@ class ChatDBAppSubject:
     """
 
     # Minimum requests in a window to trust the percentile calculation
-    _MIN_WINDOW_REQUESTS = 5
+    _MIN_WINDOW_REQUESTS = 30
+
+    # Number of scrapes to keep for the rolling window.
+    # At 5s interval, 12 scrapes = 60s window.
+    _WINDOW_SIZE = 12
 
     def __init__(self, app_client: AppClient, pg_client: PgClient) -> None:
         self._app = app_client
         self._pg = pg_client
-        self._prev_buckets: dict[int, int] | None = None
+        self._bucket_history: list[dict[int, int]] = []
 
     async def observe(self) -> dict[str, Any]:
         """
@@ -188,28 +192,40 @@ class ChatDBAppSubject:
         self, current: dict[int, int]
     ) -> dict[str, float] | None:
         """
-        Compute windowed P50/P99 from delta between current and previous
-        histogram scrapes. Returns None if insufficient data.
+        Compute windowed P50/P99 from the delta between the oldest and newest
+        histogram scrapes in a rolling window.  Returns None if insufficient data.
+
+        Using a rolling window (default 12 scrapes = ~60s at 5s interval) instead
+        of a single-interval delta avoids noisy percentiles when RPS is low.
+        With 2 RPS and a 60s window we get ~120 requests — enough for meaningful P99.
         """
-        prev = self._prev_buckets
-        self._prev_buckets = current.copy()
+        self._bucket_history.append(current.copy())
 
-        if prev is None:
-            return None  # First scrape, no delta yet
+        # Keep only the last N scrapes
+        if len(self._bucket_history) > self._WINDOW_SIZE:
+            self._bucket_history = self._bucket_history[-self._WINDOW_SIZE:]
 
-        # Compute delta buckets
+        if len(self._bucket_history) < 2:
+            return None  # Need at least 2 scrapes for a delta
+
+        oldest = self._bucket_history[0]
+        newest = self._bucket_history[-1]
+
+        # Compute delta buckets across the full window
         bounds = AppClient.HISTOGRAM_BOUNDS
-        delta_total = current.get(0, 0) - prev.get(0, 0)  # key 0 = +Inf
+        delta_total = newest.get(0, 0) - oldest.get(0, 0)  # key 0 = +Inf
 
         if delta_total < 0:
-            return None  # App restarted, counters reset
+            # App restarted, counters reset — discard history
+            self._bucket_history = [current.copy()]
+            return None
 
         if delta_total < self._MIN_WINDOW_REQUESTS:
-            return None  # Not enough requests in this window
+            return None  # Not enough requests in the window
 
         delta_buckets = []
         for bound in bounds:
-            delta = current.get(bound, 0) - prev.get(bound, 0)
+            delta = newest.get(bound, 0) - oldest.get(bound, 0)
             delta_buckets.append((bound, max(0, delta)))
 
         return {

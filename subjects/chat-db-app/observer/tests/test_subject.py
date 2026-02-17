@@ -278,18 +278,32 @@ class TestWindowedPercentiles:
         assert result is None
 
     def test_second_scrape_computes_windowed(self):
-        """Second scrape should compute from delta."""
+        """Second scrape should compute from delta when enough requests."""
         subject = self._make_subject()
         # First scrape: 100 requests, all fast
         first = {10: 100, 50: 100, 100: 100, 250: 100, 500: 100, 1000: 100, 5000: 100, 0: 100}
         subject._compute_windowed_percentiles(first)
 
-        # Second scrape: 50 more requests, all fast
+        # Second scrape: 50 more requests (>=30 threshold), all fast
         second = {10: 150, 50: 150, 100: 150, 250: 150, 500: 150, 1000: 150, 5000: 150, 0: 150}
         result = subject._compute_windowed_percentiles(second)
         assert result is not None
         assert result["latency_p99_ms"] == 10.0
         assert result["latency_p50_ms"] == 10.0
+
+    def test_rolling_window_accumulates(self):
+        """Rolling window uses oldest-to-newest delta across multiple scrapes."""
+        subject = self._make_subject()
+        # Feed 6 scrapes, each adding 10 requests (total delta = 50 across 6 scrapes)
+        for i in range(6):
+            count = 100 + i * 10
+            buckets = {10: count, 50: count, 100: count, 250: count,
+                       500: count, 1000: count, 5000: count, 0: count}
+            result = subject._compute_windowed_percentiles(buckets)
+
+        # After 6 scrapes: delta from oldest(100) to newest(150) = 50 requests
+        assert result is not None
+        assert result["latency_p99_ms"] == 10.0
 
     def test_cumulative_pollution_ignored(self):
         """Old slow requests in cumulative histogram don't affect windowed P99."""
@@ -305,8 +319,8 @@ class TestWindowedPercentiles:
         # Delta: 200 requests in <=10ms bucket, P99 = 10ms (not 5000ms!)
         assert result["latency_p99_ms"] == 10.0
 
-    def test_app_restart_returns_none(self):
-        """When counters decrease (app restart), return None."""
+    def test_app_restart_clears_history(self):
+        """When counters decrease (app restart), clear history and return None."""
         subject = self._make_subject()
         first = {10: 500, 50: 500, 100: 500, 250: 500, 500: 500, 1000: 500, 5000: 500, 0: 500}
         subject._compute_windowed_percentiles(first)
@@ -315,17 +329,29 @@ class TestWindowedPercentiles:
         second = {10: 5, 50: 5, 100: 5, 250: 5, 500: 5, 1000: 5, 5000: 5, 0: 5}
         result = subject._compute_windowed_percentiles(second)
         assert result is None
+        # History should be cleared to just the post-restart scrape
+        assert len(subject._bucket_history) == 1
 
     def test_insufficient_requests_returns_none(self):
-        """Fewer than MIN_WINDOW_REQUESTS in the window → None."""
+        """Fewer than MIN_WINDOW_REQUESTS (30) in the window → None."""
         subject = self._make_subject()
         first = {10: 100, 50: 100, 100: 100, 250: 100, 500: 100, 1000: 100, 5000: 100, 0: 100}
         subject._compute_windowed_percentiles(first)
 
-        # Only 2 new requests
-        second = {10: 102, 50: 102, 100: 102, 250: 102, 500: 102, 1000: 102, 5000: 102, 0: 102}
+        # Only 20 new requests (< 30 threshold)
+        second = {10: 120, 50: 120, 100: 120, 250: 120, 500: 120, 1000: 120, 5000: 120, 0: 120}
         result = subject._compute_windowed_percentiles(second)
         assert result is None
+
+    def test_window_size_capped(self):
+        """History doesn't grow beyond _WINDOW_SIZE."""
+        subject = self._make_subject()
+        for i in range(20):
+            count = 100 + i * 50
+            buckets = {10: count, 50: count, 100: count, 250: count,
+                       500: count, 1000: count, 5000: count, 0: count}
+            subject._compute_windowed_percentiles(buckets)
+        assert len(subject._bucket_history) == subject._WINDOW_SIZE
 
     @pytest.mark.asyncio
     async def test_observe_uses_windowed_p99(self):
