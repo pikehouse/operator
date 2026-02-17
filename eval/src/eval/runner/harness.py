@@ -300,6 +300,25 @@ async def extract_operator_data(
         except sqlite3.OperationalError:
             pass  # code_snapshots table may not exist
 
+        # Get observation log (may not exist in older operator images)
+        try:
+            obs_rows = conn.execute(
+                "SELECT observed_at, observation_json, violations_json, violation_count "
+                "FROM observation_log ORDER BY observed_at"
+            ).fetchall()
+            if obs_rows:
+                result["observation_log"] = [
+                    {
+                        "observed_at": r["observed_at"],
+                        "observation": json.loads(r["observation_json"]),
+                        "violations": json.loads(r["violations_json"]),
+                        "violation_count": r["violation_count"],
+                    }
+                    for r in obs_rows
+                ]
+        except sqlite3.OperationalError:
+            pass  # observation_log table may not exist
+
         return result
 
     return await _query_operator_db(operator_db_path, query, default={})

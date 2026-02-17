@@ -365,6 +365,25 @@ class TicketDB:
         await self._conn.commit()
         return resolved_count
 
+    async def log_observation(
+        self,
+        observation: dict[str, Any],
+        violations: list[InvariantViolation],
+    ) -> None:
+        """Log an observation cycle for post-hoc analysis."""
+        now = datetime.now().isoformat()
+        obs_json = json.dumps(observation)
+        viol_json = json.dumps([
+            {"name": v.invariant_name, "message": v.message, "severity": v.severity}
+            for v in violations
+        ])
+        await self._conn.execute(
+            "INSERT INTO observation_log (observed_at, observation_json, violations_json, violation_count) "
+            "VALUES (?, ?, ?, ?)",
+            (now, obs_json, viol_json, len(violations)),
+        )
+        await self._conn.commit()
+
     async def update_diagnosis(
         self,
         ticket_id: int,

@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS work_queue (
     trial_id INTEGER REFERENCES trials(id),
     error TEXT,
     sequence_number INTEGER,
-    vm_name TEXT
+    vm_name TEXT,
+    resolution_timeout INTEGER
 );
 
 -- Indexes
@@ -275,6 +276,17 @@ class PostgresDB:
             if not vm_col_exists:
                 await conn.execute(
                     "ALTER TABLE work_queue ADD COLUMN vm_name TEXT"
+                )
+            # Migration: add resolution_timeout column to work_queue if missing
+            rt_col_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'work_queue' AND column_name = 'resolution_timeout'
+                )
+            """)
+            if not rt_col_exists:
+                await conn.execute(
+                    "ALTER TABLE work_queue ADD COLUMN resolution_timeout INTEGER"
                 )
             # Migration: add NOTIFY trigger for work item completion
             trigger_exists = await conn.fetchval("""

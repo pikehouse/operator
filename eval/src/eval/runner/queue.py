@@ -32,6 +32,7 @@ class WorkItem:
     trial_id: int | None = None
     error: str | None = None
     sequence_number: int | None = None
+    resolution_timeout: int | None = None
 
 
 class WorkQueue:
@@ -80,9 +81,10 @@ class WorkQueue:
                     """
                     INSERT INTO work_queue (
                         campaign_id, subject_type, chaos_type,
-                        chaos_params, baseline, status, sequence_number
+                        chaos_params, baseline, status, sequence_number,
+                        resolution_timeout
                     )
-                    VALUES ($1, $2, $3, $4::jsonb, $5, 'pending', $6)
+                    VALUES ($1, $2, $3, $4::jsonb, $5, 'pending', $6, $7)
                     RETURNING id
                     """,
                     campaign_id,
@@ -91,6 +93,7 @@ class WorkQueue:
                     json.dumps(chaos_params),
                     item.get("baseline", False),
                     item.get("sequence_number"),
+                    item.get("resolution_timeout"),
                 )
                 work_ids.append(row["id"])
 
@@ -178,6 +181,7 @@ class WorkQueue:
                     claimed_at=row["claimed_at"],
                     trial_id=row["trial_id"],
                     sequence_number=row["sequence_number"],
+                    resolution_timeout=row["resolution_timeout"],
                 )
             return None
 

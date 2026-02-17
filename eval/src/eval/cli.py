@@ -436,6 +436,7 @@ def run_campaign_cmd(
                     "chaos_params": spec["chaos_params"],
                     "baseline": spec["baseline"],
                     "sequence_number": spec["sequence_number"],
+                    "resolution_timeout": spec.get("resolution_timeout"),
                 }
                 for spec in trial_specs
             ]

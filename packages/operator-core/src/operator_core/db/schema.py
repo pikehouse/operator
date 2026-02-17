@@ -54,6 +54,15 @@ AFTER UPDATE ON tickets
 BEGIN
     UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+
+-- Per-cycle observation log for post-hoc analysis
+CREATE TABLE IF NOT EXISTS observation_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    observed_at TEXT NOT NULL,
+    observation_json TEXT NOT NULL,
+    violations_json TEXT NOT NULL,
+    violation_count INTEGER NOT NULL DEFAULT 0
+);
 """
 
 AGENT_SCHEMA_SQL = """

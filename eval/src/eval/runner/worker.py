@@ -182,6 +182,7 @@ class Worker:
                 anthropic_api_key=anthropic_api_key,
                 subject_name=work_item.subject_type,
                 skip_reset=skip_reset,
+                resolution_timeout=work_item.resolution_timeout,
             )
 
             # Store trial result
@@ -297,6 +298,7 @@ class Worker:
         anthropic_api_key: str = "",
         subject_name: str = "tikv",
         skip_reset: bool = False,
+        resolution_timeout: int | None = None,
     ) -> Trial:
         """Run a single trial.
 
@@ -487,10 +489,11 @@ class Worker:
                             f"[dim]Variant config written: {variant_config.model}[/dim]"
                         )
 
-                console.log("[cyan]Waiting for agent resolution...[/cyan]")
+                effective_timeout = float(resolution_timeout) if resolution_timeout else 1500.0
+                console.log(f"[cyan]Waiting for agent resolution (timeout={effective_timeout}s)...[/cyan]")
                 ticket_created_at, resolved_at = (
                     await remote_op.wait_for_ticket_resolution(
-                        timeout_sec=1500.0,
+                        timeout_sec=effective_timeout,
                         min_ticket_id=pre_chaos_max_ticket_id,
                     )
                 )

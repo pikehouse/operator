@@ -177,6 +177,13 @@ class MonitorLoop:
             if resolved_count > 0:
                 print(f"Auto-resolved {resolved_count} ticket(s)")
 
+        # Log observation for post-hoc analysis
+        if observe_ok:
+            try:
+                await db.log_observation(observation, violations)
+            except Exception as e:
+                print(f"Failed to log observation: {e}")
+
     def _log_heartbeat(self) -> None:
         """Output periodic status message per CONTEXT.md."""
         if self._violation_count == 0:
