@@ -207,16 +207,26 @@ class ChatDBAppInvariantChecker:
             message=f"{count} sessions waiting on locks (threshold: {int(config.threshold)})",
         )
 
+    # Minimum RPS to trust P99 for the high_latency invariant.
+    # At low RPS, a single slow query makes P99 spike to 5000ms.
+    _MIN_RPS_FOR_LATENCY = 5.0
+
     def _check_high_latency(self, metrics: dict) -> InvariantViolation | None:
-        """Check if P99 latency exceeds threshold."""
+        """Check if P99 latency exceeds threshold.
+
+        Only fires when RPS >= _MIN_RPS_FOR_LATENCY because at very low
+        request rates, P99 is dominated by noise (a single slow query
+        on a large dataset pushes P99 to the max histogram bucket).
+        """
         config = HIGH_LATENCY_CONFIG
         p99 = metrics.get("latency_p99_ms", 0.0)
-        is_violated = p99 > config.threshold
+        rps = metrics.get("requests_per_sec", 0.0)
+        is_violated = p99 > config.threshold and rps >= self._MIN_RPS_FOR_LATENCY
 
         return self._check_with_grace_period(
             config=config,
             is_violated=is_violated,
-            message=f"P99 latency {p99:.1f}ms exceeds threshold {config.threshold:.0f}ms",
+            message=f"P99 latency {p99:.1f}ms exceeds threshold {config.threshold:.0f}ms (at {rps:.1f} RPS)",
         )
 
     def _check_high_error_rate(self, app: dict) -> InvariantViolation | None:

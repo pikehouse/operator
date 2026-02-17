@@ -225,7 +225,7 @@ class TestHighLatency:
 
     def test_high_latency_with_grace(self):
         checker = ChatDBAppInvariantChecker()
-        obs = _make_observation(latency_p99_ms=800.0)
+        obs = _make_observation(latency_p99_ms=800.0, requests_per_sec=50.0)
 
         # First check: within grace period (60s)
         violations = checker.check(obs)
@@ -237,6 +237,17 @@ class TestHighLatency:
         ] - timedelta(seconds=61)
         violations = checker.check(obs)
         assert any(v.invariant_name == "high_latency" for v in violations)
+
+    def test_high_latency_ignored_at_low_rps(self):
+        """High P99 at low RPS should not trigger — too noisy."""
+        checker = ChatDBAppInvariantChecker()
+        obs = _make_observation(latency_p99_ms=5000.0, requests_per_sec=2.0)
+
+        # Even after grace period, should not fire at low RPS
+        violations = checker.check(obs)
+        assert not any(v.invariant_name == "high_latency" for v in violations)
+        # _first_seen should not be set since is_violated=False
+        assert "high_latency" not in checker._first_seen
 
 
 class TestHighErrorRate:
