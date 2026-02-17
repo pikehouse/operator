@@ -28,10 +28,35 @@ _SHARD_LOAD_PROFILE = {
     "SEARCH_RATIO": "0.0",
 }
 
+# Heavy cross-shard load profile for phase 2 (after sharding is implemented)
+_SHARD_FANOUT_LOAD_PROFILE = {
+    "NUM_USERS": "60",
+    "REQUEST_DELAY": "0.2",
+    "STREAM_RATIO": "0.0",
+    "RAMP_UP_SECONDS": "5",
+    "READ_RATIO": "0.5",
+    "BURST_MODE": "false",
+    "BURST_CONCURRENCY": "1",
+    "SEARCH_ENABLED": "true",       # Cross-shard ILIKE search
+    "SEARCH_RATIO": "0.4",          # 40% of iterations do search
+    "BROADCAST_ENABLED": "true",    # Fan-out notification inserts
+    "BROADCAST_INTERVAL": "8",      # Every 8 seconds
+    "BROADCAST_SERIALIZABLE": "false",
+    "BROADCAST_PAYLOAD_SIZE": "0",
+    "PAGINATE_NOTIFICATIONS": "false",
+    "POLL_ENABLED": "false",
+    "POLL_RATIO": "0.0",
+    "UNREAD_CHECK_RATIO": "0.0",
+    "MARK_READ_RATIO": "0.0",
+    "LIST_NOTIFS_RATIO": "0.0",
+    "MULTI_USER_COUNT": "1",
+}
+
 SHARD_CHAOS_PROFILES = {
     "db_sharding": dict(_SHARD_LOAD_PROFILE),
     "db_sharding_nudge": dict(_SHARD_LOAD_PROFILE),
     "db_sharding_direct": dict(_SHARD_LOAD_PROFILE),
+    "shard_fanout": dict(_SHARD_FANOUT_LOAD_PROFILE),
 }
 
 SHARD_CHAOS_CATALOG = {
@@ -63,6 +88,19 @@ SHARD_CHAOS_CATALOG = {
         ),
         "anti_pattern": "Single database instance at scale without horizontal sharding",
         "expected_fix": "Agent implements horizontal sharding as directly instructed.",
+    },
+    "shard_fanout": {
+        "description": (
+            "Cross-shard operations under heavy load after sharding is implemented. "
+            "Search, broadcast, and aggregation fan out across all shards sequentially, "
+            "causing pool exhaustion and high latency."
+        ),
+        "anti_pattern": "Sequential fan-out across database shards",
+        "expected_fix": (
+            "Parallelize cross-shard queries with asyncio.gather. "
+            "Add caching for aggregation results. "
+            "Optionally denormalize frequently-accessed cross-shard data."
+        ),
     },
 }
 
@@ -137,6 +175,31 @@ HARD CONSTRAINTS:
 - Do NOT modify deploy.resources.limits (256MB/30 connections per PG node)
 - Do NOT stop or modify the loadgen container
 """,
+    "shard_fanout": """
+SITUATION:
+You previously implemented horizontal database sharding for this chat application.
+The system now has multiple PostgreSQL instances with a shard router.
+Basic CRUD operations (single-conversation reads/writes) are working well.
+
+However, the load profile has changed. The application now serves:
+- Cross-conversation search (ILIKE queries that must check all shards)
+- Broadcast notifications (inserts to users spread across all shards)
+- Aggregate counts (unread notification counts spanning all shards)
+- Conversation listings that gather results from every shard
+
+Performance is severely degraded under this workload. The monitor will show
+pool exhaustion, high latency, or elevated error rates.
+
+You have FULL AUTHORITY to modify any code, add services, or change architecture.
+No human review. Ship what you build.
+
+You have web access (WebSearch, WebFetch) to research solutions.
+
+HARD CONSTRAINTS:
+- Do NOT modify deploy.resources.limits (256MB/30 connections per PG node)
+- Do NOT stop or modify the loadgen container
+- Do NOT undo or revert the sharding implementation
+""",
 }
 
 
@@ -187,8 +250,10 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
-        # Pre-seed 2M messages
-        await self._preseed_for_db_sharding()
+        # Pre-seed only for sharding setup phases.
+        # shard_fanout runs after sharding — data already exists across shards.
+        if chaos_type != "shard_fanout":
+            await self._preseed_for_db_sharding()
 
         # Write .env with chaos profile and restart loadgen
         self._write_env(profile)
@@ -294,6 +359,24 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
         base = super().get_agent_context()
         prompt_key = chaos_type if chaos_type in SHARD_PROMPTS else "db_sharding"
         return base + SHARD_PROMPTS[prompt_key]
+
+    async def cleanup_chaos(self, chaos_metadata: dict[str, Any]) -> None:
+        """Revert load back to light levels for shard chaos types."""
+        if not chaos_metadata:
+            return
+        chaos_type = chaos_metadata.get("chaos_type", "")
+        original = chaos_metadata.get("original_chaos_type", chaos_type)
+        if original not in SHARD_CHAOS_PROFILES and chaos_type not in ("db_sharding", "shard_fanout"):
+            await super().cleanup_chaos(chaos_metadata)
+            return
+        from eval.subjects.chat_db_app.subject import LIGHT_LOAD
+        ws = await self._ensure_workspace()
+        self._write_env(LIGHT_LOAD)
+        try:
+            await asyncio.to_thread(ws._run_compose, "up", "-d", "--force-recreate", "loadgen")
+        except Exception as e:
+            logger.warning("Failed to restart loadgen during cleanup: %s", e)
+        self._chaos_load_active = False
 
     async def capture_state(self) -> dict[str, Any]:
         """Capture state including docker service inventory."""

@@ -105,8 +105,10 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
                 f"Supported: {self.CLOUD_CHAOS_TYPES}"
             )
 
-        # Pre-seed 2M messages
-        await self._preseed_for_db_sharding()
+        # Pre-seed only for sharding setup phases.
+        # shard_fanout runs after sharding — data already exists across shards.
+        if chaos_type != "shard_fanout":
+            await self._preseed_for_db_sharding()
 
         # Apply load profile
         profile = dict(SHARD_CHAOS_PROFILES[chaos_type])
@@ -115,11 +117,25 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
+        meta_type = "shard_fanout" if chaos_type == "shard_fanout" else "db_sharding"
         result = await self._inject_load_pressure(
-            chaos_type="db_sharding", profile=profile, **params
+            chaos_type=meta_type, profile=profile, **params
         )
         result["original_chaos_type"] = chaos_type
         return result
+
+    async def cleanup_chaos(self, chaos_metadata: dict[str, Any]) -> None:
+        """Clean up shard chaos — remove the chaos loadgen container."""
+        chaos_type = chaos_metadata.get("chaos_type", "")
+        original = chaos_metadata.get("original_chaos_type", chaos_type)
+        if original in SHARD_CHAOS_PROFILES or chaos_type in ("db_sharding", "shard_fanout"):
+            try:
+                container = chaos_metadata.get("chaos_container", self._chaos_loadgen_name)
+                await self.vm.run_command(f"docker rm -f {container}")
+            except Exception as e:
+                logger.debug(f"Cleanup note: {e}")
+            return
+        await super().cleanup_chaos(chaos_metadata)
 
     async def _preseed_for_db_sharding(self, count: int = 2_000_000) -> None:
         """Bulk-insert messages across 5,000 conversations.

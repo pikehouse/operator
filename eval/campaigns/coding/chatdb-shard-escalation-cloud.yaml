@@ -1,0 +1,23 @@
+name: chatdb-shard-escalation
+subjects: [chat-db-app-shard]
+
+# Two-phase continuous campaign:
+# Phase 1 (db_sharding_direct): Agent implements horizontal sharding
+# Phase 2 (shard_fanout): Heavy cross-shard load breaks naive sequential fan-out
+continuous: true
+
+chaos_types:
+  - type: db_sharding_direct
+    resolution_timeout: 900
+  - type: shard_fanout
+    resolution_timeout: 600
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 30
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true

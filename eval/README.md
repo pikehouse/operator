@@ -136,6 +136,7 @@ Without `--campaign`, workers claim any pending work item (backward compatible f
 | `operations/tikv-all-chaos-cloud.yaml` | tikv | All 10 chaos types incl. disk_pressure (3 trials each, + baseline) |
 | `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
 | `coding/chatdb-shard-gradient-cloud.yaml` | chat-db-app-shard | Prompt gradient A/B: db_sharding vs db_sharding_nudge vs db_sharding_direct (2 trials each, 15min timeout) |
+| `coding/chatdb-shard-escalation-cloud.yaml` | chat-db-app-shard | Continuous 2-phase: db_sharding_direct → shard_fanout (cross-shard fan-out stress after sharding) |
 
 ### Monitor cloud progress
 
