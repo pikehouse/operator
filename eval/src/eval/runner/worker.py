@@ -374,7 +374,12 @@ class Worker:
             # Get optional agent context and workspace mount
             subject_context_extra = ""
             if hasattr(subject, "get_agent_context"):
-                subject_context_extra = subject.get_agent_context()
+                import inspect
+                sig = inspect.signature(subject.get_agent_context)
+                if "chaos_type" in sig.parameters:
+                    subject_context_extra = subject.get_agent_context(chaos_type=chaos_type)
+                else:
+                    subject_context_extra = subject.get_agent_context()
 
             workspace_volume_mount = ""
             if hasattr(subject, "workspace_volume_mount"):

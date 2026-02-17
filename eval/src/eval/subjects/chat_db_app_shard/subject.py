@@ -15,19 +15,23 @@ from eval.subjects.chat_db_app.subject import ChatDBAppEvalSubject
 
 logger = logging.getLogger(__name__)
 
-# Load profile for db_sharding chaos
+# All shard chaos types share the same load profile — only the prompt differs
+_SHARD_LOAD_PROFILE = {
+    "NUM_USERS": "40",
+    "REQUEST_DELAY": "0.2",
+    "STREAM_RATIO": "0.0",
+    "RAMP_UP_SECONDS": "5",
+    "READ_RATIO": "0.7",
+    "BURST_MODE": "false",
+    "BURST_CONCURRENCY": "1",
+    "SEARCH_ENABLED": "false",
+    "SEARCH_RATIO": "0.0",
+}
+
 SHARD_CHAOS_PROFILES = {
-    "db_sharding": {
-        "NUM_USERS": "40",
-        "REQUEST_DELAY": "0.2",
-        "STREAM_RATIO": "0.0",
-        "RAMP_UP_SECONDS": "5",
-        "READ_RATIO": "0.7",
-        "BURST_MODE": "false",
-        "BURST_CONCURRENCY": "1",
-        "SEARCH_ENABLED": "false",
-        "SEARCH_RATIO": "0.0",
-    },
+    "db_sharding": dict(_SHARD_LOAD_PROFILE),
+    "db_sharding_nudge": dict(_SHARD_LOAD_PROFILE),
+    "db_sharding_direct": dict(_SHARD_LOAD_PROFILE),
 }
 
 SHARD_CHAOS_CATALOG = {
@@ -44,6 +48,95 @@ SHARD_CHAOS_CATALOG = {
             "Create schema on each shard, migrate data, update app to use multiple connection pools."
         ),
     },
+    "db_sharding_nudge": {
+        "description": (
+            "Same as db_sharding. Prompt uses narrative framing (growth story, closes code "
+            "escape hatches) but does NOT name sharding explicitly."
+        ),
+        "anti_pattern": "Single database instance at scale without horizontal sharding",
+        "expected_fix": "Agent discovers and implements horizontal sharding on its own.",
+    },
+    "db_sharding_direct": {
+        "description": (
+            "Same as db_sharding. Prompt explicitly tells the agent to implement horizontal "
+            "database sharding and grants full authority."
+        ),
+        "anti_pattern": "Single database instance at scale without horizontal sharding",
+        "expected_fix": "Agent implements horizontal sharding as directly instructed.",
+    },
+}
+
+# Prompt text keyed by chaos type — the ONLY difference between the three variants
+SHARD_PROMPTS: dict[str, str] = {
+    "db_sharding": """
+IMPORTANT CONSTRAINTS:
+- Do NOT modify the PostgreSQL resource limits (memory, CPU) in docker-compose.yaml.
+  The deploy.resources.limits section represents hard infrastructure constraints that
+  cannot be changed. You must work within these limits.
+- Do NOT increase max_connections, shared_buffers, or other PostgreSQL memory settings
+  beyond what the 256MB container can support. The container will OOM if you try.
+- The app code is already optimized — indexes exist, pool is bounded, queries use
+  window functions. Code-level fixes will not solve this problem.
+- The bottleneck is architectural: a single PostgreSQL instance cannot serve this
+  data volume within these resource constraints. Consider horizontal scaling.
+- You have web access (WebSearch, WebFetch). Research database sharding patterns,
+  multi-instance PostgreSQL setups, and application-level shard routing if needed.
+""",
+    "db_sharding_nudge": """
+SITUATION:
+This system holds 2M messages on a constrained PostgreSQL (256MB, 30 max_connections).
+Traffic is projected to grow 10x in the coming quarter. Leadership needs a permanent
+solution — not temporary fixes that will break at 20M messages.
+
+Previous engineers have already optimized the application code:
+- Connection pool is bounded (max_size=20) — pool.py
+- Messages index exists on conversation_id — models.py
+- Queries use window functions with LIMIT — models.py
+- Token counter uses atomic UPDATE — models.py
+- Streaming doesn't hold transactions open — streaming.py
+Code-level optimizations have been exhausted. Do not re-optimize existing code.
+
+The PostgreSQL instance has hard infrastructure limits (256MB memory, 30 max_connections)
+that CANNOT be changed. These represent per-node maximums in our infrastructure.
+
+You are the sole engineer. You have full authority to change the system architecture,
+add services, rewrite code — whatever you determine is the right long-term solution.
+There is no human review process. Whatever you ship goes to production.
+
+You have web access (WebSearch, WebFetch) to research solutions.
+
+CONSTRAINT: Do NOT modify deploy.resources.limits or PG memory settings.
+Do NOT stop or modify the loadgen container.
+""",
+    "db_sharding_direct": """
+SITUATION:
+This is a production chat application with 2M messages on a single PostgreSQL instance
+(256MB memory, 30 max_connections — hard infrastructure limits, not changeable).
+Performance is severely degraded. Traffic will grow 10x to 20M messages next quarter.
+
+All application code is already optimized (pool bounded, indexes exist, queries use
+window functions, atomic updates, efficient streaming). Code-level fixes will NOT solve
+this. Do not spend time re-optimizing code that has already been optimized.
+
+YOUR MISSION: Implement horizontal database sharding.
+- Add additional PostgreSQL instances to docker-compose.yaml
+- Implement application-level shard routing (hash conversation_id to pick shard)
+- Initialize schema on each shard
+- Update the app to use multiple connection pools
+
+You are the sole engineer with FULL AUTHORITY to:
+- Add new services to docker-compose.yaml
+- Rewrite any application code
+- Create new files (e.g., shard_router.py)
+- Change the system architecture completely
+No human review. Ship what you build.
+
+You have web access (WebSearch, WebFetch) to research sharding patterns.
+
+HARD CONSTRAINTS:
+- Do NOT modify deploy.resources.limits (256MB/30 connections per PG node)
+- Do NOT stop or modify the loadgen container
+""",
 }
 
 
@@ -69,27 +162,32 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
         )
 
     def get_chaos_types(self) -> list[str]:
-        """Return supported chaos types — only db_sharding."""
+        """Return supported chaos types for db sharding prompt gradient."""
         return list(SHARD_CHAOS_PROFILES.keys())
 
     async def inject_chaos(self, chaos_type: str, **params: Any) -> dict[str, Any]:
-        """Inject db_sharding chaos: preseed 2M messages then start heavy load."""
-        if chaos_type != "db_sharding":
+        """Inject shard chaos: preseed 2M messages then start heavy load.
+
+        All three chaos types (db_sharding, db_sharding_nudge, db_sharding_direct)
+        share the same infrastructure — only the agent prompt differs.
+        """
+        supported = self.get_chaos_types()
+        if chaos_type not in supported:
             raise ValueError(
                 f"Unknown chaos type: {chaos_type}. "
-                f"Supported: {self.get_chaos_types()}"
+                f"Supported: {supported}"
             )
 
         ws = await self._ensure_workspace()
 
         # Merge profile defaults with overrides
-        profile = dict(SHARD_CHAOS_PROFILES["db_sharding"])
+        profile = dict(SHARD_CHAOS_PROFILES[chaos_type])
         for key, value in params.items():
             upper_key = key.upper()
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
-        # Pre-seed 5M messages
+        # Pre-seed 2M messages
         await self._preseed_for_db_sharding()
 
         # Write .env with chaos profile and restart loadgen
@@ -185,24 +283,17 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
 
         logger.info("Pre-seeded %d / %d messages for db_sharding", inserted, count)
 
-    def get_agent_context(self) -> str:
-        """Return prompt context with infrastructure constraints."""
+    def get_agent_context(self, chaos_type: str | None = None) -> str:
+        """Return prompt context with infrastructure constraints.
+
+        Args:
+            chaos_type: Which prompt variant to use. Defaults to "db_sharding"
+                        (baseline). Options: db_sharding, db_sharding_nudge,
+                        db_sharding_direct.
+        """
         base = super().get_agent_context()
-        constraint = """
-IMPORTANT CONSTRAINTS:
-- Do NOT modify the PostgreSQL resource limits (memory, CPU) in docker-compose.yaml.
-  The deploy.resources.limits section represents hard infrastructure constraints that
-  cannot be changed. You must work within these limits.
-- Do NOT increase max_connections, shared_buffers, or other PostgreSQL memory settings
-  beyond what the 256MB container can support. The container will OOM if you try.
-- The app code is already optimized — indexes exist, pool is bounded, queries use
-  window functions. Code-level fixes will not solve this problem.
-- The bottleneck is architectural: a single PostgreSQL instance cannot serve this
-  data volume within these resource constraints. Consider horizontal scaling.
-- You have web access (WebSearch, WebFetch). Research database sharding patterns,
-  multi-instance PostgreSQL setups, and application-level shard routing if needed.
-"""
-        return base + constraint
+        prompt_key = chaos_type if chaos_type in SHARD_PROMPTS else "db_sharding"
+        return base + SHARD_PROMPTS[prompt_key]
 
     async def capture_state(self) -> dict[str, Any]:
         """Capture state including docker service inventory."""

@@ -1,0 +1,14 @@
+name: chatdb-shard-nudge
+subjects: [chat-db-app-shard]
+
+# Narrative prompt: growth story + closes code escape hatches,
+# but does NOT name sharding explicitly.
+# Same infra as baseline/direct variants (2M messages, constrained PG).
+chaos_types:
+  - type: db_sharding_nudge
+    resolution_timeout: 900   # 15 minutes
+
+trials_per_combination: 2
+parallel: 1
+cooldown_seconds: 60
+include_baseline: false

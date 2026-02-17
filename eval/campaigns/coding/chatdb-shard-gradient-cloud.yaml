@@ -1,0 +1,23 @@
+name: chatdb-shard-gradient
+subjects: [chat-db-app-shard]
+
+# Prompt gradient: A/B test three prompt styles for db sharding.
+# All share identical infra (2M messages, constrained PG 256MB/30 conns).
+# The ONLY difference is the agent context prompt.
+chaos_types:
+  - type: db_sharding
+    resolution_timeout: 900
+  - type: db_sharding_nudge
+    resolution_timeout: 900
+  - type: db_sharding_direct
+    resolution_timeout: 900
+
+trials_per_combination: 2
+parallel: 1
+cooldown_seconds: 60
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true

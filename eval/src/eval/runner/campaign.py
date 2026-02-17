@@ -32,7 +32,7 @@ class ChaosSpec(BaseModel):
             "notification_fanout", "notification_counter", "notification_realtime",  # Chat DB App notification
             "notification_poll_idle", "notification_mark_read", "notification_n_plus_one",  # Chat DB App notification
             "notification_payload", "notification_cleanup", "notification_serialize",  # Chat DB App notification
-            "db_sharding",  # Chat DB App Shard
+            "db_sharding", "db_sharding_nudge", "db_sharding_direct",  # Chat DB App Shard
         ]
         if v not in valid_types:
             raise ValueError(f"Invalid chaos type: {v}. Must be one of {valid_types}")

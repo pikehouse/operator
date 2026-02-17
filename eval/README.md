@@ -39,7 +39,10 @@ This runs 1 trial each of `node_kill`, `latency`, and `network_partition` agains
 | `coding/chatdb-counter-race.yaml` | chat-db-app | counter_race (3 trials) |
 | `coding/chatdb-all-defects.yaml` | chat-db-app | all 4 per-defect types (3 trials each) |
 | `coding/chatdb-continuous-defects.yaml` | chat-db-app | missing_index, pool_exhaustion, streaming_txn — continuous mode (no reset between trials) |
-| `coding/chatdb-db-sharding.yaml` | chat-db-app-shard | db_sharding — 5M messages on constrained PG, requires horizontal sharding (2 trials, 15min timeout) |
+| `coding/chatdb-db-sharding.yaml` | chat-db-app-shard | db_sharding — 2M messages on constrained PG, requires horizontal sharding (2 trials, 15min timeout) |
+| `coding/chatdb-shard-baseline.yaml` | chat-db-app-shard | db_sharding baseline prompt — passive "consider horizontal scaling" (2 trials, 15min timeout) |
+| `coding/chatdb-shard-nudge.yaml` | chat-db-app-shard | db_sharding_nudge — narrative prompt that closes code escape hatches (2 trials, 15min timeout) |
+| `coding/chatdb-shard-direct.yaml` | chat-db-app-shard | db_sharding_direct — explicit "implement sharding" mission prompt (2 trials, 15min timeout) |
 
 ### Running any local campaign
 
@@ -132,6 +135,7 @@ Without `--campaign`, workers claim any pending work item (backward compatible f
 | `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
 | `operations/tikv-all-chaos-cloud.yaml` | tikv | All 10 chaos types incl. disk_pressure (3 trials each, + baseline) |
 | `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
+| `coding/chatdb-shard-gradient-cloud.yaml` | chat-db-app-shard | Prompt gradient A/B: db_sharding vs db_sharding_nudge vs db_sharding_direct (2 trials each, 15min timeout) |
 
 ### Monitor cloud progress
 

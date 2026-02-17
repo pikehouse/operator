@@ -508,7 +508,14 @@ def run_campaign_cmd(
                 eval_subject = SubjectRegistry.create(subject_name, instance_id=0)
                 # Ensure workspace is set up
                 await eval_subject._ensure_workspace()
-                subject_context_extra = eval_subject.get_agent_context()
+                # Pass chaos_type to get_agent_context if the method supports it
+                import inspect
+                sig = inspect.signature(eval_subject.get_agent_context)
+                if "chaos_type" in sig.parameters:
+                    first_chaos = config.chaos_types[0].type if config.chaos_types else None
+                    subject_context_extra = eval_subject.get_agent_context(chaos_type=first_chaos)
+                else:
+                    subject_context_extra = eval_subject.get_agent_context()
 
             async with OperatorProcesses(
                 subject_name,

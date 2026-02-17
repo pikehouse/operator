@@ -2,7 +2,7 @@
 
 Inherits from GCPChatDBAppSubject but uses the shard variant source
 (all code bugs pre-fixed) with constrained PostgreSQL (256MB, 30 max_connections).
-Only supports the db_sharding chaos type.
+Supports db_sharding, db_sharding_nudge, and db_sharding_direct chaos types.
 """
 
 import asyncio
@@ -12,22 +12,12 @@ from typing import Any
 
 from eval.subjects.cloud.gcp.chatdb_subject import GCPChatDBAppSubject
 
-logger = logging.getLogger(__name__)
+from eval.subjects.chat_db_app_shard.subject import (
+    SHARD_CHAOS_PROFILES,
+    SHARD_PROMPTS,
+)
 
-# Load profile for db_sharding chaos
-SHARD_CHAOS_PROFILES = {
-    "db_sharding": {
-        "NUM_USERS": "40",
-        "REQUEST_DELAY": "0.2",
-        "STREAM_RATIO": "0.0",
-        "RAMP_UP_SECONDS": "5",
-        "READ_RATIO": "0.7",
-        "BURST_MODE": "false",
-        "BURST_CONCURRENCY": "1",
-        "SEARCH_ENABLED": "false",
-        "SEARCH_RATIO": "0.0",
-    },
-}
+logger = logging.getLogger(__name__)
 
 
 class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
@@ -39,12 +29,12 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
     Differences from GCPChatDBAppSubject:
     - Uses chat-db-app-shard service source (pre-optimized code)
     - Uses constrained PG cloud compose overlay (256MB, 30 max_connections)
-    - Only supports db_sharding chaos type
+    - Supports db_sharding, db_sharding_nudge, db_sharding_direct chaos types
     - Pre-seeds 2M messages before load injection
-    - Agent context includes infrastructure constraints
+    - Agent context varies by chaos type (prompt gradient)
     """
 
-    CLOUD_CHAOS_TYPES = ["db_sharding"]
+    CLOUD_CHAOS_TYPES = list(SHARD_CHAOS_PROFILES.keys())
 
     def __init__(
         self,
@@ -91,28 +81,25 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         """Return supported chaos types — only db_sharding."""
         return self.CLOUD_CHAOS_TYPES
 
-    def get_agent_context(self) -> str:
-        """Return prompt context with infrastructure constraints."""
+    def get_agent_context(self, chaos_type: str | None = None) -> str:
+        """Return prompt context with infrastructure constraints.
+
+        Args:
+            chaos_type: Which prompt variant to use. Defaults to "db_sharding"
+                        (baseline). Options: db_sharding, db_sharding_nudge,
+                        db_sharding_direct.
+        """
         base = super().get_agent_context()
-        constraint = """
-IMPORTANT CONSTRAINTS:
-- Do NOT modify the PostgreSQL resource limits (memory, CPU) in docker-compose.yaml.
-  The deploy.resources.limits section represents hard infrastructure constraints that
-  cannot be changed. You must work within these limits.
-- Do NOT increase max_connections, shared_buffers, or other PostgreSQL memory settings
-  beyond what the 256MB container can support. The container will OOM if you try.
-- The app code is already optimized — indexes exist, pool is bounded, queries use
-  window functions. Code-level fixes will not solve this problem.
-- The bottleneck is architectural: a single PostgreSQL instance cannot serve this
-  data volume within these resource constraints. Consider horizontal scaling.
-- You have web access (WebSearch, WebFetch). Research database sharding patterns,
-  multi-instance PostgreSQL setups, and application-level shard routing if needed.
-"""
-        return base + constraint
+        prompt_key = chaos_type if chaos_type in SHARD_PROMPTS else "db_sharding"
+        return base + SHARD_PROMPTS[prompt_key]
 
     async def inject_chaos(self, chaos_type: str, **params: Any) -> dict[str, Any]:
-        """Inject db_sharding chaos: preseed 2M messages then start heavy load."""
-        if chaos_type != "db_sharding":
+        """Inject shard chaos: preseed 2M messages then start heavy load.
+
+        All three chaos types (db_sharding, db_sharding_nudge, db_sharding_direct)
+        share the same infrastructure — only the agent prompt differs.
+        """
+        if chaos_type not in self.CLOUD_CHAOS_TYPES:
             raise ValueError(
                 f"Unknown chaos type: {chaos_type}. "
                 f"Supported: {self.CLOUD_CHAOS_TYPES}"
@@ -122,7 +109,7 @@ IMPORTANT CONSTRAINTS:
         await self._preseed_for_db_sharding()
 
         # Apply load profile
-        profile = dict(SHARD_CHAOS_PROFILES["db_sharding"])
+        profile = dict(SHARD_CHAOS_PROFILES[chaos_type])
         for key, value in params.items():
             upper_key = key.upper()
             if upper_key in profile:
