@@ -25,6 +25,9 @@ class AppClient:
     Uses httpx.AsyncClient for async HTTP requests.
     """
 
+    # Bucket upper bounds in ms, matching the app's histogram
+    HISTOGRAM_BOUNDS = [10, 50, 100, 250, 500, 1000, 5000]
+
     def __init__(self, http: httpx.AsyncClient) -> None:
         self._http = http
 
@@ -81,6 +84,36 @@ class AppClient:
             error_rate_pct=_parse_gauge_float(text, "chatdb_error_rate_percent"),
             uptime_seconds=_parse_gauge_float(text, "chatdb_uptime_seconds"),
         )
+
+    async def get_histogram_buckets(self) -> dict[int, int]:
+        """
+        Parse raw cumulative histogram bucket counts from /metrics.
+
+        Returns:
+            Dict mapping bucket upper bound (ms) to cumulative count,
+            e.g. {10: 500, 50: 600, ..., 5000: 700}.
+            Returns empty dict on failure.
+        """
+        text = await self._fetch_metrics_text()
+        buckets: dict[int, int] = {}
+        for bound in self.HISTOGRAM_BOUNDS:
+            pattern = rf'chatdb_request_duration_ms_bucket\{{le="{bound}"\}}\s+(\S+)'
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    buckets[bound] = int(float(match.group(1)))
+                except ValueError:
+                    pass
+        # Also parse +Inf for total count
+        inf_match = re.search(
+            r'chatdb_request_duration_ms_bucket\{le="\+Inf"\}\s+(\S+)', text
+        )
+        if inf_match:
+            try:
+                buckets[0] = int(float(inf_match.group(1)))  # 0 key = +Inf total
+            except ValueError:
+                pass
+        return buckets
 
     async def _fetch_metrics_text(self) -> str:
         """Fetch raw metrics text from /metrics endpoint."""

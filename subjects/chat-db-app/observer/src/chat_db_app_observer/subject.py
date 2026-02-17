@@ -17,6 +17,29 @@ from chat_db_app_observer.app_client import AppClient
 from chat_db_app_observer.pg_client import PgClient
 
 
+def _estimate_percentile_from_buckets(
+    pct: float, total: int, buckets: list[tuple[int, int]]
+) -> float:
+    """Estimate a percentile from histogram bucket deltas.
+
+    Args:
+        pct: Percentile (e.g. 0.99 for P99).
+        total: Total request count in the window.
+        buckets: List of (upper_bound_ms, count) pairs, sorted by bound.
+
+    Returns:
+        Estimated latency in ms for the given percentile.
+    """
+    if total <= 0:
+        return 0.0
+    target = pct * total
+    for bound, count in buckets:
+        if count >= target:
+            return float(bound)
+    # All requests exceeded the highest finite bucket
+    return float(buckets[-1][0]) if buckets else 0.0
+
+
 class ChatDBAppSubject:
     """
     Chat DB App implementation of SubjectProtocol.
@@ -27,11 +50,18 @@ class ChatDBAppSubject:
 
     Produces an observation dict with keys: app, connection_pool,
     database, endpoint_metrics.
+
+    Computes windowed (delta-based) latency percentiles from successive
+    histogram scrapes, so that stale cumulative data doesn't pollute P99.
     """
+
+    # Minimum requests in a window to trust the percentile calculation
+    _MIN_WINDOW_REQUESTS = 5
 
     def __init__(self, app_client: AppClient, pg_client: PgClient) -> None:
         self._app = app_client
         self._pg = pg_client
+        self._prev_buckets: dict[int, int] | None = None
 
     async def observe(self) -> dict[str, Any]:
         """
@@ -53,6 +83,13 @@ class ChatDBAppSubject:
         health = await self._app.get_health()
         endpoint_metrics = await self._safe_endpoint_metrics()
         pool_metrics = await self._safe_pool_metrics()
+        histogram_buckets = await self._safe_histogram_buckets()
+
+        # Compute windowed percentiles from histogram deltas
+        if histogram_buckets:
+            windowed = self._compute_windowed_percentiles(histogram_buckets)
+            if windowed is not None:
+                endpoint_metrics = endpoint_metrics.model_copy(update=windowed)
         db_reachable = await self._pg.is_reachable()
 
         # Only query PG stats if reachable
@@ -139,3 +176,43 @@ class ChatDBAppSubject:
             from chat_db_app_observer.types import PoolMetrics
 
             return PoolMetrics()
+
+    async def _safe_histogram_buckets(self) -> dict[int, int]:
+        """Get histogram buckets, returning empty dict on failure."""
+        try:
+            return await self._app.get_histogram_buckets()
+        except Exception:
+            return {}
+
+    def _compute_windowed_percentiles(
+        self, current: dict[int, int]
+    ) -> dict[str, float] | None:
+        """
+        Compute windowed P50/P99 from delta between current and previous
+        histogram scrapes. Returns None if insufficient data.
+        """
+        prev = self._prev_buckets
+        self._prev_buckets = current.copy()
+
+        if prev is None:
+            return None  # First scrape, no delta yet
+
+        # Compute delta buckets
+        bounds = AppClient.HISTOGRAM_BOUNDS
+        delta_total = current.get(0, 0) - prev.get(0, 0)  # key 0 = +Inf
+
+        if delta_total < 0:
+            return None  # App restarted, counters reset
+
+        if delta_total < self._MIN_WINDOW_REQUESTS:
+            return None  # Not enough requests in this window
+
+        delta_buckets = []
+        for bound in bounds:
+            delta = current.get(bound, 0) - prev.get(bound, 0)
+            delta_buckets.append((bound, max(0, delta)))
+
+        return {
+            "latency_p50_ms": _estimate_percentile_from_buckets(0.50, delta_total, delta_buckets),
+            "latency_p99_ms": _estimate_percentile_from_buckets(0.99, delta_total, delta_buckets),
+        }
