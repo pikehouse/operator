@@ -1,5 +1,6 @@
 """Variant configuration loading and discovery."""
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -8,8 +9,8 @@ import yaml
 from eval.types import VariantConfig
 
 
-# Default variants directory (relative to eval package root)
-VARIANTS_DIR = Path(__file__).parent.parent.parent / "variants"
+# Default variants directory (relative to eval package root, overridable via env)
+VARIANTS_DIR = Path(os.environ["EVAL_VARIANTS_DIR"]) if "EVAL_VARIANTS_DIR" in os.environ else Path(__file__).parent.parent.parent / "variants"
 
 
 def load_variant_config(path: Path) -> VariantConfig:

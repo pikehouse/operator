@@ -631,7 +631,7 @@ class RemoteOperatorProcesses:
     async def update_ticket_variant(
         self,
         variant_config: VariantConfig,
-        timeout_sec: float = 30.0,
+        timeout_sec: float = 120.0,
     ) -> bool:
         """Update the most recent ticket with variant config.
 

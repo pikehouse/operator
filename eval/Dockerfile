@@ -30,6 +30,10 @@ COPY eval/src/ src/
 
 RUN pip install --no-cache-dir ".[cloud]"
 
+# Copy variant configs (loaded at runtime by worker)
+COPY eval/variants/ /app/variants/
+ENV EVAL_VARIANTS_DIR=/app/variants
+
 # Copy subject compose files needed for cloud trials
 COPY subjects/tikv/docker-compose.cloud.yaml /usr/local/lib/subjects/tikv/docker-compose.cloud.yaml
 COPY subjects/chat-db-app/docker-compose.cloud.yaml /usr/local/lib/subjects/chat-db-app/docker-compose.cloud.yaml
