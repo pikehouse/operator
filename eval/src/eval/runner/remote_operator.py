@@ -562,7 +562,10 @@ class RemoteOperatorProcesses:
         timeout_sec: float = 300.0,
         min_ticket_id: int = 0,
     ) -> tuple[str | None, str | None]:
-        """Wait for a ticket to be created and resolved.
+        """Wait for the first post-chaos ticket to be created and resolved.
+
+        Detects the first ticket with ID > min_ticket_id, then tracks that
+        specific ticket until it resolves (rather than chasing the newest).
 
         Args:
             timeout_sec: Maximum time to wait
@@ -573,16 +576,25 @@ class RemoteOperatorProcesses:
         """
         start = asyncio.get_running_loop().time()
         ticket_created_at: str | None = None
+        tracked_ticket_id: int | None = None
 
         console.print(f"[dim]Waiting up to {timeout_sec}s for ticket resolution...[/dim]")
         if min_ticket_id > 0:
             console.print(f"[dim]Looking for tickets with ID > {min_ticket_id}[/dim]")
 
         while (asyncio.get_running_loop().time() - start) < timeout_sec:
-            result = await self._run_db_query(
-                f"SELECT created_at, resolved_at, status FROM tickets "
-                f"WHERE id > {min_ticket_id} ORDER BY id DESC LIMIT 1"
-            )
+            if tracked_ticket_id is not None:
+                # Track the specific ticket we already detected
+                result = await self._run_db_query(
+                    f"SELECT created_at, resolved_at, status FROM tickets "
+                    f"WHERE id = {tracked_ticket_id}"
+                )
+            else:
+                # Find the first ticket after the baseline
+                result = await self._run_db_query(
+                    f"SELECT id, created_at, resolved_at, status FROM tickets "
+                    f"WHERE id > {min_ticket_id} ORDER BY id ASC LIMIT 1"
+                )
 
             try:
                 rows = json.loads(result)
@@ -592,15 +604,18 @@ class RemoteOperatorProcesses:
                     resolved = row.get("resolved_at")
                     status = row.get("status")
 
-                    if created:
-                        if ticket_created_at is None:
-                            ticket_created_at = created
-                            console.print(f"[cyan]Ticket detected (status: {status})[/cyan]")
+                    if created and ticket_created_at is None:
+                        ticket_created_at = created
+                        tracked_ticket_id = row.get("id", tracked_ticket_id)
+                        console.print(
+                            f"[cyan]Ticket #{tracked_ticket_id} detected "
+                            f"(status: {status})[/cyan]"
+                        )
 
-                        if status == "resolved" and resolved:
-                            elapsed = asyncio.get_running_loop().time() - start
-                            console.print(f"[green]Ticket resolved after {elapsed:.1f}s[/green]")
-                            return created, resolved
+                    if status == "resolved" and resolved:
+                        elapsed = asyncio.get_running_loop().time() - start
+                        console.print(f"[green]Ticket #{tracked_ticket_id} resolved after {elapsed:.1f}s[/green]")
+                        return ticket_created_at, resolved
             except (json.JSONDecodeError, IndexError, KeyError):
                 pass
 

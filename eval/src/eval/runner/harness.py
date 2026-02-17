@@ -195,68 +195,67 @@ async def extract_operator_data(
     def query(conn):
         result: dict[str, Any] = {}
 
-        # Get most recent ticket
-        ticket_row = conn.execute(
+        # Get ALL tickets for full lifecycle reconstruction
+        ticket_rows = conn.execute(
             """
-            SELECT id, invariant_name, message, severity, first_seen_at, last_seen_at,
+            SELECT id, invariant_name, message, severity, status,
+                   first_seen_at, last_seen_at, created_at, resolved_at,
                    metric_snapshot
-            FROM tickets ORDER BY id DESC LIMIT 1
+            FROM tickets ORDER BY id
             """
-        ).fetchone()
+        ).fetchall()
 
-        if ticket_row:
-            metric_snapshot = ticket_row["metric_snapshot"]
-            if isinstance(metric_snapshot, str):
+        if ticket_rows:
+            result["tickets"] = []
+            for t in ticket_rows:
+                metric_snapshot = t["metric_snapshot"]
+                if isinstance(metric_snapshot, str):
+                    try:
+                        metric_snapshot = json.loads(metric_snapshot)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                result["tickets"].append({
+                    "ticket_id": t["id"],
+                    "invariant_name": t["invariant_name"],
+                    "message": t["message"],
+                    "severity": t["severity"],
+                    "status": t["status"],
+                    "first_seen_at": t["first_seen_at"],
+                    "last_seen_at": t["last_seen_at"],
+                    "created_at": t["created_at"],
+                    "resolved_at": t["resolved_at"],
+                    "metric_snapshot": metric_snapshot,
+                })
+
+            # Backward compat: keep monitor_detection as the most recent ticket
+            last = ticket_rows[-1]
+            ms = last["metric_snapshot"]
+            if isinstance(ms, str):
                 try:
-                    metric_snapshot = json.loads(metric_snapshot)
+                    ms = json.loads(ms)
                 except (json.JSONDecodeError, TypeError):
                     pass
-
             result["monitor_detection"] = {
-                "ticket_id": ticket_row["id"],
-                "invariant_name": ticket_row["invariant_name"],
-                "message": ticket_row["message"],
-                "severity": ticket_row["severity"],
-                "first_seen_at": ticket_row["first_seen_at"],
-                "last_seen_at": ticket_row["last_seen_at"],
-                "metric_snapshot": metric_snapshot,
+                "ticket_id": last["id"],
+                "invariant_name": last["invariant_name"],
+                "message": last["message"],
+                "severity": last["severity"],
+                "first_seen_at": last["first_seen_at"],
+                "last_seen_at": last["last_seen_at"],
+                "metric_snapshot": ms,
             }
 
-            ticket_id = ticket_row["id"]
+        # Get ALL agent sessions and their reasoning entries
+        session_rows = conn.execute(
+            """
+            SELECT session_id, ticket_id, status, outcome_summary, started_at, ended_at
+            FROM agent_sessions ORDER BY started_at
+            """
+        ).fetchall()
 
-            # Get agent session linked to this ticket.
-            # When multiple invariants fire (e.g., pool_exhaustion + high_error_rate),
-            # the agent may link its session to the first ticket while the most recent
-            # ticket (by id) is a different one. Fall back to the most recent session
-            # if no session is found for the most recent ticket.
-            session_row = conn.execute(
-                """
-                SELECT session_id, status, outcome_summary, started_at, ended_at
-                FROM agent_sessions WHERE ticket_id = ?
-                ORDER BY started_at DESC LIMIT 1
-                """,
-                (ticket_id,),
-            ).fetchone()
-
-            if session_row is None:
-                # Fallback: get the most recent session regardless of ticket_id
-                session_row = conn.execute(
-                    """
-                    SELECT session_id, status, outcome_summary, started_at, ended_at
-                    FROM agent_sessions
-                    ORDER BY started_at DESC LIMIT 1
-                    """
-                ).fetchone()
-
-            if session_row:
-                result["agent_session"] = {
-                    "session_id": session_row["session_id"],
-                    "status": session_row["status"],
-                    "outcome_summary": session_row["outcome_summary"],
-                    "started_at": session_row["started_at"],
-                    "ended_at": session_row["ended_at"],
-                }
-
+        if session_rows:
+            result["agent_sessions"] = []
+            for s in session_rows:
                 entries = conn.execute(
                     """
                     SELECT entry_type, content, raw_content, tool_name, tool_params,
@@ -264,19 +263,59 @@ async def extract_operator_data(
                     FROM agent_log_entries WHERE session_id = ?
                     ORDER BY timestamp
                     """,
-                    (session_row["session_id"],),
+                    (s["session_id"],),
                 ).fetchall()
-                result["reasoning_entries"] = [
-                    {
-                        "entry_type": e["entry_type"],
-                        "content": e["raw_content"] or e["content"] or "",
-                        "tool_name": e["tool_name"],
-                        "tool_params": e["tool_params"],
-                        "exit_code": e["exit_code"],
-                        "timestamp": e["timestamp"],
-                    }
-                    for e in entries
-                ]
+
+                result["agent_sessions"].append({
+                    "session_id": s["session_id"],
+                    "ticket_id": s["ticket_id"],
+                    "status": s["status"],
+                    "outcome_summary": s["outcome_summary"],
+                    "started_at": s["started_at"],
+                    "ended_at": s["ended_at"],
+                    "reasoning_entries": [
+                        {
+                            "entry_type": e["entry_type"],
+                            "content": e["raw_content"] or e["content"] or "",
+                            "tool_name": e["tool_name"],
+                            "tool_params": e["tool_params"],
+                            "exit_code": e["exit_code"],
+                            "timestamp": e["timestamp"],
+                        }
+                        for e in entries
+                    ],
+                })
+
+            # Backward compat: keep agent_session and reasoning_entries
+            # from the most recent session
+            last_session = session_rows[-1]
+            result["agent_session"] = {
+                "session_id": last_session["session_id"],
+                "status": last_session["status"],
+                "outcome_summary": last_session["outcome_summary"],
+                "started_at": last_session["started_at"],
+                "ended_at": last_session["ended_at"],
+            }
+            last_entries = conn.execute(
+                """
+                SELECT entry_type, content, raw_content, tool_name, tool_params,
+                       exit_code, timestamp
+                FROM agent_log_entries WHERE session_id = ?
+                ORDER BY timestamp
+                """,
+                (last_session["session_id"],),
+            ).fetchall()
+            result["reasoning_entries"] = [
+                {
+                    "entry_type": e["entry_type"],
+                    "content": e["raw_content"] or e["content"] or "",
+                    "tool_name": e["tool_name"],
+                    "tool_params": e["tool_params"],
+                    "exit_code": e["exit_code"],
+                    "timestamp": e["timestamp"],
+                }
+                for e in last_entries
+            ]
 
         # Get code snapshots (may not exist)
         try:
@@ -380,7 +419,10 @@ async def wait_for_ticket_resolution(
     timeout_sec: float = 300.0,
     min_ticket_id: int = 0,
 ) -> tuple[str | None, str | None]:
-    """Wait for ticket to be created and resolved in operator.db.
+    """Wait for the first post-chaos ticket to be created and resolved.
+
+    Detects the first ticket with ID > min_ticket_id, then tracks that
+    specific ticket until it resolves (rather than chasing the newest).
 
     Args:
         operator_db_path: Path to operator.db
@@ -392,6 +434,7 @@ async def wait_for_ticket_resolution(
     """
     start = asyncio.get_running_loop().time()
     ticket_created_at: str | None = None
+    tracked_ticket_id: int | None = None
 
     console.print(f"[dim]Waiting up to {timeout_sec}s for ticket resolution...[/dim]")
     if min_ticket_id > 0:
@@ -406,48 +449,48 @@ async def wait_for_ticket_resolution(
             await asyncio.sleep(2.0)
             continue
 
+        _tracked_id = tracked_ticket_id
+
         def query_ticket():
             conn = sqlite3.connect(operator_db_path)
             conn.row_factory = sqlite3.Row
             try:
-                # Get most recent ticket (optionally filtered by ID)
-                cursor = conn.execute(
-                    """
-                    SELECT first_seen_at, resolved_at, status
-                    FROM tickets
-                    WHERE id > ?
-                    ORDER BY id DESC
-                    LIMIT 1
-                    """,
-                    (min_ticket_id,),
-                )
+                if _tracked_id is not None:
+                    cursor = conn.execute(
+                        "SELECT id, first_seen_at, resolved_at, status "
+                        "FROM tickets WHERE id = ?",
+                        (_tracked_id,),
+                    )
+                else:
+                    cursor = conn.execute(
+                        "SELECT id, first_seen_at, resolved_at, status "
+                        "FROM tickets WHERE id > ? ORDER BY id ASC LIMIT 1",
+                        (min_ticket_id,),
+                    )
                 row = cursor.fetchone()
                 if row:
-                    return row["first_seen_at"], row["resolved_at"], row["status"]
-                return None, None, None
+                    return row["id"], row["first_seen_at"], row["resolved_at"], row["status"]
+                return None, None, None, None
             except sqlite3.OperationalError:
-                # Table doesn't exist yet (monitor still initializing)
-                return None, None, None
+                return None, None, None, None
             finally:
                 conn.close()
 
-        created, resolved, status = await asyncio.to_thread(query_ticket)
+        ticket_id, created, resolved, status = await asyncio.to_thread(query_ticket)
 
         if created:
-            # Ticket exists - save creation time for time-to-detect metric
             if ticket_created_at is None:
                 ticket_created_at = created
-                console.print(f"[cyan]Ticket detected (status: {status})[/cyan]")
+                tracked_ticket_id = ticket_id
+                console.print(f"[cyan]Ticket #{ticket_id} detected (status: {status})[/cyan]")
 
             if status == "resolved" and resolved:
                 elapsed = asyncio.get_running_loop().time() - start
-                console.print(f"[green]Ticket resolved after {elapsed:.1f}s[/green]")
-                return created, resolved
-            # Ticket not yet resolved, keep waiting
+                console.print(f"[green]Ticket #{tracked_ticket_id} resolved after {elapsed:.1f}s[/green]")
+                return ticket_created_at, resolved
 
         await asyncio.sleep(2.0)
 
-    # Timeout - return ticket creation time if detected (for time-to-detect metric)
     elapsed = asyncio.get_running_loop().time() - start
     console.print(f"[yellow]Timeout after {elapsed:.1f}s (ticket_found={ticket_created_at is not None})[/yellow]")
     return ticket_created_at, None
