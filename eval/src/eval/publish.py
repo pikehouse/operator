@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import subprocess
+import tempfile
 from pathlib import Path
 
 from eval.types import Campaign, parse_iso_datetime
@@ -110,10 +111,80 @@ def publish_html(
     return html_path, is_update
 
 
+def _find_bundle(campaign_id: int) -> Path | None:
+    """Search for a workspace bundle file for the given campaign.
+
+    Checks bundles/campaign-{id}.bundle in CWD and eval/ prefix.
+    """
+    candidates = [
+        Path("bundles") / f"campaign-{campaign_id}.bundle",
+        Path("eval/bundles") / f"campaign-{campaign_id}.bundle",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
+def _publish_from_bundle(
+    results_repo: Path, bundle_path: Path, branch_name: str, campaign: Campaign
+) -> str:
+    """Push workspace git history from a bundle to the results repo.
+
+    Clones the bundle into a temp dir, then pushes its main branch
+    to the results repo as branch_name.
+    """
+    # Save current branch to restore later
+    original_ref = _git(results_repo, "symbolic-ref", "--short", "HEAD")
+
+    try:
+        # Delete existing branch if re-publishing
+        try:
+            _git(results_repo, "rev-parse", "--verify", branch_name)
+            _git(results_repo, "branch", "-D", branch_name)
+        except RuntimeError:
+            pass
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir) / "workspace"
+
+            # Clone the bundle
+            subprocess.run(
+                ["git", "clone", str(bundle_path.resolve()), str(tmp)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+
+            # Add results repo as a remote and push the workspace branch
+            _git(tmp, "remote", "add", "results", str(results_repo.resolve()))
+
+            # Determine the bundle's current branch name
+            head_ref = _git(tmp, "rev-parse", "--abbrev-ref", "HEAD")
+
+            _git(tmp, "push", "results", f"{head_ref}:refs/heads/{branch_name}")
+
+        return branch_name
+
+    finally:
+        # Restore original branch (bundle push doesn't change working tree,
+        # but the branch delete above may leave us detached if we were on it)
+        try:
+            _git(results_repo, "checkout", original_ref)
+        except RuntimeError:
+            try:
+                _git(results_repo, "checkout", "main")
+            except RuntimeError:
+                logger.error("Failed to restore branch in results repo!")
+
+
 def publish_source_branch(
     results_repo: Path, operator_repo: Path, campaign: Campaign
 ) -> str | None:
-    """Create an orphan branch with the subject's source code at the campaign's commit.
+    """Create a branch with the subject's source code for the campaign.
+
+    Tries workspace bundle first (preserves full git history), falls back
+    to git archive snapshot (single commit) for older campaigns.
 
     Returns branch name on success, None if skipped.
     """
@@ -125,10 +196,22 @@ def publish_source_branch(
         )
         return None
 
+    branch_name = f"campaign-{campaign.id}-source"
+
+    # Try bundle first — preserves full workspace commit history
+    bundle_path = _find_bundle(campaign.id)
+    if bundle_path:
+        logger.info(
+            "Found workspace bundle %s, publishing with full history",
+            bundle_path,
+        )
+        return _publish_from_bundle(results_repo, bundle_path, branch_name, campaign)
+
+    # Fallback: git archive snapshot (single commit, for old campaigns / no bundle)
     commit = campaign.git_commit_hash
     if not commit:
         logger.warning(
-            "Campaign %d has no git_commit_hash, skipping source branch",
+            "Campaign %d has no git_commit_hash and no bundle, skipping source branch",
             campaign.id,
         )
         return None
@@ -142,8 +225,6 @@ def publish_source_branch(
             commit,
         )
         return None
-
-    branch_name = f"campaign-{campaign.id}-source"
 
     # Save current branch to restore later
     original_ref = _git(results_repo, "symbolic-ref", "--short", "HEAD")

@@ -61,3 +61,6 @@ eval/eval.db
 
 # Data directories
 data/
+
+# Eval workspace bundles
+bundles/

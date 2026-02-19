@@ -604,6 +604,18 @@ async def run_trial(
         console.print("[bold blue]Capturing final state...[/bold blue]")
         final_state = await subject.capture_state()
 
+        # Save workspace bundle for source publishing
+        workspace = getattr(subject, 'workspace', None)
+        if workspace is not None:
+            try:
+                bundle_dir = Path("bundles")
+                bundle_dir.mkdir(exist_ok=True)
+                bundle_path = bundle_dir / f"campaign-{campaign_id}.bundle"
+                await asyncio.to_thread(workspace.save_bundle, bundle_path)
+                console.print(f"[dim]Saved workspace bundle to {bundle_path}[/dim]")
+            except Exception as e:
+                console.print(f"[dim]Workspace bundle save failed: {e}[/dim]")
+
         ended_at = now()
 
     finally:
