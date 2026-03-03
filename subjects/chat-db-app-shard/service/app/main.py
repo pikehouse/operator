@@ -9,6 +9,9 @@ Endpoints:
 - POST /api/conversations/{id}/stream     Streaming message (holds transaction)
 - GET  /api/conversations/search?q=term  Search messages
 - DELETE /api/conversations/{id}   Delete conversation
+- POST /api/conversations/{cid}/messages/{mid}/attachments  Upload attachment
+- GET  /api/attachments/{aid}      Download attachment
+- GET  /api/conversations/{cid}/attachments  List attachments
 - POST /api/notifications/broadcast       Broadcast notification to all users
 - GET  /api/notifications                 List user's notifications
 - GET  /api/notifications/unread-count    Count unread notifications
@@ -20,6 +23,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import base64
 import os
 import time
 from contextlib import asynccontextmanager
@@ -36,13 +40,16 @@ from app.models import (
     create_schema,
     delete_conversation,
     ensure_default_user,
+    get_attachment,
     get_messages,
     get_unread_count,
+    list_attachments,
     list_notifications,
     mark_all_read,
     poll_notifications,
     search_messages,
     list_conversations,
+    upload_attachment,
 )
 from app.pool import create_pool
 from app.streaming import stream_response
@@ -164,6 +171,12 @@ class StreamRequest(BaseModel):
     token_count: int = 0
 
 
+class AttachmentUploadRequest(BaseModel):
+    filename: str
+    content_type: str = "application/octet-stream"
+    data_b64: str
+
+
 class BroadcastRequest(BaseModel):
     type: str = "system"
     payload: dict = {}
@@ -237,6 +250,56 @@ async def api_delete_conversation(conversation_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return {"deleted": True}
+
+
+# ---------- Attachment endpoints ----------
+
+@app.post("/api/conversations/{conversation_id}/messages/{message_id}/attachments")
+async def api_upload_attachment(
+    conversation_id: str, message_id: str, req: AttachmentUploadRequest
+):
+    """Upload a file attachment stored as BYTEA in PostgreSQL."""
+    try:
+        data = base64.b64decode(req.data_b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 data")
+    try:
+        att = await upload_attachment(
+            _pool, message_id, req.filename, req.content_type, data
+        )
+        return _serialize(att)
+    except asyncpg.ForeignKeyViolationError:
+        raise HTTPException(status_code=404, detail="Message not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/attachments/{attachment_id}")
+async def api_get_attachment(attachment_id: str):
+    """Download an attachment — loads full BYTEA blob into app memory."""
+    try:
+        att = await get_attachment(_pool, attachment_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return Response(
+        content=att["data"],
+        media_type=att["content_type"],
+        headers={
+            "Content-Disposition": f'attachment; filename="{att["filename"]}"',
+        },
+    )
+
+
+@app.get("/api/conversations/{conversation_id}/attachments")
+async def api_list_attachments(conversation_id: str):
+    """List attachment metadata for a conversation."""
+    try:
+        atts = await list_attachments(_pool, conversation_id)
+        return [_serialize(a) for a in atts]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------- Notification endpoints ----------

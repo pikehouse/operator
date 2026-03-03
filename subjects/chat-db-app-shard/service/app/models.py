@@ -55,6 +55,17 @@ async def create_schema(pool: asyncpg.Pool) -> None:
             CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+
+            CREATE TABLE IF NOT EXISTS attachments (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                filename TEXT NOT NULL,
+                content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                size_bytes INTEGER NOT NULL,
+                data BYTEA NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_attachments_message_id ON attachments(message_id);
         """)
 
 
@@ -343,6 +354,66 @@ async def mark_all_read(pool: asyncpg.Pool, user_id: str) -> int:
         )
         # Extract count from "UPDATE N"
         return int(result.split()[-1])
+
+
+# ---------- Attachment functions ----------
+
+
+async def upload_attachment(
+    pool: asyncpg.Pool,
+    message_id: str,
+    filename: str,
+    content_type: str,
+    data: bytes,
+) -> dict:
+    """Store an attachment as BYTEA in the database."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO attachments (message_id, filename, content_type, size_bytes, data)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, message_id, filename, content_type, size_bytes, created_at
+            """,
+            uuid.UUID(message_id),
+            filename,
+            content_type,
+            len(data),
+            data,
+        )
+        return dict(row)
+
+
+async def get_attachment(pool: asyncpg.Pool, attachment_id: str) -> dict | None:
+    """Retrieve an attachment including its full BYTEA data."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id, message_id, filename, content_type, size_bytes, data, created_at
+            FROM attachments
+            WHERE id = $1
+            """,
+            uuid.UUID(attachment_id),
+        )
+        return dict(row) if row else None
+
+
+async def list_attachments(
+    pool: asyncpg.Pool, conversation_id: str
+) -> list[dict]:
+    """List attachment metadata for all messages in a conversation."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT a.id, a.message_id, a.filename, a.content_type,
+                   a.size_bytes, a.created_at
+            FROM attachments a
+            JOIN messages m ON m.id = a.message_id
+            WHERE m.conversation_id = $1
+            ORDER BY a.created_at DESC
+            """,
+            uuid.UUID(conversation_id),
+        )
+        return [dict(r) for r in rows]
 
 
 async def poll_notifications(

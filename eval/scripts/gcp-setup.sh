@@ -247,6 +247,20 @@ update_env "GCP_DB_CONNECTION_NAME" "${CONNECTION_NAME}"
 update_env "EVAL_DATABASE_PASSWORD" "${DB_PASSWORD}"
 update_env "EVAL_DATABASE_URL" "\"postgresql://${DB_USER}:${DB_PASSWORD}@${DB_IP}:5432/${DB_NAME}?sslmode=require\""
 
+# --- GCS Bucket for blob storage eval ---
+echo ""
+echo ">>> GCS bucket for blob storage eval..."
+GCS_BLOB_BUCKET="${PROJECT}-chatdb-eval-blobs"
+if gcloud storage buckets describe "gs://${GCS_BLOB_BUCKET}" &>/dev/null; then
+    echo "    Bucket ${GCS_BLOB_BUCKET} already exists"
+else
+    echo "    Creating bucket ${GCS_BLOB_BUCKET}..."
+    gcloud storage buckets create "gs://${GCS_BLOB_BUCKET}" \
+        --location=us-central1 --uniform-bucket-level-access \
+        2>/dev/null || true
+fi
+update_env "GCS_BLOB_BUCKET" "${GCS_BLOB_BUCKET}"
+
 # --- Artifact Registry ---
 echo ""
 echo ">>> Artifact Registry..."

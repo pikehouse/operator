@@ -52,11 +52,51 @@ _SHARD_FANOUT_LOAD_PROFILE = {
     "MULTI_USER_COUNT": "1",
 }
 
+# Phase 3: Blob storage — BYTEA attachments overwhelm sharded PG
+_BLOB_STORAGE_LOAD_PROFILE = {
+    "NUM_USERS": "40",
+    "REQUEST_DELAY": "0.3",
+    "READ_RATIO": "0.3",
+    "SEARCH_ENABLED": "true",
+    "SEARCH_RATIO": "0.2",
+    "ATTACHMENT_ENABLED": "true",
+    "ATTACHMENT_RATIO": "0.4",
+    "ATTACHMENT_MIN_KB": "100",
+    "ATTACHMENT_MAX_KB": "5000",
+    "ATTACHMENT_DOWNLOAD_RATIO": "0.3",
+    "STREAM_RATIO": "0.0",
+    "RAMP_UP_SECONDS": "5",
+    "BURST_MODE": "false",
+    "BURST_CONCURRENCY": "1",
+    "BROADCAST_ENABLED": "false",
+}
+
+# Phase 4: Online migration — search-heavy load requires full-text search indexes
+_ONLINE_MIGRATION_LOAD_PROFILE = {
+    "NUM_USERS": "50",
+    "REQUEST_DELAY": "0.2",
+    "READ_RATIO": "0.3",
+    "SEARCH_ENABLED": "true",
+    "SEARCH_RATIO": "0.5",          # Half of all operations are search
+    "ATTACHMENT_ENABLED": "true",    # Carry over from Phase 3
+    "ATTACHMENT_RATIO": "0.1",
+    "ATTACHMENT_MIN_KB": "100",
+    "ATTACHMENT_MAX_KB": "1000",
+    "ATTACHMENT_DOWNLOAD_RATIO": "0.1",
+    "STREAM_RATIO": "0.0",
+    "RAMP_UP_SECONDS": "5",
+    "BURST_MODE": "false",
+    "BURST_CONCURRENCY": "1",
+    "BROADCAST_ENABLED": "false",
+}
+
 SHARD_CHAOS_PROFILES = {
     "db_sharding": dict(_SHARD_LOAD_PROFILE),
     "db_sharding_nudge": dict(_SHARD_LOAD_PROFILE),
     "db_sharding_direct": dict(_SHARD_LOAD_PROFILE),
     "shard_fanout": dict(_SHARD_FANOUT_LOAD_PROFILE),
+    "blob_storage": dict(_BLOB_STORAGE_LOAD_PROFILE),
+    "online_migration": dict(_ONLINE_MIGRATION_LOAD_PROFILE),
 }
 
 SHARD_CHAOS_CATALOG = {
@@ -100,6 +140,34 @@ SHARD_CHAOS_CATALOG = {
             "Parallelize cross-shard queries with asyncio.gather. "
             "Add caching for aggregation results. "
             "Optionally denormalize frequently-accessed cross-shard data."
+        ),
+    },
+    "blob_storage": {
+        "description": (
+            "File attachments stored as BYTEA in PostgreSQL cause TOAST bloat, "
+            "WAL amplification, memory pressure, and pool exhaustion on 256MB-constrained "
+            "shards. A GCS bucket is available in the environment for object storage."
+        ),
+        "anti_pattern": "Storing large binary blobs in PostgreSQL BYTEA columns",
+        "expected_fix": (
+            "Move blob storage from PostgreSQL BYTEA to GCS object storage. "
+            "Store only metadata (GCS path, filename, size) in PostgreSQL. "
+            "Update upload/download endpoints to use GCS directly."
+        ),
+    },
+    "online_migration": {
+        "description": (
+            "Search uses ILIKE sequential scans across millions of rows on each shard. "
+            "With 50% search load, this causes high latency and pool exhaustion. "
+            "Agent must add tsvector + GIN indexes online without downtime."
+        ),
+        "anti_pattern": "ILIKE sequential scans on large tables without full-text search indexes",
+        "expected_fix": (
+            "Add tsvector column with GIN index to messages on every shard. "
+            "Use CREATE INDEX CONCURRENTLY (outside transaction). "
+            "Backfill existing rows in batches. "
+            "Add trigger for auto-populating tsvector on new inserts. "
+            "Update search queries to use @@ operator instead of ILIKE."
         ),
     },
 }
@@ -200,6 +268,74 @@ HARD CONSTRAINTS:
 - Do NOT stop or modify the loadgen container
 - Do NOT undo or revert the sharding implementation
 """,
+    "blob_storage": """
+SITUATION:
+This chat application recently deployed a file attachment feature. Users can upload
+file attachments to messages, and these are stored as BYTEA columns directly in
+PostgreSQL. The system has horizontal database sharding from a previous scaling effort.
+
+Since the attachment feature launched, the system is degrading severely:
+- Memory pressure on the 256MB PostgreSQL shard instances (TOAST bloat from large BYTEAs)
+- WAL amplification from writing multi-MB binary data through PostgreSQL replication
+- Connection pool exhaustion as attachment downloads hold connections while streaming large blobs
+- Increased latency across all operations, not just attachment-related ones
+
+The attachment upload/download endpoints load entire blobs into app memory via the
+PostgreSQL connection, which ties up connections from the bounded pool.
+
+Google Cloud Storage (GCS) object storage is available in your environment. Check the
+$GCS_BLOB_BUCKET environment variable for the bucket name. The VM has Application Default
+Credentials (ADC) with cloud-platform scope, so you can use GCS natively — install the
+google-cloud-storage Python library and use it directly. No additional IAM or credentials
+needed.
+
+You have FULL AUTHORITY to modify any code, add services, install packages, rebuild
+Docker images, or change architecture. No human review. Ship what you build.
+
+You have web access (WebSearch, WebFetch) to research solutions.
+
+HARD CONSTRAINTS:
+- Do NOT modify deploy.resources.limits (256MB/30 connections per PG node)
+- Do NOT stop or modify the loadgen container
+- Do NOT undo or revert the sharding implementation
+- Attachments must continue to work (upload, download, list) — you cannot disable the feature
+""",
+    "online_migration": """
+SITUATION:
+This chat application has horizontal database sharding and uses GCS for blob storage
+(from previous scaling efforts). The system serves millions of messages across shards.
+
+The search feature is now the primary bottleneck. Search uses ILIKE '%term%' which
+performs sequential scans across every shard. With 50% of all operations being searches,
+this causes:
+- Extremely high latency on search queries (seconds to tens of seconds)
+- Connection pool exhaustion as search queries hold connections during full table scans
+- Cascading failures affecting non-search operations
+
+The correct solution is PostgreSQL full-text search using tsvector columns with GIN indexes.
+However, this must be done as an online migration without downtime:
+
+Key challenges:
+- CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+- You cannot UPDATE millions of rows at once on 256MB-constrained PostgreSQL instances
+- The migration must happen on EVERY shard (each has its own PostgreSQL instance)
+- New inserts must auto-populate the tsvector column (trigger or generated column)
+- Existing rows must be backfilled in small batches to avoid OOM
+- Search queries must be updated to use the @@ operator instead of ILIKE
+- Invalid indexes from failed CONCURRENTLY attempts must be detected and retried
+
+You have FULL AUTHORITY to modify any code, run SQL migrations, install packages,
+rebuild Docker images, or change architecture. No human review. Ship what you build.
+
+You have web access (WebSearch, WebFetch) to research PostgreSQL full-text search
+patterns, online migration strategies, and tsvector/GIN index usage.
+
+HARD CONSTRAINTS:
+- Do NOT modify deploy.resources.limits (256MB/30 connections per PG node)
+- Do NOT stop or modify the loadgen container
+- Do NOT undo or revert the sharding implementation or GCS blob storage
+- Search must continue to work during the migration (degraded performance is acceptable)
+""",
 }
 
 
@@ -251,8 +387,9 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
                 profile[upper_key] = str(value)
 
         # Pre-seed only for sharding setup phases.
-        # shard_fanout runs after sharding — data already exists across shards.
-        if chaos_type != "shard_fanout":
+        # shard_fanout, blob_storage, online_migration run after sharding — data
+        # already exists across shards.
+        if chaos_type not in ("shard_fanout", "blob_storage", "online_migration"):
             await self._preseed_for_db_sharding()
 
         # Write .env with chaos profile and restart loadgen
@@ -366,7 +503,7 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
             return
         chaos_type = chaos_metadata.get("chaos_type", "")
         original = chaos_metadata.get("original_chaos_type", chaos_type)
-        if original not in SHARD_CHAOS_PROFILES and chaos_type not in ("db_sharding", "shard_fanout"):
+        if original not in SHARD_CHAOS_PROFILES and chaos_type not in ("db_sharding", "shard_fanout", "blob_storage", "online_migration"):
             await super().cleanup_chaos(chaos_metadata)
             return
         from eval.subjects.chat_db_app.subject import LIGHT_LOAD

@@ -29,11 +29,17 @@ Environment variables:
     MULTI_USER_COUNT: Number of users to create at startup (default: 1)
     BROADCAST_PAYLOAD_SIZE: Bytes of padding data in broadcast payloads (default: 0 = none)
     PAGINATE_NOTIFICATIONS: Walk all notification pages via offset (default: false)
+    ATTACHMENT_ENABLED: Enable file attachment uploads (default: false)
+    ATTACHMENT_RATIO: Fraction of messages that get attachments (default: 0.0)
+    ATTACHMENT_MIN_KB: Minimum attachment size in KB (default: 100)
+    ATTACHMENT_MAX_KB: Maximum attachment size in KB (default: 5000)
+    ATTACHMENT_DOWNLOAD_RATIO: Fraction of iterations that download an attachment (default: 0.0)
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import os
 import random
@@ -68,6 +74,11 @@ LIST_NOTIFS_RATIO = float(os.environ.get("LIST_NOTIFS_RATIO", "0.0"))
 MULTI_USER_COUNT = int(os.environ.get("MULTI_USER_COUNT", "1"))
 BROADCAST_PAYLOAD_SIZE = int(os.environ.get("BROADCAST_PAYLOAD_SIZE", "0"))
 PAGINATE_NOTIFICATIONS = os.environ.get("PAGINATE_NOTIFICATIONS", "false").lower() in ("true", "1", "yes")
+ATTACHMENT_ENABLED = os.environ.get("ATTACHMENT_ENABLED", "false").lower() in ("true", "1", "yes")
+ATTACHMENT_RATIO = float(os.environ.get("ATTACHMENT_RATIO", "0.0"))
+ATTACHMENT_MIN_KB = int(os.environ.get("ATTACHMENT_MIN_KB", "100"))
+ATTACHMENT_MAX_KB = int(os.environ.get("ATTACHMENT_MAX_KB", "5000"))
+ATTACHMENT_DOWNLOAD_RATIO = float(os.environ.get("ATTACHMENT_DOWNLOAD_RATIO", "0.0"))
 
 SEARCH_TERMS = [
     "quantum", "database", "PostgreSQL", "connection", "deadlock",
@@ -201,6 +212,62 @@ async def simulate_user(
                         log.warning(f"User {user_id}: search failed {resp.status_code}")
                 except httpx.TimeoutException:
                     log.warning(f"User {user_id}: search timed out for '{term}'")
+
+            # Attachment interactions
+            if ATTACHMENT_ENABLED and conversation_id:
+                # Upload attachment after some messages
+                if resp and resp.status_code == 200 and random.random() < ATTACHMENT_RATIO:
+                    try:
+                        # Get message_id from the last successful POST response
+                        msg_data = resp.json()
+                        msg_id = msg_data.get("id")
+                        if msg_id:
+                            size_kb = random.randint(ATTACHMENT_MIN_KB, ATTACHMENT_MAX_KB)
+                            blob = os.urandom(size_kb * 1024)
+                            data_b64 = base64.b64encode(blob).decode()
+                            att_resp = await client.post(
+                                f"{APP_URL}/api/conversations/{conversation_id}/messages/{msg_id}/attachments",
+                                json={
+                                    "filename": f"file-{random.randint(1000,9999)}.bin",
+                                    "content_type": "application/octet-stream",
+                                    "data_b64": data_b64,
+                                },
+                                timeout=60,
+                            )
+                            if att_resp.status_code == 200:
+                                log.info(f"User {user_id}: uploaded {size_kb}KB attachment")
+                            else:
+                                log.warning(f"User {user_id}: attachment upload failed {att_resp.status_code}")
+                    except httpx.TimeoutException:
+                        log.warning(f"User {user_id}: attachment upload timed out")
+                    except Exception as e:
+                        log.warning(f"User {user_id}: attachment upload error: {e}")
+
+                # Periodically download a random attachment
+                if random.random() < ATTACHMENT_DOWNLOAD_RATIO:
+                    try:
+                        list_resp = await client.get(
+                            f"{APP_URL}/api/conversations/{conversation_id}/attachments",
+                            timeout=30,
+                        )
+                        if list_resp.status_code == 200:
+                            atts = list_resp.json()
+                            if atts:
+                                att = random.choice(atts)
+                                start = time.monotonic()
+                                dl_resp = await client.get(
+                                    f"{APP_URL}/api/attachments/{att['id']}",
+                                    timeout=60,
+                                )
+                                elapsed = time.monotonic() - start
+                                if dl_resp.status_code == 200:
+                                    log.info(f"User {user_id}: downloaded attachment {len(dl_resp.content)}B ({elapsed:.1f}s)")
+                                else:
+                                    log.warning(f"User {user_id}: attachment download failed {dl_resp.status_code}")
+                    except httpx.TimeoutException:
+                        log.warning(f"User {user_id}: attachment download timed out")
+                    except Exception as e:
+                        log.warning(f"User {user_id}: attachment download error: {e}")
 
             # Notification interactions
             notif_user_id = assigned_user_ids[user_id % len(assigned_user_ids)] if assigned_user_ids else None
@@ -446,11 +513,12 @@ async def main() -> None:
     multi_info = f", multi_user={MULTI_USER_COUNT}" if MULTI_USER_COUNT > 1 else ""
     payload_info = f", broadcast_payload={BROADCAST_PAYLOAD_SIZE}B" if BROADCAST_PAYLOAD_SIZE > 0 else ""
     paginate_info = ", paginate_notifications" if PAGINATE_NOTIFICATIONS else ""
+    attach_info = f", attachments={ATTACHMENT_RATIO:.0%} ({ATTACHMENT_MIN_KB}-{ATTACHMENT_MAX_KB}KB, dl={ATTACHMENT_DOWNLOAD_RATIO:.0%})" if ATTACHMENT_ENABLED else ""
     log.info(
         f"Load generator starting: {NUM_USERS} users, {REQUEST_DELAY}s delay, "
         f"{STREAM_RATIO:.0%} streaming, read_ratio={READ_RATIO}, mode={mode}"
         f"{search_info}{broadcast_info}{poll_info}{notif_info}{multi_info}"
-        f"{payload_info}{paginate_info}"
+        f"{payload_info}{paginate_info}{attach_info}"
     )
 
     async with httpx.AsyncClient() as client:

@@ -1,11 +1,9 @@
-name: chatdb-shard-escalation
+name: chatdb-shard-migration
 subjects: [chat-db-app-shard]
 
-# Four-phase continuous campaign:
-# Phase 1 (db_sharding_direct): Agent implements horizontal sharding
-# Phase 2 (shard_fanout): Heavy cross-shard load breaks naive sequential fan-out
-# Phase 3 (blob_storage): BYTEA attachments overwhelm sharded PG — move to GCS
-# Phase 4 (online_migration): ILIKE sequential scans — add tsvector/GIN indexes online
+# Standalone online_migration phase: ILIKE sequential scans across shards.
+# Agent must add tsvector/GIN indexes online without downtime.
+# Requires sharding + fanout + blob_storage already implemented.
 continuous: true
 
 chaos_types:

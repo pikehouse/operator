@@ -2,11 +2,13 @@
 
 Inherits from GCPChatDBAppSubject but uses the shard variant source
 (all code bugs pre-fixed) with constrained PostgreSQL (256MB, 30 max_connections).
-Supports db_sharding, db_sharding_nudge, and db_sharding_direct chaos types.
+Supports db_sharding, db_sharding_nudge, db_sharding_direct, blob_storage,
+and online_migration chaos types.
 """
 
 import asyncio
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -78,8 +80,16 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         )
 
     def get_chaos_types(self) -> list[str]:
-        """Return supported chaos types — only db_sharding."""
+        """Return supported chaos types."""
         return self.CLOUD_CHAOS_TYPES
+
+    def get_operator_env(self) -> dict[str, str]:
+        """Return extra env vars including GCS blob bucket for the agent."""
+        env = super().get_operator_env()
+        env["GCS_BLOB_BUCKET"] = os.environ.get(
+            "GCS_BLOB_BUCKET", f"{self.project}-chatdb-eval-blobs"
+        )
+        return env
 
     def get_agent_context(self, chaos_type: str | None = None) -> str:
         """Return prompt context with infrastructure constraints.
@@ -106,8 +116,9 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
             )
 
         # Pre-seed only for sharding setup phases.
-        # shard_fanout runs after sharding — data already exists across shards.
-        if chaos_type != "shard_fanout":
+        # shard_fanout, blob_storage, online_migration run after sharding — data
+        # already exists across shards.
+        if chaos_type not in ("shard_fanout", "blob_storage", "online_migration"):
             await self._preseed_for_db_sharding()
 
         # Apply load profile
@@ -117,7 +128,9 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
             if upper_key in profile:
                 profile[upper_key] = str(value)
 
-        meta_type = "shard_fanout" if chaos_type == "shard_fanout" else "db_sharding"
+        # Use a meta chaos_type that the cleanup logic recognizes
+        no_preseed_types = ("shard_fanout", "blob_storage", "online_migration")
+        meta_type = chaos_type if chaos_type in no_preseed_types else "db_sharding"
         result = await self._inject_load_pressure(
             chaos_type=meta_type, profile=profile, **params
         )
@@ -128,7 +141,7 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         """Clean up shard chaos — remove the chaos loadgen container."""
         chaos_type = chaos_metadata.get("chaos_type", "")
         original = chaos_metadata.get("original_chaos_type", chaos_type)
-        if original in SHARD_CHAOS_PROFILES or chaos_type in ("db_sharding", "shard_fanout"):
+        if original in SHARD_CHAOS_PROFILES or chaos_type in ("db_sharding", "shard_fanout", "blob_storage", "online_migration"):
             try:
                 container = chaos_metadata.get("chaos_container", self._chaos_loadgen_name)
                 await self.vm.run_command(f"docker rm -f {container}")

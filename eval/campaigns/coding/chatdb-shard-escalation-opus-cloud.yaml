@@ -1,15 +1,21 @@
 name: chatdb-shard-escalation-opus
 subjects: [chat-db-app-shard]
 
-# Two-phase continuous campaign (Opus 4.6 variant):
+# Four-phase continuous campaign (Opus 4.6 variant):
 # Phase 1 (db_sharding_direct): Agent implements horizontal sharding
 # Phase 2 (shard_fanout): Heavy cross-shard load breaks naive sequential fan-out
+# Phase 3 (blob_storage): BYTEA attachments overwhelm sharded PG — move to GCS
+# Phase 4 (online_migration): ILIKE sequential scans — add tsvector/GIN indexes online
 continuous: true
 
 chaos_types:
   - type: db_sharding_direct
     resolution_timeout: 900
   - type: shard_fanout
+    resolution_timeout: 1800
+  - type: blob_storage
+    resolution_timeout: 2400
+  - type: online_migration
     resolution_timeout: 1800
 
 trials_per_combination: 1
