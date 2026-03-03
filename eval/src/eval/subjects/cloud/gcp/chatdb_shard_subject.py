@@ -86,8 +86,9 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
     def get_operator_env(self) -> dict[str, str]:
         """Return extra env vars including GCS blob bucket for the agent."""
         env = super().get_operator_env()
+        project = self.vm.project or "operator-486214"
         env["GCS_BLOB_BUCKET"] = os.environ.get(
-            "GCS_BLOB_BUCKET", f"{self.project}-chatdb-eval-blobs"
+            "GCS_BLOB_BUCKET", f"{project}-chatdb-eval-blobs"
         )
         return env
 
