@@ -157,7 +157,7 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         to avoid per-batch IAP tunnel overhead. Uses 50K-row batches
         to stay within the 256MB PG memory limit.
         """
-        batch_size_rows = 50_000
+        batch_size_rows = 10_000
         num_batches = (count + batch_size_rows - 1) // batch_size_rows
         logger.info(
             "Pre-seeding %d messages (%d batches) for db_sharding chaos...",
@@ -176,6 +176,7 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         # 3. ANALYZE at the end
         script = f"""#!/bin/bash
 set -o pipefail
+exec 2>&1
 
 PSQL="{psql_cmd}"
 COMPOSE_DIR="{self.compose_dir}"
@@ -205,8 +206,8 @@ while [ $BATCH_START -lt $TOTAL ]; do
             echo "PROGRESS: $INSERTED / $TOTAL messages"
         fi
     else
-        echo "WARN: Failed batch at $BATCH_START, restarting postgres..."
-        cd $COMPOSE_DIR && $COMPOSE_CMD -p $PROJECT up -d postgres
+        echo "WARN: Failed batch at $BATCH_START (exit $?), restarting postgres..."
+        cd $COMPOSE_DIR && $COMPOSE_CMD -p $PROJECT up -d postgres 2>&1 || echo "WARN: compose restart failed"
         sleep 5
     fi
     BATCH_START=$((BATCH_START + BATCH_SIZE))
@@ -232,13 +233,19 @@ echo "DONE: $INSERTED / $TOTAL messages inserted"
             )
             output = stdout or stderr or ""
             for line in output.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
                 if line.startswith("PROGRESS:") or line.startswith("DONE:"):
                     logger.info("Pre-seed: %s", line)
-                elif line.startswith("WARN:"):
+                elif line.startswith("WARN:") or line.startswith("ERROR"):
                     logger.warning("Pre-seed: %s", line)
 
             if exit_code != 0:
-                logger.warning("Pre-seed script exited %d: %s", exit_code, output[-500:])
+                logger.warning(
+                    "Pre-seed script exited %d, last 1000 chars: %s",
+                    exit_code, output[-1000:],
+                )
         except Exception as e:
             logger.warning("Pre-seed script failed: %s", e)
 
