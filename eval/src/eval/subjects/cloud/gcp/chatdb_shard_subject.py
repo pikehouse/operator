@@ -6,9 +6,9 @@ Supports db_sharding, db_sharding_nudge, db_sharding_direct, blob_storage,
 and online_migration chaos types.
 """
 
-import asyncio
 import logging
 import os
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,11 @@ from eval.subjects.chat_db_app_shard.subject import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _shell_quote(s: str) -> str:
+    """Quote a string for safe use as a single shell argument."""
+    return shlex.quote(s)
 
 
 class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
@@ -154,105 +159,87 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
     async def _preseed_for_db_sharding(self, count: int = 2_000_000) -> None:
         """Bulk-insert messages across 5,000 conversations.
 
-        Uses 50K-row batches to stay within the 256MB PG memory limit.
-        If PG OOMs during a batch, restarts it and continues.
+        Runs the entire seeding loop on the VM in a single SSH session
+        to avoid per-batch IAP tunnel overhead. Uses 50K-row batches
+        to stay within the 256MB PG memory limit.
         """
         batch_size_rows = 50_000
-        logger.info("Pre-seeding %d messages for db_sharding chaos...", count)
-
-        compose_network = f"{self.project_name}_default"
-
-        # Create seed user and 5,000 conversations
-        setup_sql = (
-            "INSERT INTO users (id, email) "
-            "VALUES ('00000000-0000-0000-0000-000000000000', 'seed@eval.test') "
-            "ON CONFLICT DO NOTHING; "
-            "INSERT INTO conversations (id, user_id, title) "
-            "SELECT "
-            "('C0000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, "
-            "'00000000-0000-4000-8000-000000000001', "
-            "'conv ' || g "
-            "FROM generate_series(0, 4999) AS g "
-            "ON CONFLICT DO NOTHING;"
+        num_batches = (count + batch_size_rows - 1) // batch_size_rows
+        logger.info(
+            "Pre-seeding %d messages (%d batches) for db_sharding chaos...",
+            count, num_batches,
         )
 
-        psql_base = (
+        compose_network = f"{self.project_name}_default"
+        psql_cmd = (
             f"docker run --rm --network {compose_network} postgres:16 psql "
             f"'postgresql://chatapp:chatapp@postgres:5432/chatdb'"
         )
 
+        # Build a shell script that runs entirely on the VM:
+        # 1. Create seed user + conversations
+        # 2. Loop through batches, restarting PG on failure
+        # 3. ANALYZE at the end
+        script = f"""#!/bin/bash
+set -o pipefail
+
+PSQL="{psql_cmd}"
+COMPOSE_DIR="{self.compose_dir}"
+COMPOSE_CMD="{self.docker_compose_cmd}"
+PROJECT="{self.project_name}"
+BATCH_SIZE={batch_size_rows}
+TOTAL={count}
+
+# Step 1: Create seed user and conversations
+$PSQL -c "INSERT INTO users (id, email) VALUES ('00000000-0000-0000-0000-000000000000', 'seed@eval.test') ON CONFLICT DO NOTHING; INSERT INTO conversations (id, user_id, title) SELECT ('C0000000-0000-0000-0000-' || lpad(g::text, 12, '0'))::uuid, '00000000-0000-4000-8000-000000000001', 'conv ' || g FROM generate_series(0, 4999) AS g ON CONFLICT DO NOTHING;"
+if [ $? -ne 0 ]; then
+    echo "WARN: Failed to create seed conversations"
+fi
+
+# Step 2: Batch insert messages
+INSERTED=0
+BATCH_START=0
+while [ $BATCH_START -lt $TOTAL ]; do
+    REMAINING=$((TOTAL - BATCH_START))
+    BS=$BATCH_SIZE
+    if [ $REMAINING -lt $BS ]; then BS=$REMAINING; fi
+
+    $PSQL -c "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) SELECT gen_random_uuid(), ('C0000000-0000-0000-0000-' || lpad(((g % 5000))::text, 12, '0'))::uuid, 'Message ' || g || ' content padding.', CASE WHEN g % 2 = 0 THEN 'user' ELSE 'assistant' END, 10 + (g % 100), now() - interval '1 second' * ($BATCH_START + g % 2592000) FROM generate_series(1, $BS) AS g;"
+    if [ $? -eq 0 ]; then
+        INSERTED=$((INSERTED + BS))
+        if [ $((INSERTED % 500000)) -eq 0 ]; then
+            echo "PROGRESS: $INSERTED / $TOTAL messages"
+        fi
+    else
+        echo "WARN: Failed batch at $BATCH_START, restarting postgres..."
+        cd $COMPOSE_DIR && $COMPOSE_CMD -p $PROJECT up -d postgres
+        sleep 5
+    fi
+    BATCH_START=$((BATCH_START + BATCH_SIZE))
+done
+
+# Step 3: ANALYZE
+$PSQL -c "ANALYZE messages;"
+echo "DONE: $INSERTED / $TOTAL messages inserted"
+"""
+
         try:
             exit_code, stdout, stderr = await self.vm.run_command(
-                f"{psql_base} -c \"{setup_sql}\"",
-                timeout_sec=120.0,
+                f"bash -c {_shell_quote(script)}",
+                timeout_sec=1200.0,  # 20 min for full seeding
             )
+            output = stdout or stderr or ""
+            # Log progress lines
+            for line in output.splitlines():
+                if line.startswith("PROGRESS:") or line.startswith("DONE:"):
+                    logger.info("Pre-seed: %s", line)
+                elif line.startswith("WARN:"):
+                    logger.warning("Pre-seed: %s", line)
+
             if exit_code != 0:
-                logger.warning(
-                    "Failed to create seed conversations: %s",
-                    (stdout or stderr).strip()[:200],
-                )
+                logger.warning("Pre-seed script exited %d: %s", exit_code, output[-500:])
         except Exception as e:
-            logger.warning("Failed to create seed conversations: %s", e)
-
-        # Batch insert messages in small chunks to avoid OOM
-        inserted = 0
-        for batch_start in range(0, count, batch_size_rows):
-            batch_size = min(batch_size_rows, count - batch_start)
-            insert_sql = (
-                "INSERT INTO messages (id, conversation_id, content, role, token_count, created_at) "
-                "SELECT gen_random_uuid(), "
-                f"('C0000000-0000-0000-0000-' || lpad(((g % 5000))::text, 12, '0'))::uuid, "
-                f"'Message ' || g || ' content padding.', "
-                "CASE WHEN g % 2 = 0 THEN 'user' ELSE 'assistant' END, "
-                f"10 + (g % 100), "
-                f"now() - interval '1 second' * ({batch_start} + g % 2592000) "
-                f"FROM generate_series(1, {batch_size}) AS g;"
-            )
-            try:
-                exit_code, stdout, stderr = await self.vm.run_command(
-                    f"{psql_base} -c \"{insert_sql}\"",
-                    timeout_sec=120.0,
-                )
-                if exit_code == 0:
-                    inserted += batch_size
-                    if inserted % 500_000 == 0:
-                        logger.info("Pre-seeded %d / %d messages", inserted, count)
-                else:
-                    logger.warning(
-                        "Failed to pre-seed batch at %d: exit %d: %s",
-                        batch_start, exit_code, (stdout or stderr).strip()[:200],
-                    )
-                    # PG may have OOM'd — restart it and continue
-                    await self.vm.run_command(
-                        f"cd {self.compose_dir} && "
-                        f"{self.docker_compose_cmd} -p {self.project_name} "
-                        f"up -d postgres",
-                        timeout_sec=30.0,
-                    )
-                    await asyncio.sleep(5)
-            except Exception as e:
-                logger.warning("Failed to pre-seed batch at %d: %s", batch_start, e)
-                try:
-                    await self.vm.run_command(
-                        f"cd {self.compose_dir} && "
-                        f"{self.docker_compose_cmd} -p {self.project_name} "
-                        f"up -d postgres",
-                        timeout_sec=30.0,
-                    )
-                    await asyncio.sleep(5)
-                except Exception:
-                    pass
-
-        # ANALYZE so PG knows the true table stats
-        try:
-            await self.vm.run_command(
-                f"{psql_base} -c \"ANALYZE messages;\"",
-                timeout_sec=120.0,
-            )
-        except Exception as e:
-            logger.warning("Failed to ANALYZE messages: %s", e)
-
-        logger.info("Pre-seeded %d / %d messages for db_sharding", inserted, count)
+            logger.warning("Pre-seed script failed: %s", e)
 
     async def capture_state(self) -> dict[str, Any]:
         """Capture state including docker service inventory."""
