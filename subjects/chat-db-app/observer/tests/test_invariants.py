@@ -49,7 +49,6 @@ def _make_observation(
     error_rate_pct: float = 0.0,
     uptime_seconds: float = 3600.0,
     search_latency_p99_ms: float = 0.0,
-    search_requests_per_sec: float = 0.0,
 ) -> dict:
     """Build a complete observation dict for testing."""
     return {
@@ -81,7 +80,6 @@ def _make_observation(
             "requests_per_sec": requests_per_sec,
             "error_count_5xx": error_count_5xx,
             "search_latency_p99_ms": search_latency_p99_ms,
-            "search_requests_per_sec": search_requests_per_sec,
         },
     }
 
@@ -401,17 +399,17 @@ class TestMultipleViolations:
 
 
 class TestHighSearchLatency:
-    """Tests for high_search_latency invariant."""
+    """Tests for high_search_latency invariant (probe-based)."""
 
     def test_normal_search_latency_no_violation(self):
         checker = ChatDBAppInvariantChecker()
-        obs = _make_observation(search_latency_p99_ms=100.0, search_requests_per_sec=10.0)
+        obs = _make_observation(search_latency_p99_ms=100.0)
         violations = checker.check(obs)
         assert not any(v.invariant_name == "high_search_latency" for v in violations)
 
     def test_high_search_latency_with_grace(self):
         checker = ChatDBAppInvariantChecker()
-        obs = _make_observation(search_latency_p99_ms=3000.0, search_requests_per_sec=10.0)
+        obs = _make_observation(search_latency_p99_ms=3000.0)
 
         # First check: within grace period (30s)
         violations = checker.check(obs)
@@ -424,24 +422,10 @@ class TestHighSearchLatency:
         violations = checker.check(obs)
         assert any(v.invariant_name == "high_search_latency" for v in violations)
 
-    def test_search_latency_ignored_at_low_rps(self):
-        """High search P99 at low RPS should not trigger — too noisy."""
-        checker = ChatDBAppInvariantChecker()
-        obs = _make_observation(search_latency_p99_ms=5000.0, search_requests_per_sec=1.0)
-
-        # Even after grace period, should not fire at low search RPS
-        checker.check(obs)
-        checker._first_seen["high_search_latency"] = checker._first_seen.get(
-            "high_search_latency", checker._first_seen.get("high_search_latency")
-        )
-        # At 1.0 RPS (below _MIN_SEARCH_RPS=2.0), should never trigger
-        violations = checker.check(obs)
-        assert not any(v.invariant_name == "high_search_latency" for v in violations)
-
     def test_search_latency_clears_when_resolved(self):
         checker = ChatDBAppInvariantChecker()
         # Trigger violation
-        obs_bad = _make_observation(search_latency_p99_ms=3000.0, search_requests_per_sec=10.0)
+        obs_bad = _make_observation(search_latency_p99_ms=3000.0)
         checker.check(obs_bad)
         checker._first_seen["high_search_latency"] = checker._first_seen[
             "high_search_latency"
@@ -450,14 +434,14 @@ class TestHighSearchLatency:
         assert any(v.invariant_name == "high_search_latency" for v in violations)
 
         # Resolve (search latency drops)
-        obs_good = _make_observation(search_latency_p99_ms=50.0, search_requests_per_sec=10.0)
+        obs_good = _make_observation(search_latency_p99_ms=50.0)
         violations = checker.check(obs_good)
         assert not any(v.invariant_name == "high_search_latency" for v in violations)
         assert "high_search_latency" not in checker._first_seen
 
     def test_no_search_metrics_no_violation(self):
-        """When search metrics are absent (0.0), invariant should not fire."""
+        """When search latency is 0.0 (no probe data), invariant should not fire."""
         checker = ChatDBAppInvariantChecker()
-        obs = _make_observation()  # defaults: search_latency_p99_ms=0.0, search_rps=0.0
+        obs = _make_observation()  # defaults: search_latency_p99_ms=0.0
         violations = checker.check(obs)
         assert not any(v.invariant_name == "high_search_latency" for v in violations)

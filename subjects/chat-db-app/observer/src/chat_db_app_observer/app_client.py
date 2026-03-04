@@ -85,34 +85,28 @@ class AppClient:
             uptime_seconds=_parse_gauge_float(text, "chatdb_uptime_seconds"),
         )
 
-    async def get_search_histogram_buckets(self) -> dict[int, int]:
+    async def probe_search_latency_ms(self) -> float | None:
         """
-        Parse search-specific cumulative histogram bucket counts from /metrics.
+        Measure actual search latency by making a test search request.
 
-        Returns:
-            Dict mapping bucket upper bound (ms) to cumulative count for search ops.
-            Returns empty dict on failure or if no search metrics are present.
+        Returns latency in milliseconds, or None if the request fails.
+        This is independent of any app-side metrics instrumentation.
         """
-        text = await self._fetch_metrics_text()
-        buckets: dict[int, int] = {}
-        for bound in self.HISTOGRAM_BOUNDS:
-            pattern = rf'chatdb_search_duration_ms_bucket\{{le="{bound}"\}}\s+(\S+)'
-            match = re.search(pattern, text)
-            if match:
-                try:
-                    buckets[bound] = int(float(match.group(1)))
-                except ValueError:
-                    pass
-        # Also parse +Inf for total count
-        inf_match = re.search(
-            r'chatdb_search_duration_ms_bucket\{le="\+Inf"\}\s+(\S+)', text
-        )
-        if inf_match:
-            try:
-                buckets[0] = int(float(inf_match.group(1)))  # 0 key = +Inf total
-            except ValueError:
-                pass
-        return buckets
+        import time as _time
+
+        try:
+            start = _time.monotonic()
+            resp = await self._http.get(
+                "/api/conversations/search",
+                params={"q": "test"},
+                timeout=30.0,
+            )
+            elapsed_ms = (_time.monotonic() - start) * 1000
+            if resp.status_code == 200:
+                return elapsed_ms
+            return None
+        except Exception:
+            return None
 
     async def get_histogram_buckets(self) -> dict[int, int]:
         """

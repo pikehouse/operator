@@ -52,6 +52,7 @@ def _make_mock_app_client(
         )
     )
     mock.get_histogram_buckets = AsyncMock(return_value={})
+    mock.probe_search_latency_ms = AsyncMock(return_value=None)
     return mock
 
 
@@ -379,3 +380,67 @@ class TestWindowedPercentiles:
         # Second observe: windowed data available, should use windowed P99
         obs2 = await subject.observe()
         assert obs2["endpoint_metrics"]["latency_p99_ms"] == 10.0  # All recent requests fast
+
+
+class TestSearchProbeLatency:
+    """Tests for probe-based search latency tracking."""
+
+    def _make_subject(self):
+        app_client = _make_mock_app_client()
+        pg_client = _make_mock_pg_client()
+        return ChatDBAppSubject(app_client=app_client, pg_client=pg_client)
+
+    def test_no_probe_data_returns_zero(self):
+        subject = self._make_subject()
+        result = subject._update_search_probes(None)
+        assert result == 0.0
+
+    def test_single_probe(self):
+        subject = self._make_subject()
+        result = subject._update_search_probes(2500.0)
+        assert result == 2500.0
+
+    def test_median_of_probes(self):
+        subject = self._make_subject()
+        # Feed 3 probes
+        subject._update_search_probes(100.0)
+        subject._update_search_probes(200.0)
+        result = subject._update_search_probes(3000.0)
+        # Median of [100, 200, 3000] = 200
+        assert result == 200.0
+
+    def test_window_trimming(self):
+        subject = self._make_subject()
+        # Fill beyond window size
+        for i in range(20):
+            subject._update_search_probes(float(i * 100))
+        assert len(subject._search_probe_history) == subject._SEARCH_PROBE_WINDOW
+
+    def test_failed_probes_ignored(self):
+        subject = self._make_subject()
+        subject._update_search_probes(2000.0)
+        # Failed probe (None) should not affect the window
+        result = subject._update_search_probes(None)
+        assert result == 2000.0
+
+    @pytest.mark.asyncio
+    async def test_observe_reports_search_latency(self):
+        """Verify observe() includes probe-based search latency."""
+        app_client = _make_mock_app_client()
+        app_client.probe_search_latency_ms = AsyncMock(return_value=2500.0)
+        pg_client = _make_mock_pg_client()
+        subject = ChatDBAppSubject(app_client=app_client, pg_client=pg_client)
+
+        obs = await subject.observe()
+        assert obs["endpoint_metrics"]["search_latency_p99_ms"] == 2500.0
+
+    @pytest.mark.asyncio
+    async def test_observe_search_latency_none_is_zero(self):
+        """Verify observe() reports 0.0 when probe fails."""
+        app_client = _make_mock_app_client()
+        app_client.probe_search_latency_ms = AsyncMock(return_value=None)
+        pg_client = _make_mock_pg_client()
+        subject = ChatDBAppSubject(app_client=app_client, pg_client=pg_client)
+
+        obs = await subject.observe()
+        assert obs["endpoint_metrics"]["search_latency_p99_ms"] == 0.0

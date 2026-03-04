@@ -62,11 +62,15 @@ class ChatDBAppSubject:
     # At 5s interval, 12 scrapes = 60s window.
     _WINDOW_SIZE = 12
 
+    # Number of probe results to keep for the search latency rolling window.
+    # At 5s interval, 12 probes = 60s window.
+    _SEARCH_PROBE_WINDOW = 12
+
     def __init__(self, app_client: AppClient, pg_client: PgClient) -> None:
         self._app = app_client
         self._pg = pg_client
         self._bucket_history: list[dict[int, int]] = []
-        self._search_bucket_history: list[dict[int, int]] = []
+        self._search_probe_history: list[float] = []
 
     async def observe(self) -> dict[str, Any]:
         """
@@ -89,7 +93,6 @@ class ChatDBAppSubject:
         endpoint_metrics = await self._safe_endpoint_metrics()
         pool_metrics = await self._safe_pool_metrics()
         histogram_buckets = await self._safe_histogram_buckets()
-        search_histogram_buckets = await self._safe_search_histogram_buckets()
 
         # Compute windowed percentiles from histogram deltas
         if histogram_buckets:
@@ -97,17 +100,9 @@ class ChatDBAppSubject:
             if windowed is not None:
                 endpoint_metrics = endpoint_metrics.model_copy(update=windowed)
 
-        # Compute search-specific windowed percentiles
-        search_p99 = 0.0
-        search_rps = 0.0
-        if search_histogram_buckets:
-            search_windowed = self._compute_windowed_percentiles(
-                search_histogram_buckets,
-                history=self._search_bucket_history,
-            )
-            if search_windowed is not None:
-                search_p99 = search_windowed.get("latency_p99_ms", 0.0)
-                search_rps = search_windowed.get("requests_per_sec", 0.0)
+        # Probe search latency directly (independent of app instrumentation)
+        search_latency_ms = await self._app.probe_search_latency_ms()
+        search_p99 = self._update_search_probes(search_latency_ms)
 
         db_reachable = await self._pg.is_reachable()
 
@@ -176,7 +171,6 @@ class ChatDBAppSubject:
                 "requests_per_sec": endpoint_metrics.requests_per_sec,
                 "error_count_5xx": endpoint_metrics.requests_5xx,
                 "search_latency_p99_ms": search_p99,
-                "search_requests_per_sec": search_rps,
             },
         }
 
@@ -205,12 +199,31 @@ class ChatDBAppSubject:
         except Exception:
             return {}
 
-    async def _safe_search_histogram_buckets(self) -> dict[int, int]:
-        """Get search histogram buckets, returning empty dict on failure."""
-        try:
-            return await self._app.get_search_histogram_buckets()
-        except Exception:
-            return {}
+    def _update_search_probes(self, latency_ms: float | None) -> float:
+        """Update search probe rolling window and return the median latency.
+
+        Args:
+            latency_ms: Latest probe result in ms, or None if probe failed.
+
+        Returns:
+            Median latency from the rolling window, or 0.0 if no data.
+        """
+        if latency_ms is not None:
+            self._search_probe_history.append(latency_ms)
+
+        # Trim to window size
+        while len(self._search_probe_history) > self._SEARCH_PROBE_WINDOW:
+            self._search_probe_history.pop(0)
+
+        if not self._search_probe_history:
+            return 0.0
+
+        # Use median for stability (all probes will be slow when ILIKE is slow)
+        sorted_probes = sorted(self._search_probe_history)
+        mid = len(sorted_probes) // 2
+        if len(sorted_probes) % 2 == 0:
+            return (sorted_probes[mid - 1] + sorted_probes[mid]) / 2
+        return sorted_probes[mid]
 
     def _compute_windowed_percentiles(
         self,
