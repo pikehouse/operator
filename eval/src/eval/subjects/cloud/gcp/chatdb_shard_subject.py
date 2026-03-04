@@ -8,7 +8,6 @@ and online_migration chaos types.
 
 import logging
 import os
-import shlex
 from pathlib import Path
 from typing import Any
 
@@ -20,11 +19,6 @@ from eval.subjects.chat_db_app_shard.subject import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _shell_quote(s: str) -> str:
-    """Quote a string for safe use as a single shell argument."""
-    return shlex.quote(s)
 
 
 class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
@@ -223,13 +217,20 @@ $PSQL -c "ANALYZE messages;"
 echo "DONE: $INSERTED / $TOTAL messages inserted"
 """
 
+        # Write script to VM then execute — avoids quoting issues with
+        # nested quotes going through SSH.
+        remote_script = "/tmp/preseed.sh"
         try:
+            await self.vm.run_command(
+                f"cat > {remote_script} << 'PRESEED_EOF'\n{script}\nPRESEED_EOF",
+                timeout_sec=30.0,
+            )
+            await self.vm.run_command(f"chmod +x {remote_script}", timeout_sec=10.0)
             exit_code, stdout, stderr = await self.vm.run_command(
-                f"bash -c {_shell_quote(script)}",
+                f"bash {remote_script}",
                 timeout_sec=1200.0,  # 20 min for full seeding
             )
             output = stdout or stderr or ""
-            # Log progress lines
             for line in output.splitlines():
                 if line.startswith("PROGRESS:") or line.startswith("DONE:"):
                     logger.info("Pre-seed: %s", line)
