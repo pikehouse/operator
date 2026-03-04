@@ -75,6 +75,17 @@ _metrics = {
     "latency_bucket_1000": 0,
     "latency_bucket_5000": 0,
     "latency_bucket_inf": 0,
+    # Search-specific latency histogram (for search invariant)
+    "search_latency_sum_ms": 0.0,
+    "search_latency_count": 0,
+    "search_latency_bucket_10": 0,
+    "search_latency_bucket_50": 0,
+    "search_latency_bucket_100": 0,
+    "search_latency_bucket_250": 0,
+    "search_latency_bucket_500": 0,
+    "search_latency_bucket_1000": 0,
+    "search_latency_bucket_5000": 0,
+    "search_latency_bucket_inf": 0,
 }
 
 _start_time = time.monotonic()
@@ -204,7 +215,10 @@ async def api_list_conversations():
 async def api_search_messages(q: str = ""):
     if not q.strip():
         return []
+    start = time.monotonic()
     results = await search_messages(_pool, DEFAULT_USER_ID, q.strip())
+    elapsed_ms = (time.monotonic() - start) * 1000
+    _record_search_latency(elapsed_ms)
     return [_serialize(r) for r in results]
 
 
@@ -486,8 +500,40 @@ async def metrics():
         f'chatdb_request_duration_ms_bucket{{le="5000"}} {_metrics["latency_bucket_5000"]}',
         f'chatdb_request_duration_ms_bucket{{le="+Inf"}} {_metrics["latency_bucket_inf"]}',
         "",
+        "# HELP chatdb_search_duration_ms_bucket Search request duration histogram",
+        "# TYPE chatdb_search_duration_ms_bucket histogram",
+        f'chatdb_search_duration_ms_bucket{{le="10"}} {_metrics["search_latency_bucket_10"]}',
+        f'chatdb_search_duration_ms_bucket{{le="50"}} {_metrics["search_latency_bucket_50"]}',
+        f'chatdb_search_duration_ms_bucket{{le="100"}} {_metrics["search_latency_bucket_100"]}',
+        f'chatdb_search_duration_ms_bucket{{le="250"}} {_metrics["search_latency_bucket_250"]}',
+        f'chatdb_search_duration_ms_bucket{{le="500"}} {_metrics["search_latency_bucket_500"]}',
+        f'chatdb_search_duration_ms_bucket{{le="1000"}} {_metrics["search_latency_bucket_1000"]}',
+        f'chatdb_search_duration_ms_bucket{{le="5000"}} {_metrics["search_latency_bucket_5000"]}',
+        f'chatdb_search_duration_ms_bucket{{le="+Inf"}} {_metrics["search_latency_bucket_inf"]}',
+        "",
     ]
     return Response(content="\n".join(lines), media_type="text/plain")
+
+
+def _record_search_latency(elapsed_ms: float) -> None:
+    """Record a search operation's latency in the search-specific histogram."""
+    _metrics["search_latency_sum_ms"] += elapsed_ms
+    _metrics["search_latency_count"] += 1
+    if elapsed_ms <= 10:
+        _metrics["search_latency_bucket_10"] += 1
+    if elapsed_ms <= 50:
+        _metrics["search_latency_bucket_50"] += 1
+    if elapsed_ms <= 100:
+        _metrics["search_latency_bucket_100"] += 1
+    if elapsed_ms <= 250:
+        _metrics["search_latency_bucket_250"] += 1
+    if elapsed_ms <= 500:
+        _metrics["search_latency_bucket_500"] += 1
+    if elapsed_ms <= 1000:
+        _metrics["search_latency_bucket_1000"] += 1
+    if elapsed_ms <= 5000:
+        _metrics["search_latency_bucket_5000"] += 1
+    _metrics["search_latency_bucket_inf"] += 1
 
 
 def _estimate_percentile(pct: float, total: int) -> float:

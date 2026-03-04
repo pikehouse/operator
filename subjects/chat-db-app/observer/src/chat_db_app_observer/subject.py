@@ -66,6 +66,7 @@ class ChatDBAppSubject:
         self._app = app_client
         self._pg = pg_client
         self._bucket_history: list[dict[int, int]] = []
+        self._search_bucket_history: list[dict[int, int]] = []
 
     async def observe(self) -> dict[str, Any]:
         """
@@ -88,12 +89,26 @@ class ChatDBAppSubject:
         endpoint_metrics = await self._safe_endpoint_metrics()
         pool_metrics = await self._safe_pool_metrics()
         histogram_buckets = await self._safe_histogram_buckets()
+        search_histogram_buckets = await self._safe_search_histogram_buckets()
 
         # Compute windowed percentiles from histogram deltas
         if histogram_buckets:
             windowed = self._compute_windowed_percentiles(histogram_buckets)
             if windowed is not None:
                 endpoint_metrics = endpoint_metrics.model_copy(update=windowed)
+
+        # Compute search-specific windowed percentiles
+        search_p99 = 0.0
+        search_rps = 0.0
+        if search_histogram_buckets:
+            search_windowed = self._compute_windowed_percentiles(
+                search_histogram_buckets,
+                history=self._search_bucket_history,
+            )
+            if search_windowed is not None:
+                search_p99 = search_windowed.get("latency_p99_ms", 0.0)
+                search_rps = search_windowed.get("requests_per_sec", 0.0)
+
         db_reachable = await self._pg.is_reachable()
 
         # Only query PG stats if reachable
@@ -160,6 +175,8 @@ class ChatDBAppSubject:
                 "latency_p50_ms": endpoint_metrics.latency_p50_ms,
                 "requests_per_sec": endpoint_metrics.requests_per_sec,
                 "error_count_5xx": endpoint_metrics.requests_5xx,
+                "search_latency_p99_ms": search_p99,
+                "search_requests_per_sec": search_rps,
             },
         }
 
@@ -188,8 +205,17 @@ class ChatDBAppSubject:
         except Exception:
             return {}
 
+    async def _safe_search_histogram_buckets(self) -> dict[int, int]:
+        """Get search histogram buckets, returning empty dict on failure."""
+        try:
+            return await self._app.get_search_histogram_buckets()
+        except Exception:
+            return {}
+
     def _compute_windowed_percentiles(
-        self, current: dict[int, int]
+        self,
+        current: dict[int, int],
+        history: list[dict[int, int]] | None = None,
     ) -> dict[str, float] | None:
         """
         Compute windowed P50/P99 from the delta between the oldest and newest
@@ -198,18 +224,26 @@ class ChatDBAppSubject:
         Using a rolling window (default 12 scrapes = ~60s at 5s interval) instead
         of a single-interval delta avoids noisy percentiles when RPS is low.
         With 2 RPS and a 60s window we get ~120 requests — enough for meaningful P99.
+
+        Args:
+            current: Current histogram bucket snapshot.
+            history: Optional explicit history list to use. If None, uses
+                     self._bucket_history (for general request latency).
         """
-        self._bucket_history.append(current.copy())
+        if history is None:
+            history = self._bucket_history
+
+        history.append(current.copy())
 
         # Keep only the last N scrapes
-        if len(self._bucket_history) > self._WINDOW_SIZE:
-            self._bucket_history = self._bucket_history[-self._WINDOW_SIZE:]
+        while len(history) > self._WINDOW_SIZE:
+            history.pop(0)
 
-        if len(self._bucket_history) < 2:
+        if len(history) < 2:
             return None  # Need at least 2 scrapes for a delta
 
-        oldest = self._bucket_history[0]
-        newest = self._bucket_history[-1]
+        oldest = history[0]
+        newest = history[-1]
 
         # Compute delta buckets across the full window
         bounds = AppClient.HISTOGRAM_BOUNDS
@@ -217,7 +251,8 @@ class ChatDBAppSubject:
 
         if delta_total < 0:
             # App restarted, counters reset — discard history
-            self._bucket_history = [current.copy()]
+            history.clear()
+            history.append(current.copy())
             return None
 
         if delta_total < self._MIN_WINDOW_REQUESTS:
@@ -228,7 +263,12 @@ class ChatDBAppSubject:
             delta = newest.get(bound, 0) - oldest.get(bound, 0)
             delta_buckets.append((bound, max(0, delta)))
 
+        # Estimate RPS from window span (WINDOW_SIZE * 5s interval)
+        window_seconds = (len(history) - 1) * 5.0
+        rps = delta_total / window_seconds if window_seconds > 0 else 0.0
+
         return {
             "latency_p50_ms": _estimate_percentile_from_buckets(0.50, delta_total, delta_buckets),
             "latency_p99_ms": _estimate_percentile_from_buckets(0.99, delta_total, delta_buckets),
+            "requests_per_sec": rps,
         }

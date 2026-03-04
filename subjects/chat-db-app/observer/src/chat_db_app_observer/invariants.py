@@ -81,6 +81,13 @@ TABLE_BLOAT_CONFIG = InvariantConfig(
     severity="warning",
 )
 
+HIGH_SEARCH_LATENCY_CONFIG = InvariantConfig(
+    name="high_search_latency",
+    grace_period=timedelta(seconds=30),
+    threshold=2000.0,  # search P99 > 2000ms
+    severity="warning",
+)
+
 
 class ChatDBAppInvariantChecker:
     """
@@ -143,6 +150,11 @@ class ChatDBAppInvariantChecker:
 
         # 7. Table bloat (write amplification)
         v = self._check_table_bloat(db)
+        if v:
+            violations.append(v)
+
+        # 8. High search latency
+        v = self._check_high_search_latency(metrics)
         if v:
             violations.append(v)
 
@@ -264,6 +276,26 @@ class ChatDBAppInvariantChecker:
             config=config,
             is_violated=is_violated,
             message=f"Table '{worst_table}' has {worst_dead} dead tuples ({worst_ratio:.1f}x live ratio, threshold: {config.threshold:.1f}x)",
+        )
+
+    # Minimum search RPS to trust search P99.
+    _MIN_SEARCH_RPS = 2.0
+
+    def _check_high_search_latency(self, metrics: dict) -> InvariantViolation | None:
+        """Check if search-specific P99 latency exceeds threshold.
+
+        Only fires when search RPS >= _MIN_SEARCH_RPS to avoid noise
+        when no search load is present.
+        """
+        config = HIGH_SEARCH_LATENCY_CONFIG
+        p99 = metrics.get("search_latency_p99_ms", 0.0)
+        rps = metrics.get("search_requests_per_sec", 0.0)
+        is_violated = p99 > config.threshold and rps >= self._MIN_SEARCH_RPS
+
+        return self._check_with_grace_period(
+            config=config,
+            is_violated=is_violated,
+            message=f"Search P99 latency {p99:.1f}ms exceeds threshold {config.threshold:.0f}ms (at {rps:.1f} search RPS)",
         )
 
     def _check_with_grace_period(
