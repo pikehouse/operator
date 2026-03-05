@@ -199,7 +199,7 @@ async def extract_operator_data(
             """
             SELECT id, invariant_name, message, severity, status,
                    first_seen_at, last_seen_at, created_at, resolved_at,
-                   metric_snapshot
+                   metric_snapshot, variant_system_prompt, subject_context
             FROM tickets ORDER BY id
             """
         ).fetchall()
@@ -243,6 +243,15 @@ async def extract_operator_data(
                 "last_seen_at": last["last_seen_at"],
                 "metric_snapshot": ms,
             }
+
+        # Extract effective system prompt from ticket variant data
+        if ticket_rows:
+            for t in ticket_rows:
+                base = t["variant_system_prompt"] or ""
+                ctx = t["subject_context"] or ""
+                if base or ctx:
+                    result["effective_system_prompt"] = (base + "\n\n" + ctx).strip()
+                    break
 
         # Get ALL agent sessions and their reasoning entries
         session_rows = conn.execute(

@@ -509,6 +509,11 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
         except Exception:
             pass
 
+    # Extract effective system prompt from stored operator data
+    effective_system_prompt = None
+    if stored_operator_data:
+        effective_system_prompt = stored_operator_data.get("effective_system_prompt")
+
     # Extract reasoning from commands for display with elapsed time calculation
     commands_with_reasoning = []
     prev_timestamp = None
@@ -609,5 +614,6 @@ async def _render_trial(request: Request, db: EvalDBProtocol, trial_id: int):
             "code_workspace": code_workspace,
             "code_diff": code_diff,
             "db_config_diff": db_config_diff,
+            "effective_system_prompt": effective_system_prompt,
         },
     )

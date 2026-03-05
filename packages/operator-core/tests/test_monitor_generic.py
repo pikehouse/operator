@@ -260,7 +260,7 @@ class TestMonitorLoopAutoResolve:
 
     @pytest.mark.asyncio
     async def test_auto_resolves_cleared_violations(self, tmp_path):
-        """MonitorLoop should auto-resolve tickets when violations clear."""
+        """MonitorLoop should auto-resolve tickets when violations clear and window elapses."""
         subject = MockSubject()
         now = datetime.now()
         violation = InvariantViolation(
@@ -279,6 +279,7 @@ class TestMonitorLoopAutoResolve:
             checker=checker,
             db_path=db_path,
             interval_seconds=1.0,
+            stability_window_sec=0,  # Immediate resolution for backward compat
         )
 
         from operator_core.db.tickets import TicketDB
@@ -294,8 +295,106 @@ class TestMonitorLoopAutoResolve:
             # Clear the violation
             checker.violations = []
 
-            # Second cycle: violation cleared - should auto-resolve
+            # Second cycle: violation cleared - should auto-resolve (window=0)
             await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.RESOLVED
+
+    @pytest.mark.asyncio
+    async def test_stability_window_prevents_premature_resolve(self, tmp_path):
+        """Ticket stays open when violations clear but stability window hasn't elapsed."""
+        subject = MockSubject()
+        now = datetime.now()
+        violation = InvariantViolation(
+            invariant_name="test_invariant",
+            message="Test violation",
+            first_seen=now,
+            last_seen=now,
+            store_id="node-1",
+            severity="warning",
+        )
+        checker = MockChecker(violations=[violation])
+        db_path = tmp_path / "test.db"
+
+        loop = MonitorLoop(
+            subject=subject,
+            checker=checker,
+            db_path=db_path,
+            interval_seconds=1.0,
+            stability_window_sec=300,  # 5 minutes - won't elapse during test
+        )
+
+        from operator_core.db.tickets import TicketDB
+        from operator_core.monitor.types import TicketStatus
+
+        async with TicketDB(db_path) as db:
+            # First cycle: violation present - creates ticket
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.OPEN
+
+            # Clear the violation
+            checker.violations = []
+
+            # Second cycle: violation cleared but window hasn't elapsed
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.OPEN  # Still open!
+
+    @pytest.mark.asyncio
+    async def test_stability_window_resolves_after_elapsed(self, tmp_path):
+        """Ticket resolves after stability window elapses."""
+        from unittest.mock import patch
+        from datetime import timedelta
+
+        subject = MockSubject()
+        now = datetime.now()
+        violation = InvariantViolation(
+            invariant_name="test_invariant",
+            message="Test violation",
+            first_seen=now,
+            last_seen=now,
+            store_id="node-1",
+            severity="warning",
+        )
+        checker = MockChecker(violations=[violation])
+        db_path = tmp_path / "test.db"
+
+        loop = MonitorLoop(
+            subject=subject,
+            checker=checker,
+            db_path=db_path,
+            interval_seconds=1.0,
+            stability_window_sec=60,
+        )
+
+        from operator_core.db.tickets import TicketDB
+        from operator_core.monitor.types import TicketStatus
+
+        async with TicketDB(db_path) as db:
+            # First cycle: violation present - creates ticket
+            await loop._check_cycle(db)
+            tickets = await db.list_tickets()
+            assert len(tickets) == 1
+            assert tickets[0].status == TicketStatus.OPEN
+
+            # Clear the violation
+            checker.violations = []
+
+            # Simulate time passing beyond the stability window
+            future_time = datetime.now() + timedelta(seconds=120)
+            with patch("operator_core.db.tickets.datetime") as mock_dt:
+                mock_dt.now.return_value = future_time
+                mock_dt.fromisoformat = datetime.fromisoformat
+
+                resolved_count = await db.auto_resolve_cleared(
+                    set(), stability_window_sec=60
+                )
+                assert resolved_count == 1
+
             tickets = await db.list_tickets()
             assert len(tickets) == 1
             assert tickets[0].status == TicketStatus.RESOLVED

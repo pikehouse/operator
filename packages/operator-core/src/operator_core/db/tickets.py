@@ -321,15 +321,19 @@ class TicketDB:
     async def auto_resolve_cleared(
         self,
         current_violation_keys: set[str],
+        stability_window_sec: float = 60.0,
     ) -> int:
         """
         Auto-resolve open tickets whose violations have cleared.
 
         Resolves tickets whose violation_key is NOT in the current set
-        of active violations. Respects the held flag.
+        of active violations AND whose last_seen_at is older than the
+        stability window. This prevents false resolution when a container
+        restart temporarily clears metrics.
 
         Args:
             current_violation_keys: Set of currently active violation keys
+            stability_window_sec: Seconds the violation must be absent before resolving
 
         Returns:
             Number of tickets that were resolved
@@ -340,27 +344,29 @@ class TicketDB:
         # (operator-override tickets have no matching violation key to keep them alive)
         async with self._conn.execute(
             """
-            SELECT id, violation_key FROM tickets
+            SELECT id, violation_key, last_seen_at FROM tickets
             WHERE status != 'resolved' AND held = 0
               AND type != 'operator-override'
             """,
         ) as cursor:
             rows = await cursor.fetchall()
 
-        # Resolve tickets whose violations have cleared
+        # Resolve tickets whose violations have cleared and stayed clear
         resolved_count = 0
         for row in rows:
             if row["violation_key"] not in current_violation_keys:
-                await self._conn.execute(
-                    """
-                    UPDATE tickets SET
-                        status = 'resolved',
-                        resolved_at = ?
-                    WHERE id = ?
-                    """,
-                    (now.isoformat(), row["id"]),
-                )
-                resolved_count += 1
+                last_seen = datetime.fromisoformat(row["last_seen_at"])
+                if (now - last_seen).total_seconds() >= stability_window_sec:
+                    await self._conn.execute(
+                        """
+                        UPDATE tickets SET
+                            status = 'resolved',
+                            resolved_at = ?
+                        WHERE id = ?
+                        """,
+                        (now.isoformat(), row["id"]),
+                    )
+                    resolved_count += 1
 
         await self._conn.commit()
         return resolved_count

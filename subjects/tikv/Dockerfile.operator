@@ -11,6 +11,14 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends docker-ce-cli && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install gcloud CLI (agent needs gsutil / gcloud for GCS blob storage)
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+       > /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+       | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    apt-get update && apt-get install -y --no-install-recommends google-cloud-cli && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Install Node.js 22 LTS (required by Claude Code CLI bundled with claude-agent-sdk)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \

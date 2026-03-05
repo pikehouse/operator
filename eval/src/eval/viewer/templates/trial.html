@@ -407,4 +407,15 @@
 </div>
 {% endif %}
 
+{% if effective_system_prompt %}
+<details class="bg-white border border-stone-200 rounded-lg mb-5">
+    <summary class="p-5 cursor-pointer text-sm font-semibold uppercase tracking-wide text-stone-500 hover:text-stone-700 transition-colors select-none">
+        Effective System Prompt
+    </summary>
+    <div class="px-5 pb-5">
+        <pre class="bg-stone-800 text-stone-300 rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">{{ effective_system_prompt }}</pre>
+    </div>
+</details>
+{% endif %}
+
 {% endblock %}

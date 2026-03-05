@@ -62,6 +62,7 @@ class MonitorLoop:
         db_path: Path,
         interval_seconds: float = 30.0,
         subject_context: str | None = None,
+        stability_window_sec: float = 60.0,
     ) -> None:
         """
         Initialize monitor loop.
@@ -72,12 +73,14 @@ class MonitorLoop:
             db_path: Path to SQLite database file
             interval_seconds: Seconds between check cycles (default 30)
             subject_context: Optional subject-specific agent prompt context
+            stability_window_sec: Seconds violation must be absent before auto-resolving
         """
         self.subject = subject
         self.checker = checker
         self.db_path = db_path
         self.interval = interval_seconds
         self._subject_context = subject_context
+        self._stability_window = stability_window_sec
         self._shutdown = asyncio.Event()
 
         # Stats for heartbeat
@@ -173,7 +176,9 @@ class MonitorLoop:
         # A failed observe must NOT resolve tickets — we simply don't know.
         if observe_ok:
             current_keys = {make_violation_key(v) for v in violations}
-            resolved_count = await db.auto_resolve_cleared(current_keys)
+            resolved_count = await db.auto_resolve_cleared(
+                current_keys, stability_window_sec=self._stability_window
+            )
             if resolved_count > 0:
                 print(f"Auto-resolved {resolved_count} ticket(s)")
 

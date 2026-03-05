@@ -63,6 +63,9 @@ def run_monitor(
         None, "--subject-context-extra", envvar="SUBJECT_CONTEXT_EXTRA",
         help="Extra context appended to the agent prompt (e.g., workspace rebuild commands)"
     ),
+    stability_window: float = typer.Option(
+        60.0, "--stability-window", help="Seconds violation must be absent before auto-resolving"
+    ),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """
@@ -162,6 +165,7 @@ def run_monitor(
                 db_path=db_path,
                 interval_seconds=interval,
                 subject_context=subject_context,
+                stability_window_sec=stability_window,
             )
 
             await loop.run()
