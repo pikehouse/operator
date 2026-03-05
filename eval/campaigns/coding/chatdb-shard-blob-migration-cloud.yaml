@@ -1,0 +1,29 @@
+name: chatdb-shard-blob-migration
+subjects: [chat-db-app-shard]
+
+# Combined blob_storage + online_migration: 4-phase continuous escalation.
+# Phase 1: Implement horizontal sharding (15 min)
+# Phase 2: Fix cross-shard fan-out (30 min)
+# Phase 3: Move BYTEA attachments to GCS (60 min)
+# Phase 4: Online full-text search migration across shards (60 min)
+continuous: true
+
+chaos_types:
+  - type: db_sharding_direct
+    resolution_timeout: 900
+  - type: shard_fanout
+    resolution_timeout: 1800
+  - type: blob_storage
+    resolution_timeout: 3600
+  - type: online_migration
+    resolution_timeout: 3600
+
+trials_per_combination: 1
+parallel: 1
+cooldown_seconds: 30
+include_baseline: false
+
+cloud:
+  provider: gcp
+  operator:
+    enabled: true
