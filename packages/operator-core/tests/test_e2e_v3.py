@@ -433,7 +433,8 @@ class TestE2EFlow:
         subject = MockSubject(healthy=False)
         checker = MockChecker(subject)
         loop = MonitorLoop(
-            subject=subject, checker=checker, db_path=db_path, interval_seconds=1.0
+            subject=subject, checker=checker, db_path=db_path, interval_seconds=1.0,
+            stability_window_sec=0,
         )
 
         async with TicketDB(db_path) as db:
