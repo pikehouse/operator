@@ -55,6 +55,7 @@ def _enrich_trial(trial: Trial) -> dict[str, Any]:
     prev_timestamp = None
     for cmd in raw_commands:
         if isinstance(cmd, dict):
+            tool_name = cmd.get("tool_name", "")
             tool_params = cmd.get("tool_params", "")
             command_str = ""
             reasoning = ""
@@ -62,6 +63,22 @@ def _enrich_trial(trial: Trial) -> dict[str, Any]:
                 params = json.loads(tool_params) if isinstance(tool_params, str) else tool_params
                 command_str = params.get("command", "")
                 reasoning = params.get("reasoning", "")
+                # For non-Bash tools, build a descriptive command string
+                if not command_str and tool_name:
+                    if tool_name == "Read":
+                        command_str = f"[Read] {params.get('file_path', '')}"
+                    elif tool_name == "Edit":
+                        command_str = f"[Edit] {params.get('file_path', '')}"
+                    elif tool_name == "Write":
+                        command_str = f"[Write] {params.get('file_path', '')}"
+                    elif tool_name == "Glob":
+                        command_str = f"[Glob] {params.get('pattern', '')}"
+                    elif tool_name == "Grep":
+                        command_str = f"[Grep] {params.get('pattern', '')} in {params.get('path', '.')}"
+                    elif tool_name == "TodoWrite":
+                        command_str = f"[TodoWrite]"
+                    else:
+                        command_str = f"[{tool_name}]"
             except (json.JSONDecodeError, TypeError):
                 command_str = str(cmd)
             timestamp = cmd.get("timestamp", "")
@@ -103,28 +120,37 @@ def _enrich_trial(trial: Trial) -> dict[str, Any]:
                 "status": sess.get("status", ""),
                 "outcome_summary": sess.get("outcome_summary", ""),
             }
-        if "reasoning_entries" in stored:
-            prev_ts = None
-            for e in stored["reasoning_entries"]:
-                reasoning = None
-                if e.get("entry_type") == "tool_call" and e.get("tool_params"):
-                    try:
-                        params = json.loads(e["tool_params"]) if isinstance(e["tool_params"], str) else e["tool_params"]
-                        reasoning = params.get("reasoning")
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                curr_ts = e.get("timestamp")
-                elapsed = compute_duration_seconds(prev_ts or "", curr_ts) if curr_ts and prev_ts else None
-                if curr_ts:
-                    prev_ts = curr_ts
-                reasoning_entries.append({
-                    "entry_type": e.get("entry_type", ""),
-                    "content": e.get("content", ""),
-                    "tool_name": e.get("tool_name"),
-                    "timestamp": e.get("timestamp"),
-                    "reasoning": reasoning,
-                    "elapsed_seconds": round(elapsed, 1) if elapsed is not None else None,
-                })
+        # Collect reasoning entries from all sessions (not just last)
+        all_entries = []
+        sessions = stored.get("agent_sessions", [])
+        if sessions:
+            for s in sessions:
+                all_entries.extend(s.get("reasoning_entries", []))
+        # Fall back to top-level reasoning_entries if no per-session data
+        if not all_entries:
+            all_entries = stored.get("reasoning_entries", [])
+
+        prev_ts = None
+        for e in all_entries:
+            reasoning = None
+            if e.get("entry_type") == "tool_call" and e.get("tool_params"):
+                try:
+                    params = json.loads(e["tool_params"]) if isinstance(e["tool_params"], str) else e["tool_params"]
+                    reasoning = params.get("reasoning")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            curr_ts = e.get("timestamp")
+            elapsed = compute_duration_seconds(prev_ts or "", curr_ts) if curr_ts and prev_ts else None
+            if curr_ts:
+                prev_ts = curr_ts
+            reasoning_entries.append({
+                "entry_type": e.get("entry_type", ""),
+                "content": e.get("content", ""),
+                "tool_name": e.get("tool_name"),
+                "timestamp": e.get("timestamp"),
+                "reasoning": reasoning,
+                "elapsed_seconds": round(elapsed, 1) if elapsed is not None else None,
+            })
 
     # Code diff
     code_diff = None
@@ -524,7 +550,7 @@ _JS = """\
   // Campaign notes
   if (campaign.notes) {
     const notesEl = document.getElementById('campaign-notes');
-    notesEl.innerHTML = `<details><summary>Campaign Notes</summary><div style="white-space:pre-wrap;font-size:0.85rem;color:var(--text-secondary);padding:8px 0">${esc(campaign.notes)}</div></details>`;
+    notesEl.innerHTML = `<details open><summary>Campaign Notes</summary><div style="white-space:pre-wrap;font-size:0.85rem;color:var(--text-secondary);padding:8px 0">${esc(campaign.notes)}</div></details>`;
     notesEl.style.display = 'block';
   }
 
