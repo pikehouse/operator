@@ -91,12 +91,12 @@ _ONLINE_MIGRATION_LOAD_PROFILE = {
 }
 
 SHARD_CHAOS_PROFILES = {
-    "db_sharding": dict(_SHARD_LOAD_PROFILE),
-    "db_sharding_nudge": dict(_SHARD_LOAD_PROFILE),
-    "db_sharding_direct": dict(_SHARD_LOAD_PROFILE),
-    "shard_fanout": dict(_SHARD_FANOUT_LOAD_PROFILE),
-    "blob_storage": dict(_BLOB_STORAGE_LOAD_PROFILE),
-    "online_migration": dict(_ONLINE_MIGRATION_LOAD_PROFILE),
+    "db_sharding": _SHARD_LOAD_PROFILE,
+    "db_sharding_nudge": _SHARD_LOAD_PROFILE,
+    "db_sharding_direct": _SHARD_LOAD_PROFILE,
+    "shard_fanout": _SHARD_FANOUT_LOAD_PROFILE,
+    "blob_storage": _BLOB_STORAGE_LOAD_PROFILE,
+    "online_migration": _ONLINE_MIGRATION_LOAD_PROFILE,
 }
 
 SHARD_CHAOS_CATALOG = {
@@ -404,8 +404,10 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
 
         self._chaos_load_active = True
 
+        no_preseed_types = ("shard_fanout", "blob_storage", "online_migration")
+        meta_type = chaos_type if chaos_type in no_preseed_types else "db_sharding"
         return {
-            "chaos_type": "db_sharding",
+            "chaos_type": meta_type,
             "original_chaos_type": chaos_type,
             "load_params": profile,
         }
@@ -503,7 +505,7 @@ class ChatDBAppShardEvalSubject(ChatDBAppEvalSubject):
             return
         chaos_type = chaos_metadata.get("chaos_type", "")
         original = chaos_metadata.get("original_chaos_type", chaos_type)
-        if original not in SHARD_CHAOS_PROFILES and chaos_type not in ("db_sharding", "shard_fanout", "blob_storage", "online_migration"):
+        if original not in SHARD_CHAOS_PROFILES:
             await super().cleanup_chaos(chaos_metadata)
             return
         from eval.subjects.chat_db_app.subject import LIGHT_LOAD

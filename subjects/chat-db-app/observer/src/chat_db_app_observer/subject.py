@@ -11,6 +11,7 @@ pg_stat_database.
 
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
 from chat_db_app_observer.app_client import AppClient
@@ -69,8 +70,8 @@ class ChatDBAppSubject:
     def __init__(self, app_client: AppClient, pg_client: PgClient) -> None:
         self._app = app_client
         self._pg = pg_client
-        self._bucket_history: list[dict[int, int]] = []
-        self._search_probe_history: list[float] = []
+        self._bucket_history: deque[dict[int, int]] = deque(maxlen=self._WINDOW_SIZE)
+        self._search_probe_history: deque[float] = deque(maxlen=self._SEARCH_PROBE_WINDOW)
 
     async def observe(self) -> dict[str, Any]:
         """
@@ -211,10 +212,6 @@ class ChatDBAppSubject:
         if latency_ms is not None:
             self._search_probe_history.append(latency_ms)
 
-        # Trim to window size
-        while len(self._search_probe_history) > self._SEARCH_PROBE_WINDOW:
-            self._search_probe_history.pop(0)
-
         if not self._search_probe_history:
             return 0.0
 
@@ -228,7 +225,7 @@ class ChatDBAppSubject:
     def _compute_windowed_percentiles(
         self,
         current: dict[int, int],
-        history: list[dict[int, int]] | None = None,
+        history: deque[dict[int, int]] | None = None,
     ) -> dict[str, float] | None:
         """
         Compute windowed P50/P99 from the delta between the oldest and newest
@@ -247,10 +244,6 @@ class ChatDBAppSubject:
             history = self._bucket_history
 
         history.append(current.copy())
-
-        # Keep only the last N scrapes
-        while len(history) > self._WINDOW_SIZE:
-            history.pop(0)
 
         if len(history) < 2:
             return None  # Need at least 2 scrapes for a delta

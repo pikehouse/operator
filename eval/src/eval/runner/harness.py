@@ -5,14 +5,13 @@ import json
 import sqlite3
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
 from rich.console import Console
 
-from eval.types import Campaign, EvalSubject, Trial, VariantConfig
+from eval.types import Campaign, EvalSubject, Trial, VariantConfig, now
 from eval.runner.db import EvalDB
 from eval.runner.campaign import CampaignConfig, expand_campaign_matrix
 from eval.variants import get_variant
@@ -38,11 +37,6 @@ class TrialStats:
         """Record a failed trial (thread-safe)."""
         async with self._lock:
             self.failed += 1
-
-
-def now() -> str:
-    """Return current UTC timestamp in ISO8601 format."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 def get_repo_info() -> tuple[str, bool]:
@@ -652,14 +646,14 @@ async def run_trial(
     )
 
 
-def capture_deployment_topology(
+async def capture_deployment_topology(
     subject: EvalSubject,
     mode: str = "local",
 ) -> str:
     """Capture deployment topology from a subject instance.
 
-    Calls subject.get_topology() (duck-typed) and composes the full
-    topology including operator/eval processes.
+    Calls subject.get_topology() (duck-typed, sync or async) and composes
+    the full topology including operator/eval processes.
 
     Args:
         subject: EvalSubject with optional get_topology() method
@@ -673,12 +667,10 @@ def capture_deployment_topology(
 
     try:
         result = subject.get_topology()
-        # Handle both sync and async get_topology
         if asyncio.iscoroutine(result):
-            # Can't await in sync context — return empty and let caller handle
-            return ""
-
-        topology = result
+            topology = await result
+        else:
+            topology = result
 
         if mode == "local":
             # Add host processes (eval runner + operator)
@@ -701,34 +693,7 @@ def capture_deployment_topology(
                 {"from": "eval-runner", "to": "docker", "label": "chaos inject"},
             ]
 
-        return json.dumps(topology)
-    except Exception as e:
-        console.print(f"[dim]Topology capture failed: {e}[/dim]")
-        return ""
-
-
-async def capture_deployment_topology_async(
-    subject: EvalSubject,
-    mode: str = "cloud-gcp",
-) -> str:
-    """Capture deployment topology from a cloud subject instance.
-
-    Async version for cloud subjects whose get_topology() is async.
-
-    Args:
-        subject: EvalSubject with optional async get_topology() method
-        mode: Execution mode
-
-    Returns:
-        JSON string of topology data, or empty string if unavailable
-    """
-    if not hasattr(subject, "get_topology"):
-        return ""
-
-    try:
-        topology = await subject.get_topology()
-
-        if mode == "cloud-gcp":
+        elif mode == "cloud-gcp":
             # Add eval-worker host
             eval_worker_entry = {
                 "id": "eval-worker",
@@ -756,6 +721,10 @@ async def capture_deployment_topology_async(
     except Exception as e:
         console.print(f"[dim]Topology capture failed: {e}[/dim]")
         return ""
+
+
+# Backward-compat alias for worker.py imports
+capture_deployment_topology_async = capture_deployment_topology
 
 
 async def run_campaign(
@@ -949,7 +918,7 @@ async def run_campaign_from_config(
     # Capture deployment topology from instance 0
     try:
         _, inst0 = await pool.acquire()
-        topology_json = capture_deployment_topology(inst0, mode="local")
+        topology_json = await capture_deployment_topology(inst0, mode="local")
         pool.release(0)
         if topology_json:
             # Update campaign with topology

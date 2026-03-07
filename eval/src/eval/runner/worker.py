@@ -21,7 +21,7 @@ from rich.console import Console
 from eval.runner.db_postgres import PostgresDB
 from eval.runner.queue import WorkQueue, WorkItem
 from eval.subjects.factory import SubjectRegistry
-from eval.types import Campaign, Trial, VariantConfig
+from eval.types import Campaign, Trial, VariantConfig, now
 from eval.variants import get_variant
 
 logger = logging.getLogger(__name__)
@@ -321,11 +321,7 @@ class Worker:
         Returns:
             Trial record with populated metrics
         """
-        from datetime import datetime, timezone
         import json
-
-        def now() -> str:
-            return datetime.now(timezone.utc).isoformat()
 
         async def vm_now() -> str:
             """Get current UTC time from the VM's clock.

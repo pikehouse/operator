@@ -9,6 +9,11 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 
+def now() -> str:
+    """Return current UTC timestamp in ISO8601 format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 def safe_json_loads(data: str | None, default=None):
     """Parse JSON string, handling double-encoded values from JSONB.
 

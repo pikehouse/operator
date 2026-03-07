@@ -141,7 +141,7 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
         """Clean up shard chaos — remove the chaos loadgen container."""
         chaos_type = chaos_metadata.get("chaos_type", "")
         original = chaos_metadata.get("original_chaos_type", chaos_type)
-        if original in SHARD_CHAOS_PROFILES or chaos_type in ("db_sharding", "shard_fanout", "blob_storage", "online_migration"):
+        if original in SHARD_CHAOS_PROFILES:
             try:
                 container = chaos_metadata.get("chaos_container", self._chaos_loadgen_name)
                 await self.vm.run_command(f"docker rm -f {container}")
