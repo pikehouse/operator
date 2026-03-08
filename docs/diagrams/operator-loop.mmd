@@ -1,0 +1,30 @@
+flowchart LR
+    subgraph Subject["Subject"]
+        direction TB
+        S["Distributed System\n(TiKV, PostgreSQL, ...)"]
+    end
+
+    subgraph Monitor["Monitor"]
+        direction TB
+        O["observe()"] --> C["check invariants"]
+    end
+
+    subgraph Tickets["Tickets"]
+        direction TB
+        T["SQLite / PostgreSQL"]
+    end
+
+    subgraph Agent["Agent"]
+        direction TB
+        D["diagnose"] --> F["fix via shell"]
+    end
+
+    Subject -->|"state"| Monitor
+    Monitor -->|"violations"| Tickets
+    Tickets -->|"open tickets"| Agent
+    Agent -->|"shell commands"| Subject
+
+    style Subject fill:#e8f4f8,stroke:#2196F3
+    style Monitor fill:#fff3e0,stroke:#FF9800
+    style Tickets fill:#fce4ec,stroke:#E91E63
+    style Agent fill:#e8f5e9,stroke:#4CAF50

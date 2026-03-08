@@ -1,0 +1,16 @@
+flowchart LR
+    R["Reset\nsubject"] --> I["Inject\nchaos"]
+    I --> Det["Wait for\ndetection"]
+    Det --> Res["Wait for\nresolution"]
+    Res --> S["Score\ntrial"]
+    S --> Cl["Cleanup\nchaos"]
+
+    Det -.-|"time-to-detect"| I
+    Res -.-|"time-to-resolve"| I
+
+    style R fill:#e8f5e9,stroke:#4CAF50
+    style I fill:#fce4ec,stroke:#E91E63
+    style Det fill:#fff3e0,stroke:#FF9800
+    style Res fill:#fff3e0,stroke:#FF9800
+    style S fill:#e8f4f8,stroke:#2196F3
+    style Cl fill:#f3e5f5,stroke:#9C27B0

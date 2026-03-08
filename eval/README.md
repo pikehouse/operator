@@ -1,6 +1,17 @@
-# Eval - Chaos Engineering Framework
+# Eval — Chaos Engineering Framework
 
-Runs campaigns of trials where chaos is injected into a test subject and an autonomous operator agent attempts to diagnose and resolve the problem.
+Runs **campaigns** of **trials** to measure how well the operator detects and resolves infrastructure problems.
+
+<p align="center">
+  <img src="../docs/diagrams/eval-trial.svg" alt="Trial lifecycle: reset, inject chaos, detect, resolve, score" width="700">
+</p>
+
+## Concepts
+
+- **Campaign** — a matrix of (subject x chaos_type x trials_per_combination). Defined in YAML, produces a set of trials.
+- **Trial** — one execution cycle: reset subject, inject chaos, wait for detection, wait for resolution, score the outcome.
+- **Variant** — agent configuration (model, system prompt, tools). Used for A/B testing.
+- **Scoring** — time-to-detect, time-to-resolve, win rate, command analysis.
 
 ## Prerequisites
 
@@ -9,63 +20,137 @@ Runs campaigns of trials where chaos is injected into a test subject and an auto
 - `uv` package manager
 - `ANTHROPIC_API_KEY` set in environment (or in `.env` at repo root)
 
-## Running Local Campaigns
-
-Local campaigns run against Docker Compose clusters on your machine. No cloud setup needed.
-
-### Quick start: TiKV smoke test
+## Quick Start
 
 ```bash
 cd eval
+
+# Run a smoke test (3 trials, ~5 min)
 uv run eval run campaign campaigns/smoke-tests/tikv-smoke.yaml
+
+# Run a single trial
+uv run eval run --subject tikv --chaos node_kill --trials 1
+
+# View results
+uv run eval list
+uv run eval analyze <campaign_id>
 ```
 
-This runs 1 trial each of `node_kill`, `latency`, and `network_partition` against a local TiKV cluster. The harness starts Docker Compose, runs the operator, injects chaos, waits for detection and resolution, and records results.
+## Campaign Reference
 
-### Available local campaigns
+### Smoke Tests
 
-| Campaign | Subject | What it tests |
-|----------|---------|---------------|
-| `smoke-tests/tikv-smoke.yaml` | tikv | node_kill, latency, network_partition (1 trial each) |
-| `operations/tikv-node-kill.yaml` | tikv | node_kill only (1 trial) |
-| `operations/tikv-all-chaos-local.yaml` | tikv | All 8 local-safe chaos types (3 trials each, + baseline) |
-| `operations/tikv-cascading-failures.yaml` | tikv | pd_leader_kill, node_kill (3 trials each) |
-| `operations/tikv-diagnostic-difficulty.yaml` | tikv | process_pause, packet_loss, asymmetric_partition (3 trials each) |
-| `operations/tikv-subtle-gradual.yaml` | tikv | leader_concentration, process_pause (3 trials each) |
-| `coding/chatdb-code-fix.yaml` | chat-db-app | load_pressure (3 trials) |
-| `coding/chatdb-missing-index.yaml` | chat-db-app | missing_index (3 trials) |
-| `coding/chatdb-pool-exhaustion.yaml` | chat-db-app | pool_exhaustion (3 trials) |
-| `coding/chatdb-streaming-txn.yaml` | chat-db-app | streaming_txn (3 trials) |
-| `coding/chatdb-counter-race.yaml` | chat-db-app | counter_race (3 trials) |
-| `coding/chatdb-all-defects.yaml` | chat-db-app | all 4 per-defect types (3 trials each) |
-| `coding/chatdb-continuous-defects.yaml` | chat-db-app | missing_index, pool_exhaustion, streaming_txn — continuous mode (no reset between trials) |
-| `coding/chatdb-db-sharding.yaml` | chat-db-app-shard | db_sharding — 2M messages on constrained PG, requires horizontal sharding (2 trials, 15min timeout) |
-| `coding/chatdb-shard-baseline.yaml` | chat-db-app-shard | db_sharding baseline prompt — passive "consider horizontal scaling" (2 trials, 15min timeout) |
-| `coding/chatdb-shard-nudge.yaml` | chat-db-app-shard | db_sharding_nudge — narrative prompt that closes code escape hatches (2 trials, 15min timeout) |
-| `coding/chatdb-shard-direct.yaml` | chat-db-app-shard | db_sharding_direct — explicit "implement sharding" mission prompt (2 trials, 15min timeout) |
+| Campaign | Subject | Chaos types |
+|----------|---------|-------------|
+| `smoke-tests/tikv-smoke.yaml` | tikv | node_kill, latency, network_partition |
+| `smoke-tests/tikv-cloud-smoke.yaml` | tikv | node_kill (cloud) |
+| `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure (cloud) |
 
-### Running any local campaign
+### Operations — TiKV
+
+| Campaign | Chaos types | Notes |
+|----------|-------------|-------|
+| `operations/tikv-node-kill.yaml` | node_kill | Single type, 1 trial |
+| `operations/tikv-cascading-failures.yaml` | pd_leader_kill, node_kill | Control plane + data node |
+| `operations/tikv-diagnostic-difficulty.yaml` | process_pause, packet_loss, asymmetric_partition | Hard-to-diagnose faults |
+| `operations/tikv-subtle-gradual.yaml` | leader_concentration, process_pause | Subtle performance degradation |
+| `operations/tikv-all-chaos-local.yaml` | All 9 local chaos types | 3 trials each + baseline |
+| `operations/tikv-all-chaos-cloud.yaml` | All 10 chaos types incl. disk_pressure | 3 trials each + baseline (cloud) |
+| `operations/tikv-cloud-exotic-chaos.yaml` | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration | Cloud exotic types |
+| `operations/tikv-cloud-latency-test.yaml` | latency | Cloud latency test |
+
+### Coding — Chat-DB-App Core Defects
+
+| Campaign | Chaos types | Notes |
+|----------|-------------|-------|
+| `coding/chatdb-code-fix.yaml` | load_pressure | Legacy load test |
+| `coding/chatdb-all-defects.yaml` | missing_index, pool_exhaustion, streaming_txn, counter_race | All 4 core defects |
+| `coding/chatdb-missing-index.yaml` | missing_index | Sequential scan on messages |
+| `coding/chatdb-pool-exhaustion.yaml` | pool_exhaustion | Unbounded pool hits max_connections |
+| `coding/chatdb-streaming-txn.yaml` | streaming_txn | Long-held transactions |
+| `coding/chatdb-counter-race.yaml` | counter_race | Read-modify-write race |
+| `coding/chatdb-correlated-subquery.yaml` | correlated_subquery | N+1 query pattern |
+| `coding/chatdb-fulltext-search.yaml` | fulltext_search | Missing full-text index |
+| `coding/chatdb-read-scale.yaml` | read_scale | Read replica needed |
+| `coding/chatdb-unbounded-results.yaml` | unbounded_results | Missing pagination |
+| `coding/chatdb-write-amplification.yaml` | write_amplification | Excessive writes |
+| `coding/chatdb-write-contention.yaml` | write_contention | Lock contention |
+
+### Coding — Chat-DB-App Notification Subsystem
+
+| Campaign | Chaos types |
+|----------|-------------|
+| `coding/chatdb-notification-cleanup.yaml` | notification_cleanup |
+| `coding/chatdb-notification-counter.yaml` | notification_counter |
+| `coding/chatdb-notification-fanout.yaml` | notification_fanout |
+| `coding/chatdb-notification-mark-read.yaml` | notification_mark_read |
+| `coding/chatdb-notification-n-plus-one.yaml` | notification_n_plus_one |
+| `coding/chatdb-notification-payload.yaml` | notification_payload |
+| `coding/chatdb-notification-poll-idle.yaml` | notification_poll_idle |
+| `coding/chatdb-notification-realtime.yaml` | notification_realtime |
+| `coding/chatdb-notification-serialize.yaml` | notification_serialize |
+
+### Coding — Chat-DB-App Continuous/Evolution
+
+| Campaign | Chaos types | Notes |
+|----------|-------------|-------|
+| `coding/chatdb-continuous-defects.yaml` | missing_index, pool_exhaustion, streaming_txn | No reset between trials |
+| `coding/chatdb-continuous-evolution.yaml` | 18 chaos types stacked | Full evolution run, continuous |
+| `coding/chatdb-cloud-continuous-evolution.yaml` | 18 chaos types stacked | Cloud variant of above |
+
+### Coding — Chat-DB-App-Shard (Horizontal Scaling)
+
+| Campaign | Chaos types | Notes |
+|----------|-------------|-------|
+| `coding/chatdb-db-sharding.yaml` | db_sharding | 15min timeout |
+| `coding/chatdb-db-sharding-cloud.yaml` | db_sharding | Cloud variant |
+| `coding/chatdb-shard-baseline.yaml` | db_sharding | Passive "consider scaling" prompt |
+| `coding/chatdb-shard-nudge.yaml` | db_sharding_nudge | Narrative prompt, closes escape hatches |
+| `coding/chatdb-shard-direct.yaml` | db_sharding_direct | Explicit "implement sharding" prompt |
+| `coding/chatdb-shard-gradient-cloud.yaml` | db_sharding, db_sharding_nudge, db_sharding_direct | Prompt gradient A/B test (cloud) |
+| `coding/chatdb-shard-escalation-cloud.yaml` | db_sharding_direct, shard_fanout, blob_storage, online_migration | 4-phase continuous (cloud) |
+| `coding/chatdb-shard-escalation-opus-cloud.yaml` | db_sharding_direct, shard_fanout, blob_storage, online_migration | 4-phase with Opus variant (cloud) |
+| `coding/chatdb-shard-blob-cloud.yaml` | db_sharding_direct, shard_fanout, blob_storage | 3-phase continuous (cloud) |
+| `coding/chatdb-shard-migration-cloud.yaml` | db_sharding_direct, shard_fanout, blob_storage, online_migration | Full 4-phase (cloud) |
+| `coding/chatdb-shard-blob-migration-cloud.yaml` | db_sharding_direct, shard_fanout, blob_storage, online_migration | 4-phase, longer timeouts (cloud) |
+
+### Coding — Chat-DB-App Cloud
+
+| Campaign | Chaos types | Notes |
+|----------|-------------|-------|
+| `coding/chatdb-cloud-all-defects.yaml` | missing_index, pool_exhaustion, streaming_txn, counter_race | Cloud variant |
+| `coding/chatdb-cloud-load-stress.yaml` | load_pressure | 50 users, 0.6 stream ratio (cloud) |
+| `coding/chatdb-cloud-pool-exhaustion.yaml` | pool_exhaustion | Cloud variant |
+| `coding/chatdb-cloud-debug-edit.yaml` | debug_code_edit | Inject bugs into app code (cloud) |
+
+### Debug
+
+| Campaign | Subject | Notes |
+|----------|---------|-------|
+| `debug/chatdb-notification-validation.yaml` | chat-db-app | 10 notification + query chaos types |
+| `debug/chatdb-shard-retry-nudge-direct.yaml` | chat-db-app-shard | Nudge + direct prompt retry |
+| `debug/chatdb-shard-blob-smoke.yaml` | chat-db-app-shard | Short blob timeout (300s) |
+| `debug/chatdb-shard-migration-smoke.yaml` | chat-db-app-shard | Short migration timeout (300s) |
+| `debug/chatdb-search-invariant-smoke.yaml` | chat-db-app-shard | Tests search_latency invariant |
+| `debug/chatdb-checker-baseline.yaml` | chat-db-app | 7 chaos types, rule-based checker |
+| `debug/chatdb-checker-llm.yaml` | chat-db-app | Same 7 types, LLM-based checker |
+
+## Running Campaigns
+
+### Local
 
 ```bash
 cd eval
 uv run eval run campaign campaigns/<campaign-file>.yaml
 ```
 
-### Running a single trial
+### Cloud (GCP)
+
+Cloud campaigns provision GCP VMs, run trials there, and store results in a shared PostgreSQL database. See [CLOUD.md](CLOUD.md) for architecture details.
+
+#### Cloud prerequisites
 
 ```bash
-cd eval
-uv run eval run --subject tikv --chaos node_kill --trials 1
-```
-
-## Running Cloud Campaigns (GCP)
-
-Cloud campaigns provision GCP VMs, run trials there, and store results in a shared PostgreSQL database. See [CLOUD.md](CLOUD.md) for the full cloud architecture reference (terminology, Docker images, rebuild decision matrix).
-
-### Cloud prerequisites
-
-```bash
-# Authenticate with GCP (tokens expire — re-run if needed)
 gcloud auth login
 gcloud compute instances list  # Verify auth works
 ```
@@ -80,36 +165,24 @@ Ensure `.env` at repo root has:
 | `CHATDB_APP_IMAGE` | Chat DB App: pre-built app image |
 | `CHATDB_LOADGEN_IMAGE` | Chat DB App: pre-built loadgen image |
 
-### Enqueue a cloud campaign
+#### Enqueue and run
 
 ```bash
 cd eval
 source ../.env
 
-# TiKV cloud smoke test
+# Enqueue
 uv run eval run campaign campaigns/smoke-tests/tikv-cloud-smoke.yaml --cloud=gcp
 
-# Chat DB App debug test
-uv run eval run campaign campaigns/coding/chatdb-cloud-debug-edit.yaml --cloud=gcp
-
-# Chat DB App load stress test
-uv run eval run campaign campaigns/coding/chatdb-cloud-load-stress.yaml --cloud=gcp
-```
-
-### Start a worker
-
-```bash
-cd eval
+# Start a worker
 GIT_SHA=$(git rev-parse --short HEAD)
 uv run eval worker start --cloud=gcp \
   --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 ```
 
-The worker claims items from the queue, provisions VMs, runs trials, and records results.
+#### Concurrent campaigns
 
-#### Running concurrent campaigns
-
-Use `--campaign` to scope workers to a specific campaign. This prevents workers from stealing work items from other campaigns running in parallel:
+Use `--campaign` to scope workers to a specific campaign:
 
 ```bash
 # Campaign A (terminal 1)
@@ -123,68 +196,25 @@ uv run eval worker start --cloud=gcp --id=c110-1 --campaign=110 \
   --operator-image=us-central1-docker.pkg.dev/${GCP_PROJECT}/eval/operator:${GIT_SHA}
 ```
 
-Without `--campaign`, workers claim any pending work item (backward compatible for single-campaign use).
-
-### Available cloud campaigns
-
-| Campaign | Subject | What it tests |
-|----------|---------|---------------|
-| `smoke-tests/tikv-cloud-smoke.yaml` | tikv | node_kill (1 trial) |
-| `coding/chatdb-cloud-debug-edit.yaml` | chat-db-app | debug_code_edit (1 trial) |
-| `smoke-tests/chatdb-cloud-smoke.yaml` | chat-db-app | load_pressure (1 trial) |
-| `operations/tikv-cloud-exotic-chaos.yaml` | tikv | process_pause, packet_loss, asymmetric_partition, pd_leader_kill, leader_concentration (3 trials each) |
-| `operations/tikv-all-chaos-cloud.yaml` | tikv | All 10 chaos types incl. disk_pressure (3 trials each, + baseline) |
-| `coding/chatdb-cloud-load-stress.yaml` | chat-db-app | load_pressure at 50 users / 0.6 stream ratio (5 trials) |
-| `coding/chatdb-shard-gradient-cloud.yaml` | chat-db-app-shard | Prompt gradient A/B: db_sharding vs db_sharding_nudge vs db_sharding_direct (2 trials each, 15min timeout) |
-| `coding/chatdb-shard-escalation-cloud.yaml` | chat-db-app-shard | Continuous 2-phase: db_sharding_direct (15min) → shard_fanout (30min) |
-| `coding/chatdb-shard-escalation-opus-cloud.yaml` | chat-db-app-shard | Same as above but with Opus 4.6 variant for A/B comparison |
-
-### Monitor cloud progress
-
-```bash
-cd eval
-
-# Queue status
-uv run eval worker status --remote
-
-# Campaign details
-uv run eval show <campaign_id> --remote
-
-# Trial details
-uv run eval show --trial <trial_id> --remote
-
-# Web viewer
-uv run eval viewer --remote
-```
-
 ## Analysis
 
-After campaigns complete, analyze and compare results:
-
 ```bash
 cd eval
 
-# List all campaigns
+# List campaigns
 uv run eval list
-uv run eval list --notable                      # Only notable campaigns
+uv run eval list --notable
 
-# Mark campaigns as notable (significant results worth revisiting)
+# Mark as notable / annotate
 uv run eval notable <campaign_id>
-uv run eval notable <campaign_id> --clear       # Unmark
-
-# Annotate campaigns with notes
 uv run eval note <campaign_id> "Reference baseline for TiKV node_kill"
-uv run eval note <campaign_id>                  # View current note
-uv run eval note <campaign_id> --clear          # Clear
 
 # Score a campaign
 uv run eval analyze <campaign_id>
 uv run eval analyze <campaign_id> --commands    # Include LLM command classification
 
-# Compare two campaigns
+# Compare campaigns
 uv run eval compare <id1> <id2>
-
-# Compare agent vs auto-found baseline
 uv run eval compare-baseline <campaign_id>
 
 # Web UI
@@ -193,52 +223,27 @@ uv run eval viewer                              # http://127.0.0.1:8000
 
 For cloud results, add `--remote` to commands above.
 
-## Exporting Results
-
-Export a campaign as a self-contained HTML file that can be opened in any browser — no server needed:
+## Exporting & Publishing
 
 ```bash
 cd eval
 
-# Export to default file (campaign-<id>.html)
+# Export campaign as self-contained HTML
 uv run eval export <campaign_id>
+uv run eval export <campaign_id> --remote       # From cloud database
 
-# Custom output path
-uv run eval export <campaign_id> -o results.html
-
-# Export from cloud database
-uv run eval export <campaign_id> --remote
-```
-
-The exported HTML includes campaign summary, trial table, reasoning timelines, code diffs, DB config changes, and topology diagrams — all embedded with no external dependencies.
-
-## Publishing Results
-
-Publish a campaign to the [operator-campaigns](https://github.com/pikehouse/operator-campaigns) repo with a single command. This exports the HTML, captures the subject's source code as an orphan branch, generates a README with links, and pushes to GitHub:
-
-```bash
-cd eval
-
-# Publish from cloud database
+# Publish to operator-campaigns repo
 uv run eval publish <campaign_id> --remote
-
-# Dry run (commit locally, don't push)
 uv run eval publish <campaign_id> --remote --dry-run
-
-# Skip source branch or behavior classification
-uv run eval publish <campaign_id> --remote --skip-source
-uv run eval publish <campaign_id> --remote --skip-behavior
 ```
 
-Requires `OPERATOR_RESULTS_REPO_LOCATION` in your `.env` (path to a local clone of the results repo). Re-publishing the same campaign updates the existing HTML and recreates the source branch.
+Requires `OPERATOR_RESULTS_REPO_LOCATION` in `.env` for publishing.
 
 ## Campaign Config Reference
 
-Campaign YAML files live in `eval/campaigns/` organized by category (`smoke-tests/`, `coding/`, `operations/`). Key fields:
-
 ```yaml
 name: my-campaign
-subjects: [tikv]                 # tikv or chat-db-app
+subjects: [tikv]                 # tikv, chat-db-app, or chat-db-app-shard
 chaos_types:
   - type: node_kill
   - type: latency
@@ -256,17 +261,49 @@ cloud:                           # Omit for local campaigns
     image: us-central1-docker.pkg.dev/$GCP_PROJECT/eval/operator:${GIT_SHA}
 ```
 
-## Chat-DB-App Chaos Types
+## Chaos Types
 
-Each chaos type targets a specific defect in the app by shaping load patterns:
+### TiKV
 
-| Type | What it triggers | Expected invariants |
-|------|-----------------|---------------------|
-| `missing_index` | Sequential scans on messages table (no index) | `high_latency` |
-| `pool_exhaustion` | Unbounded pool hits max_connections | `pool_exhaustion`, `high_error_rate` |
-| `streaming_txn` | Streaming holds transactions open 10-30s | `idle_in_transaction`, `pool_exhaustion` |
-| `counter_race` | Concurrent writes race on token counter | `lock_contention` |
-| `load_pressure` | Backward-compat alias for `pool_exhaustion` | (same as pool_exhaustion) |
+| Type | What it does |
+|------|-------------|
+| `node_kill` | SIGKILL a TiKV container |
+| `latency` | tc netem delay (params: `min_ms`, `max_ms`) |
+| `network_partition` | iptables block TiKV ↔ peers and TiKV ↔ PD |
+| `process_pause` | SIGSTOP/SIGCONT (freeze process) |
+| `packet_loss` | tc netem intermittent loss (param: `percent`) |
+| `asymmetric_partition` | Block traffic to one peer only |
+| `pd_leader_kill` | Kill a PD control plane node |
+| `leader_concentration` | Concentrate all region leaders on one store |
+| `disk_pressure` | Fill tmpfs (cloud only) |
+
+### Chat-DB-App
+
+| Type | What it triggers |
+|------|-----------------|
+| `missing_index` | Sequential scans (no index on messages) |
+| `pool_exhaustion` | Unbounded pool hits max_connections |
+| `streaming_txn` | Connections stuck idle-in-transaction |
+| `counter_race` | Read-modify-write race on token counter |
+| `load_pressure` | Alias for pool_exhaustion |
+| `correlated_subquery` | N+1 query pattern |
+| `fulltext_search` | Missing full-text search index |
+| `read_scale` | Read replica needed |
+| `unbounded_results` | Missing pagination |
+| `write_amplification` | Excessive write operations |
+| `write_contention` | Lock contention under concurrent writes |
+| `notification_*` | 9 notification subsystem defects (fanout, counter, realtime, poll_idle, mark_read, n_plus_one, payload, cleanup, serialize) |
+
+### Chat-DB-App-Shard
+
+| Type | What it triggers |
+|------|-----------------|
+| `db_sharding` | 2M messages on constrained PG, needs horizontal sharding |
+| `db_sharding_nudge` | Same setup, narrative prompt closing escape hatches |
+| `db_sharding_direct` | Same setup, explicit "implement sharding" prompt |
+| `shard_fanout` | Cross-shard query optimization (requires prior sharding) |
+| `blob_storage` | Large message storage in blob store (requires prior sharding) |
+| `online_migration` | Zero-downtime schema migration (requires prior phases) |
 
 ## Recovering from Cloud Failures
 

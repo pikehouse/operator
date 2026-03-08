@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260.9619999999998 312.75" width="1260.9619999999998" height="312.75" style="--bg:#FFFFFF;--fg:#27272A;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<g class="subgraph" data-id="Subject" data-label="Subject">
+  <rect x="715.871" y="124.94999999999999" width="204.36599999999996" height="113.80000000000001" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="715.871" y="124.94999999999999" width="204.36599999999996" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="727.871" y="138.95" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Subject</text>
+</g>
+<g class="subgraph" data-id="Monitor" data-label="Monitor">
+  <rect x="1048.4589999999998" y="40" width="172.503" height="181.8" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="1048.4589999999998" y="40" width="172.503" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="1060.4589999999998" y="54" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Monitor</text>
+</g>
+<g class="subgraph" data-id="Tickets" data-label="Tickets">
+  <rect x="40" y="82.45" width="196.21499999999997" height="96.9" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="40" y="82.45" width="196.21499999999997" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="52" y="96.45" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Tickets</text>
+</g>
+<g class="subgraph" data-id="Agent" data-label="Agent">
+  <rect x="398.29499999999996" y="90.94999999999999" width="137.676" height="181.8" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <rect x="398.29499999999996" y="90.94999999999999" width="137.676" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+  <text x="410.29499999999996" y="104.94999999999999" font-size="12" font-weight="600" fill="var(--_text-sec)" dy="4.199999999999999">Agent</text>
+</g>
+<polyline class="edge" data-from="Subject" data-to="Monitor" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="state" points="920.237,181.85 1036.4589999999998,181.85 1036.4589999999998,161.2 1048.4589999999998,161.2" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Monitor" data-to="Tickets" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="violations" points="1048.4589999999998,100.6 1036.4589999999998,100.6 1036.4589999999998,79.95 386.29499999999996,79.95 386.29499999999996,114.75 236.21499999999997,114.75" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Tickets" data-to="Agent" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="open tickets" points="236.21499999999997,147.05 272.215,147.05 272.215,181.85 398.29499999999996,181.85" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Agent" data-to="Subject" data-style="solid" data-arrow-start="false" data-arrow-end="true" data-label="shell commands" points="535.971,181.85 715.871,181.85" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="O" data-to="C" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="1134.7105,120.9 1134.7105,168.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="D" data-to="F" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="467.1329999999999,171.85 467.1329999999999,219.85" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<g class="edge-label" data-from="Subject" data-to="Monitor" data-label="state">
+  <rect x="964.237" y="165.85" width="40.221999999999994" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="984.348" y="181" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">state</text>
+</g>
+<g class="edge-label" data-from="Monitor" data-to="Tickets" data-label="violations">
+  <rect x="941.665" y="63.95000000000001" width="62.794000000000004" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="973.062" y="79.10000000000001" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">violations</text>
+</g>
+<g class="edge-label" data-from="Tickets" data-to="Agent" data-label="open tickets">
+  <rect x="280.215" y="165.85" width="74.08000000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="317.255" y="181" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">open tickets</text>
+</g>
+<g class="edge-label" data-from="Agent" data-to="Subject" data-label="shell commands">
+  <rect x="579.971" y="165.85" width="91.9" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="625.921" y="181" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">shell commands</text>
+</g>
+<g class="node" data-id="S" data-label="Distributed System
+(TiKV, PostgreSQL, ...)" data-shape="rectangle">
+  <rect x="731.871" y="168.95" width="172.36599999999996" height="53.800000000000004" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="818.054" y="195.85" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="818.054" dy="-3.9000000000000012">Distributed System</tspan><tspan x="818.054" dy="16.900000000000002">(TiKV, PostgreSQL, ...)</tspan></text>
+</g>
+<g class="node" data-id="O" data-label="observe()" data-shape="rectangle">
+  <rect x="1084.8365" y="84" width="99.74799999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1134.7105" y="102.45" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">observe()</text>
+</g>
+<g class="node" data-id="C" data-label="check invariants" data-shape="rectangle">
+  <rect x="1064.4589999999998" y="168.9" width="140.503" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="1134.7105" y="187.35000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">check invariants</text>
+</g>
+<g class="node" data-id="T" data-label="SQLite / PostgreSQL" data-shape="rectangle">
+  <rect x="56" y="126.45" width="164.21499999999997" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="138.1075" y="144.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">SQLite / PostgreSQL</text>
+</g>
+<g class="node" data-id="D" data-label="diagnose" data-shape="rectangle">
+  <rect x="418.741" y="134.95" width="96.78399999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="467.133" y="153.39999999999998" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">diagnose</text>
+</g>
+<g class="node" data-id="F" data-label="fix via shell" data-shape="rectangle">
+  <rect x="414.29499999999996" y="219.85" width="105.67599999999999" height="36.900000000000006" rx="0" ry="0" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="0.75" />
+  <text x="467.1329999999999" y="238.3" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)" dy="4.55">fix via shell</text>
+</g>
+</svg>

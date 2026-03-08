@@ -1,126 +1,57 @@
 # Operator
 
-An autonomous AI system for monitoring and remediating distributed systems. Operator continuously observes infrastructure, detects invariant violations, and uses Claude to diagnose and fix issues via shell commands.
+Autonomous observe-detect-fix loop for distributed systems, evaluated via chaos engineering campaigns.
 
-## Architecture
+Read the blog post: [Building an Autonomous Database Operator with Claude](https://pike-house.com/remarks/claude-shard-database)
 
-Operator implements a three-component control loop:
+## How It Works
 
-```mermaid
-flowchart TD
-    Monitor["MONITOR\n(host/cron)"]
-    Monitor -->|"observe()"| Subject
+<p align="center">
+  <img src="docs/diagrams/operator-loop.svg" alt="Operator loop: observe, detect violations, create tickets, agent fixes" width="700">
+</p>
 
-    subgraph Docker["DOCKER NETWORK"]
-        subgraph Subject["SUBJECT (TiKV cluster)"]
-            tikv0 & tikv1 & tikv2
-            pd0 & pd1 & pd2
-        end
-        subgraph Agent["AGENT (containerized)"]
-            Claude["Claude + shell"]
-            Control["container control"]
-            Claude -->|"docker socket"| Control
-        end
-    end
+A **monitor** observes a subject (any distributed system) on a schedule. An **invariant checker** detects violations — node down, high latency, pool exhaustion, missing index. Violations create **tickets**. An **agent** (Claude with shell access) reads tickets, diagnoses the problem, and fixes it.
 
-    Control -->|"manage containers"| Subject
-    Claude -->|"inspect / exec"| Subject
+The operator is subject-agnostic. Adding a new subject means implementing two methods: `observe()` returns system state, `check()` returns violations. Everything else — monitoring, ticketing, agent reasoning — works automatically.
 
-    subgraph DB["SQLite (tickets)"]
-        direction LR
-        writes["Monitor writes"]
-        reads["Agent reads"]
-    end
+## Evaluation
 
-    Monitor --> writes
-    reads --> Agent
-```
+<p align="center">
+  <img src="docs/diagrams/eval-trial.svg" alt="Trial lifecycle: reset, inject chaos, detect, resolve, score" width="700">
+</p>
 
-### Components
+**Campaigns** run structured trials against subjects. Each trial resets the subject, injects chaos, and measures how quickly the operator detects and resolves the problem. Campaigns produce metrics like time-to-detect, time-to-resolve, and win rate.
 
-| Component | Description |
-|-----------|-------------|
-| **Monitor** | Daemon that polls the subject at regular intervals, checks invariants, and creates tickets for violations |
-| **Agent** | Containerized AI (Claude) that processes tickets, diagnoses issues, and executes shell commands to remediate |
-| **Subject** | The distributed system being monitored (TiKV cluster, rate limiter, etc.) |
+See [`eval/README.md`](eval/README.md) for the full eval reference.
 
-### Data Flow
+## Subjects
 
-```mermaid
-flowchart LR
-    subgraph MonitorLoop["1. Monitor Loop (every n seconds)"]
-        direction TB
-        observe["subject.observe()"] --> check["checker.check(observation)"]
-        check --> tickets["Create / update tickets\n(SQLite)"]
-    end
-
-    subgraph AgentLoop["2. Agent Loop (continuous polling)"]
-        direction TB
-        poll["Poll open tickets\n(SQLite)"] --> analyze["Claude analyzes ticket"]
-        analyze --> exec["Execute shell commands\n(Docker socket)"]
-        exec --> resolve["Resolve or escalate"]
-    end
-
-    MonitorLoop -->|"tickets"| AgentLoop
-```
-
-## Demo
-
-The demo provides an interactive terminal UI that walks through a complete fault injection and recovery cycle.
-
-### What It Does
-
-1. **Shows cluster health** — Displays baseline metrics for a healthy cluster
-2. **Generates load** — Starts a YCSB workload against the cluster
-3. **Injects a fault** — Kills a TiKV node (or rate limiter node)
-4. **Detects the issue** — Monitor identifies the invariant violation and creates a ticket
-5. **AI diagnoses** — Claude analyzes metrics, logs, and cluster state
-6. **Recovers** — Agent executes remediation commands (e.g., restart the node)
-7. **Verifies health** — Shows the cluster returned to a healthy state
-
-### Running the Demo
-
-```bash
-# TiKV cluster demo (default)
-./scripts/run-demo.sh tikv
-
-# Rate limiter demo
-./scripts/run-demo.sh ratelimiter
-```
-
-The script handles:
-- Starting the Docker Compose stack (cluster + observability)
-- Clearing any existing tickets
-- Launching the interactive TUI
-
-### Requirements
-
-- Docker and Docker Compose
-- Python 3.12+
-- `uv` package manager
-- Anthropic API key in environment
-
-## Evaluation System
-
-The eval system runs structured chaos engineering experiments (campaigns) to measure operator performance across different fault scenarios and subjects.
-
-See [`eval/README.md`](eval/README.md) for setup and usage — including how to run local smoke tests and cloud campaigns.
+| Subject | Category | What the operator monitors |
+|---------|----------|---------------------------|
+| **TiKV** | Operations | Distributed KV store — node health, region balance, latency, leader distribution |
+| **Chat-DB-App** | Coding | FastAPI + PostgreSQL — connection pool, query performance, schema, race conditions |
+| **Chat-DB-App-Shard** | Coding | Sharded variant — horizontal scaling, fanout queries, blob storage, online migration |
+| **Rate Limiter** | Operations | Token bucket service — Redis health, rate accuracy |
 
 ## Project Structure
 
 ```
 packages/
-├── operator-core/          # Main package (monitor, agent, CLI)
-└── operator-protocols/     # Subject & InvariantChecker protocols
+├── operator-core/          # Monitor loop, agent, CLI, ticket DB
+└── operator-protocols/     # SubjectProtocol, InvariantCheckerProtocol (zero deps)
 
 subjects/
-├── tikv/                   # TiKV subject implementation
-├── ratelimiter/            # Rate limiter subject implementation
-└── chat-db-app/            # Chat DB App subject (FastAPI + PostgreSQL)
+├── tikv/                   # TiKV subject (Docker Compose cluster)
+├── chat-db-app/            # Chat DB App subject (FastAPI + PostgreSQL)
+└── ratelimiter/            # Rate limiter subject
+
+eval/                       # Chaos engineering eval framework
+├── campaigns/              # Campaign YAML configs
+├── variants/               # Agent configuration variants
+└── src/eval/               # Runner, analysis, subjects, viewer
 
 demo/                       # Interactive TUI demo
-eval/                       # Evaluation harness and analysis
-scripts/                    # Helper scripts (run-demo.sh, etc.)
+scripts/                    # Helper scripts
 ```
 
 ## Quick Start
@@ -132,6 +63,17 @@ uv sync
 # Set API key
 export ANTHROPIC_API_KEY=your_key
 
-# Run the demo
+# Run the TiKV demo (interactive TUI)
 ./scripts/run-demo.sh tikv
+
+# Run an eval smoke test
+cd eval
+uv run eval run campaign campaigns/smoke-tests/tikv-smoke.yaml
 ```
+
+### Requirements
+
+- Docker and Docker Compose
+- Python 3.12+
+- `uv` package manager
+- `ANTHROPIC_API_KEY` in environment

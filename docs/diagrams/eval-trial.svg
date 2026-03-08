@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 542.3879999999999 319.8666666666667" width="542.3879999999999" height="319.8666666666667" style="--bg:#FFFFFF;--fg:#27272A;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 85%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="arrowhead" markerWidth="8" markerHeight="5" refX="7" refY="2.5" orient="auto">
+    <polygon points="0 0, 8 2.5, 0 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+  <marker id="arrowhead-start" markerWidth="8" markerHeight="5" refX="1" refY="2.5" orient="auto-start-reverse">
+    <polygon points="8 0, 0 2.5, 8 5" fill="var(--_arrow)" stroke="var(--_arrow)" stroke-width="0.75" stroke-linejoin="round" />
+  </marker>
+</defs>
+<polyline class="edge" data-from="R" data-to="I" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="381.46,148.70000000000002 405.46,148.70000000000002 405.46,211.08166666666668 414.496,211.08166666666668" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="I" data-to="Det" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="414.496,232.6016666666667 405.46,232.6016666666667 405.46,238.7166666666667 135.302,238.7166666666667" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Det" data-to="Res" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="135.302,225.26666666666668 147.302,225.26666666666668 147.302,139.40500000000003 159.302,139.40500000000003" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Res" data-to="S" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="260.532,130.43833333333333 272.532,130.43833333333333 272.532,66.9 296.532,66.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="S" data-to="Cl" data-style="solid" data-arrow-start="false" data-arrow-end="true" points="375.532,66.9 414.496,66.9" fill="none" stroke="var(--_line)" stroke-width="1" marker-end="url(#arrowhead)" />
+<polyline class="edge" data-from="Det" data-to="I" data-style="dotted" data-arrow-start="false" data-arrow-end="false" data-label="time-to-detect" points="135.302,252.16666666666669 287.222,252.16666666666669 287.222,260.7166666666667 405.46,260.7166666666667 405.46,243.3616666666667 414.496,243.3616666666667" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" />
+<polyline class="edge" data-from="Res" data-to="I" data-style="dotted" data-arrow-start="false" data-arrow-end="false" data-label="time-to-resolve" points="260.532,148.37166666666667 278.90599999999995,148.37166666666667 278.90599999999995,214.60000000000002 405.46,214.60000000000002 405.46,221.8416666666667 414.496,221.8416666666667" fill="none" stroke="var(--_line)" stroke-width="1" stroke-dasharray="4 4" />
+<g class="edge-label" data-from="Det" data-to="I" data-label="time-to-detect">
+  <rect x="295.222" y="244.71666666666667" width="78.23800000000001" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="334.341" y="259.8666666666667" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">time-to-detect</text>
+</g>
+<g class="edge-label" data-from="Res" data-to="I" data-label="time-to-resolve">
+  <rect x="286.90599999999995" y="198.60000000000002" width="86.554" height="30.3" rx="2" ry="2" fill="var(--bg)" stroke="var(--_inner-stroke)" stroke-width="1" />
+  <text x="330.18299999999994" y="213.75000000000003" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-sec)" dy="3.8499999999999996">time-to-resolve</text>
+</g>
+<g class="node" data-id="R" data-label="Reset
+subject" data-shape="rectangle">
+  <rect x="296.532" y="121.80000000000001" width="84.928" height="53.800000000000004" rx="0" ry="0" fill="#e8f5e9" stroke="#4CAF50" stroke-width="0.75" />
+  <text x="338.996" y="148.70000000000002" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="338.996" dy="-3.9000000000000012">Reset</tspan><tspan x="338.996" dy="16.900000000000002">subject</tspan></text>
+</g>
+<g class="node" data-id="I" data-label="Inject
+chaos" data-shape="rectangle">
+  <rect x="414.496" y="200.3216666666667" width="79" height="53.800000000000004" rx="0" ry="0" fill="#fce4ec" stroke="#E91E63" stroke-width="0.75" />
+  <text x="453.996" y="227.2216666666667" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="453.996" dy="-3.9000000000000012">Inject</tspan><tspan x="453.996" dy="16.900000000000002">chaos</tspan></text>
+</g>
+<g class="node" data-id="Det" data-label="Wait for
+detection" data-shape="rectangle">
+  <rect x="40" y="211.8166666666667" width="95.30199999999999" height="53.800000000000004" rx="0" ry="0" fill="#fff3e0" stroke="#FF9800" stroke-width="0.75" />
+  <text x="87.651" y="238.7166666666667" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="87.651" dy="-3.9000000000000012">Wait for</tspan><tspan x="87.651" dy="16.900000000000002">detection</tspan></text>
+</g>
+<g class="node" data-id="Res" data-label="Wait for
+resolution" data-shape="rectangle">
+  <rect x="159.302" y="112.50500000000001" width="101.22999999999999" height="53.800000000000004" rx="0" ry="0" fill="#fff3e0" stroke="#FF9800" stroke-width="0.75" />
+  <text x="209.91699999999997" y="139.405" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="209.91699999999997" dy="-3.9000000000000012">Wait for</tspan><tspan x="209.91699999999997" dy="16.900000000000002">resolution</tspan></text>
+</g>
+<g class="node" data-id="S" data-label="Score
+trial" data-shape="rectangle">
+  <rect x="296.532" y="40" width="79" height="53.800000000000004" rx="0" ry="0" fill="#e8f4f8" stroke="#2196F3" stroke-width="0.75" />
+  <text x="336.032" y="66.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="336.032" dy="-3.9000000000000012">Score</tspan><tspan x="336.032" dy="16.900000000000002">trial</tspan></text>
+</g>
+<g class="node" data-id="Cl" data-label="Cleanup
+chaos" data-shape="rectangle">
+  <rect x="414.496" y="40" width="90.856" height="53.800000000000004" rx="0" ry="0" fill="#f3e5f5" stroke="#9C27B0" stroke-width="0.75" />
+  <text x="459.924" y="66.9" text-anchor="middle" font-size="13" font-weight="500" fill="var(--_text)"><tspan x="459.924" dy="-3.9000000000000012">Cleanup</tspan><tspan x="459.924" dy="16.900000000000002">chaos</tspan></text>
+</g>
+</svg>
