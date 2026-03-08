@@ -72,8 +72,3 @@ async def create_subject(
             f"Unknown subject '{subject_name}'. "
             f"Available subjects: {', '.join(AVAILABLE_SUBJECTS)}"
         )
-
-
-def get_available_subjects() -> list[str]:
-    """Return list of available subject names."""
-    return AVAILABLE_SUBJECTS.copy()

@@ -21,7 +21,6 @@ dependencies = [
 [project.optional-dependencies]
 cloud = [
     "asyncpg>=0.29.0",  # PostgreSQL async driver for Cloud SQL
-    "google-cloud-compute>=1.0.0",  # GCP Compute Engine API (optional, uses gcloud CLI by default)
 ]
 
 [project.scripts]

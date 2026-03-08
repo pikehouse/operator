@@ -243,25 +243,3 @@ class AuditLogDB:
 
         return cursor.lastrowid
 
-    def get_entries_by_timerange(self, start_time: datetime, end_time: datetime) -> list[dict]:
-        """
-        Retrieve all log entries within a time range.
-
-        Args:
-            start_time: Start of time range (inclusive)
-            end_time: End of time range (inclusive)
-
-        Returns:
-            List of log entries as dictionaries
-        """
-        cursor = self._conn.execute(
-            """
-            SELECT * FROM agent_log_entries
-            WHERE timestamp >= ? AND timestamp <= ?
-            ORDER BY timestamp ASC
-            """,
-            (start_time.isoformat(), end_time.isoformat()),
-        )
-
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
