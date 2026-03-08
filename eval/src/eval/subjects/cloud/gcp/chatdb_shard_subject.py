@@ -54,8 +54,11 @@ class GCPChatDBAppShardSubject(GCPChatDBAppSubject):
             compose_dir=compose_dir,
             **kwargs,
         )
-        # Override VM name prefix to avoid collision with regular chatdb
-        self.vm._name_prefix = f"chatdb-shard-eval-{instance_id}"
+        # Override VM name to avoid collision with regular chatdb.
+        # GCPVM computes self.name in __init__ from name_prefix, so we must
+        # replace the already-computed name (not a non-existent _name_prefix).
+        suffix = self.vm.name.split("-")[-1]  # preserve the uuid suffix
+        self.vm.name = f"chatdb-shard-eval-{instance_id}-{suffix}"
 
         # Override source to point to the shard variant
         docker_path = Path("/usr/local/lib/subjects/chat-db-app-shard/service")
