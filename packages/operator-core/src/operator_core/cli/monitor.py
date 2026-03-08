@@ -15,13 +15,11 @@ from pathlib import Path
 
 import typer
 
+from operator_core.cli import DEFAULT_DB_PATH
 from operator_core.cli.subject_factory import AVAILABLE_SUBJECTS, create_subject
 from operator_core.monitor.loop import MonitorLoop
 
 monitor_app = typer.Typer(help="Run the operator monitor daemon")
-
-# Default database path
-DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
 
 
 @monitor_app.command("run")

@@ -14,20 +14,17 @@ Per RESEARCH.md patterns:
 
 import asyncio
 import json
-from datetime import datetime
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from operator_core.cli import DEFAULT_DB_PATH
 from operator_core.db.tickets import TicketDB
 from operator_core.monitor.types import TicketStatus
 
 tickets_app = typer.Typer(help="Manage operator tickets")
-
-# Default database path per RESEARCH.md
-DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
 
 
 def _get_db_path() -> Path:

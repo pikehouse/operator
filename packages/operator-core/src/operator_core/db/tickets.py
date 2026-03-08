@@ -14,14 +14,14 @@ Per RESEARCH.md patterns:
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiosqlite
 
 from operator_core.db.schema import SCHEMA_SQL
-from operator_core.monitor.types import Ticket, TicketStatus, TicketType, make_violation_key
+from operator_core.monitor.types import Ticket, TicketStatus, TicketType, make_violation_key, row_to_ticket
 from operator_protocols import InvariantViolation
 
 
@@ -64,65 +64,8 @@ class TicketDB:
         await self._conn.commit()
 
     def _row_to_ticket(self, row: aiosqlite.Row) -> Ticket:
-        """
-        Convert a database row to a Ticket dataclass.
-
-        Args:
-            row: Database row with ticket fields
-
-        Returns:
-            Ticket instance
-        """
-        # Parse datetime strings
-        first_seen_at = datetime.fromisoformat(row["first_seen_at"])
-        last_seen_at = datetime.fromisoformat(row["last_seen_at"])
-        resolved_at = (
-            datetime.fromisoformat(row["resolved_at"])
-            if row["resolved_at"]
-            else None
-        )
-        created_at = (
-            datetime.fromisoformat(row["created_at"])
-            if row["created_at"]
-            else None
-        )
-        updated_at = (
-            datetime.fromisoformat(row["updated_at"])
-            if row["updated_at"]
-            else None
-        )
-
-        # Parse metric_snapshot JSON
-        metric_snapshot = (
-            json.loads(row["metric_snapshot"])
-            if row["metric_snapshot"]
-            else None
-        )
-
-        return Ticket(
-            id=row["id"],
-            violation_key=row["violation_key"],
-            invariant_name=row["invariant_name"],
-            message=row["message"],
-            severity=row["severity"],
-            first_seen_at=first_seen_at,
-            last_seen_at=last_seen_at,
-            status=TicketStatus(row["status"]),
-            store_id=row["store_id"],
-            held=bool(row["held"]),
-            batch_key=row["batch_key"],
-            occurrence_count=row["occurrence_count"],
-            resolved_at=resolved_at,
-            diagnosis=row["diagnosis"],
-            metric_snapshot=metric_snapshot,
-            subject_context=row["subject_context"],
-            type=row["type"],
-            variant_model=row["variant_model"],
-            variant_system_prompt=row["variant_system_prompt"],
-            variant_tools_config=row["variant_tools_config"],
-            created_at=created_at,
-            updated_at=updated_at,
-        )
+        """Convert a database row to a Ticket dataclass."""
+        return row_to_ticket(row)
 
     async def create_or_update_ticket(
         self,
@@ -339,37 +282,33 @@ class TicketDB:
             Number of tickets that were resolved
         """
         now = datetime.now()
+        cutoff = (now - timedelta(seconds=stability_window_sec)).isoformat()
+        now_iso = now.isoformat()
 
-        # Get all open, non-held, violation-observed tickets
-        # (operator-override tickets have no matching violation key to keep them alive)
-        async with self._conn.execute(
+        # Build a single UPDATE with NOT IN for current violation keys
+        if current_violation_keys:
+            placeholders = ",".join("?" for _ in current_violation_keys)
+            query = f"""
+                UPDATE tickets SET status = 'resolved', resolved_at = ?
+                WHERE status != 'resolved' AND held = 0
+                  AND type != 'operator-override'
+                  AND violation_key NOT IN ({placeholders})
+                  AND last_seen_at <= ?
             """
-            SELECT id, violation_key, last_seen_at FROM tickets
-            WHERE status != 'resolved' AND held = 0
-              AND type != 'operator-override'
-            """,
-        ) as cursor:
-            rows = await cursor.fetchall()
+            params = [now_iso, *current_violation_keys, cutoff]
+        else:
+            # No active violations — resolve all eligible tickets past the window
+            query = """
+                UPDATE tickets SET status = 'resolved', resolved_at = ?
+                WHERE status != 'resolved' AND held = 0
+                  AND type != 'operator-override'
+                  AND last_seen_at <= ?
+            """
+            params = [now_iso, cutoff]
 
-        # Resolve tickets whose violations have cleared and stayed clear
-        resolved_count = 0
-        for row in rows:
-            if row["violation_key"] not in current_violation_keys:
-                last_seen = datetime.fromisoformat(row["last_seen_at"])
-                if (now - last_seen).total_seconds() >= stability_window_sec:
-                    await self._conn.execute(
-                        """
-                        UPDATE tickets SET
-                            status = 'resolved',
-                            resolved_at = ?
-                        WHERE id = ?
-                        """,
-                        (now.isoformat(), row["id"]),
-                    )
-                    resolved_count += 1
-
+        cursor = await self._conn.execute(query, params)
         await self._conn.commit()
-        return resolved_count
+        return cursor.rowcount
 
     async def log_observation(
         self,

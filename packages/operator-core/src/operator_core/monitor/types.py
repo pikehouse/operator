@@ -12,6 +12,7 @@ Per RESEARCH.md patterns:
 - Violation key format: invariant_name:store_id
 """
 
+import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import Enum
@@ -113,3 +114,40 @@ def make_violation_key(violation: InvariantViolation) -> str:
     if violation.store_id:
         return f"{violation.invariant_name}:{violation.store_id}"
     return violation.invariant_name
+
+
+def row_to_ticket(row: Any) -> Ticket:
+    """Convert a database row (dict-like) to a Ticket dataclass.
+
+    Works with both aiosqlite.Row and sqlite3.Row objects.
+
+    Args:
+        row: Database row with ticket fields
+
+    Returns:
+        Ticket instance
+    """
+    return Ticket(
+        id=row["id"],
+        violation_key=row["violation_key"],
+        invariant_name=row["invariant_name"],
+        message=row["message"],
+        severity=row["severity"],
+        first_seen_at=datetime.fromisoformat(row["first_seen_at"]),
+        last_seen_at=datetime.fromisoformat(row["last_seen_at"]),
+        status=TicketStatus(row["status"]),
+        store_id=row["store_id"],
+        held=bool(row["held"]),
+        batch_key=row["batch_key"],
+        occurrence_count=row["occurrence_count"],
+        resolved_at=datetime.fromisoformat(row["resolved_at"]) if row["resolved_at"] else None,
+        diagnosis=row["diagnosis"],
+        metric_snapshot=json.loads(row["metric_snapshot"]) if row["metric_snapshot"] else None,
+        subject_context=row["subject_context"],
+        type=row["type"],
+        variant_model=row["variant_model"],
+        variant_system_prompt=row["variant_system_prompt"],
+        variant_tools_config=row["variant_tools_config"],
+        created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+        updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+    )

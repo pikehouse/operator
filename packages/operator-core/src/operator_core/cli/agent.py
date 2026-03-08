@@ -6,9 +6,9 @@ from pathlib import Path
 import typer
 
 from operator_core.agent_lab import run_agent_loop
+from operator_core.cli import DEFAULT_DB_PATH
 
 agent_app = typer.Typer(help="Run the AI agent")
-DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
 
 
 @agent_app.command("start")

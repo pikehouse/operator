@@ -17,9 +17,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-audit_app = typer.Typer(help="Review agent audit logs")
+from operator_core.cli import DEFAULT_DB_PATH
 
-DEFAULT_DB_PATH = Path.home() / ".operator" / "tickets.db"
+audit_app = typer.Typer(help="Review agent audit logs")
 
 
 def _format_timestamp(iso_str: str | None) -> str:
