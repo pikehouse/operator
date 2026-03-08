@@ -494,24 +494,26 @@ class Worker:
                     )
                 )
 
-                # Download operator.db and extract commands + operator data
-                if ticket_created_at:
-                    try:
-                        from eval.runner.harness import (
-                            extract_commands_from_operator_db,
-                            extract_operator_data,
-                        )
+                # Download operator.db and extract data
+                try:
+                    from eval.runner.harness import (
+                        extract_commands_from_operator_db,
+                        extract_operator_data,
+                    )
 
-                        local_db = Path(f"/tmp/operator-{uuid.uuid4().hex[:8]}.db")
-                        await remote_op.download_operator_db(local_db)
+                    local_db = Path(f"/tmp/operator-{uuid.uuid4().hex[:8]}.db")
+                    await remote_op.download_operator_db(local_db)
+                    # Commands only if agent worked a ticket
+                    if ticket_created_at:
                         commands = await extract_commands_from_operator_db(local_db)
                         console.log(f"[dim]Extracted {len(commands)} commands[/dim]")
-                        operator_data = await extract_operator_data(local_db)
-                        console.log(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
-                        # Clean up temp file
-                        local_db.unlink(missing_ok=True)
-                    except Exception as e:
-                        logger.warning(f"Failed to extract commands: {e}")
+                    # Always extract operator data (observation_log, tickets, etc.)
+                    operator_data = await extract_operator_data(local_db)
+                    console.log(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
+                    # Clean up temp file
+                    local_db.unlink(missing_ok=True)
+                except Exception as e:
+                    logger.warning(f"Failed to extract operator data: {e}")
             else:
                 # No operator: just wait for subject self-recovery
                 console.log("[cyan]Waiting for recovery...[/cyan]")

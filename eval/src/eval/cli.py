@@ -518,11 +518,20 @@ def run_campaign_cmd(
                 else:
                     subject_context_extra = eval_subject.get_agent_context()
 
+            # Thread checker config to operator
+            checker_type = "deterministic"
+            checker_model = None
+            if config.checker:
+                checker_type = config.checker.type
+                checker_model = config.checker.model
+
             async with OperatorProcesses(
                 subject_name,
                 operator_db,
                 eval_subject=eval_subject,
                 subject_context_extra=subject_context_extra,
+                checker_type=checker_type,
+                checker_model=checker_model,
             ) as op:
                 # Use the resolved path from OperatorProcesses (relative to project root)
                 return await execute_campaign(op.operator_db_path)

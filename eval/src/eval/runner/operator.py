@@ -31,6 +31,8 @@ class OperatorProcesses:
         project_root: Optional[Path] = None,
         eval_subject: Optional["EvalSubject"] = None,
         subject_context_extra: Optional[str] = None,
+        checker_type: str = "deterministic",
+        checker_model: Optional[str] = None,
     ):
         self.subject_name = subject_name
         self.project_root = project_root or self._find_project_root()
@@ -41,6 +43,8 @@ class OperatorProcesses:
             self.operator_db_path = (self.project_root / operator_db_path).resolve()
         self.eval_subject = eval_subject  # Used to reset cluster before starting
         self.subject_context_extra = subject_context_extra
+        self.checker_type = checker_type
+        self.checker_model = checker_model
         self.monitor_proc: Optional[subprocess.Popen] = None
         self.agent_proc: Optional[subprocess.Popen] = None
         self._started = False
@@ -130,6 +134,12 @@ class OperatorProcesses:
         # Pass extra context (e.g., workspace rebuild commands)
         if self.subject_context_extra:
             monitor_cmd.extend(["--subject-context-extra", self.subject_context_extra])
+
+        # LLM checker override
+        if self.checker_type == "llm":
+            monitor_cmd.extend(["--checker", "llm"])
+            if self.checker_model:
+                monitor_cmd.extend(["--checker-model", self.checker_model])
 
         # Start monitor subprocess with fast check interval for eval
         console.print("[bold blue]Starting operator monitor (5s interval)...[/bold blue]")

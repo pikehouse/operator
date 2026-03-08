@@ -79,6 +79,12 @@ class CloudConfig(BaseModel):
         return v
 
 
+class CheckerConfig(BaseModel):
+    """Checker configuration for A/B testing detection approaches."""
+    type: str = Field(default="deterministic", description="'deterministic' or 'llm'")
+    model: str | None = Field(default=None, description="Model for LLM checker")
+
+
 class CampaignConfig(BaseModel):
     """Campaign YAML schema with validation."""
     name: str
@@ -92,6 +98,10 @@ class CampaignConfig(BaseModel):
     continuous: bool = Field(
         default=False,
         description="Run trials sequentially without resetting between them (stacking defects)"
+    )
+    checker: CheckerConfig | None = Field(
+        default=None,
+        description="Checker configuration (default: deterministic)"
     )
     cloud: CloudConfig | None = Field(
         default=None,

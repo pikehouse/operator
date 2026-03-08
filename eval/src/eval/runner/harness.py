@@ -596,12 +596,15 @@ async def run_trial(
                     min_ticket_id=pre_chaos_max_ticket_id,  # Filter to tickets after chaos
                 )
 
-                # Extract commands (RUN-04) and operator data
+                # Extract commands (RUN-04) — only if agent worked a ticket
                 if ticket_created_at:
                     commands = await extract_commands_from_operator_db(operator_db_path)
                     console.print(f"[dim]Extracted {len(commands)} commands[/dim]")
-                    operator_data = await extract_operator_data(operator_db_path)
-                    console.print(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
+
+                # Always extract operator data (observation_log, tickets, etc.)
+                # even when no ticket was created — captures what the checker saw
+                operator_data = await extract_operator_data(operator_db_path)
+                console.print(f"[dim]Extracted operator data keys: {list(operator_data.keys())}[/dim]")
 
         # Capture final state (RUN-03)
         console.print("[bold blue]Capturing final state...[/bold blue]")

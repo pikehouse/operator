@@ -64,6 +64,14 @@ def run_monitor(
     stability_window: float = typer.Option(
         60.0, "--stability-window", help="Seconds violation must be absent before auto-resolving"
     ),
+    checker_type: str = typer.Option(
+        "deterministic", "--checker",
+        help="Checker type: 'deterministic' (default) or 'llm'"
+    ),
+    checker_model: str = typer.Option(
+        "claude-haiku-4-5-20251001", "--checker-model",
+        help="Model for LLM checker (only used when --checker=llm)"
+    ),
     db_path: Path = typer.Option(DEFAULT_DB_PATH, "--db", help="Path to tickets database"),
 ) -> None:
     """
@@ -135,10 +143,19 @@ def run_monitor(
     async def _run() -> None:
         try:
             # Use factory to create subject and checker
-            subject_instance, checker = await create_subject(
+            subject_instance, default_checker = await create_subject(
                 subject,
                 **factory_kwargs,
             )
+
+            # Swap in LLM checker if requested
+            if checker_type == "llm":
+                from operator_core.monitor.llm_checker import LLMInvariantChecker
+                checker = LLMInvariantChecker(model=checker_model)
+                print(f"  Checker: LLM ({checker_model})")
+            else:
+                checker = default_checker
+                print("  Checker: deterministic")
 
             # Load subject-specific agent prompt if available
             subject_context = None

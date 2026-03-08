@@ -1,0 +1,18 @@
+name: chatdb-checker-llm
+subjects: [chat-db-app]
+chaos_types:
+  - type: pool_exhaustion
+  - type: streaming_txn
+  - type: missing_index
+  - type: counter_race
+  - type: notification_fanout
+  - type: write_amplification
+  - type: fulltext_search
+trials_per_combination: 2
+parallel: 1
+cooldown_seconds: 10
+include_baseline: false
+variant: default
+checker:
+  type: llm
+  model: claude-haiku-4-5-20251001
