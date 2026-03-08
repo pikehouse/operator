@@ -146,22 +146,17 @@ for i in $(seq 1 ${NUM_WORKERS}); do
 done
 ```
 
-After starting, wait ~15 seconds and verify each worker claimed a work item by tailing their output files.
+### 5. Wait for Completion
 
-### 5. Report
-
-Wait for the campaign to complete with live progress:
+Run `eval wait` as a **background** Bash command (`run_in_background: true`). You will be automatically notified when it completes — do not poll, sleep, or check status in a loop.
 
 ```bash
-source $PROJECT_ROOT/.env && uv run eval wait <campaign_id> --remote
+source $PROJECT_ROOT/.env && uv run eval wait ${CID} --remote
 ```
 
-Run this as a background Bash command so you can continue working while it runs. It will show live progress and exit with a summary when all trials finish.
+**Important:** Do NOT run `eval show`, `eval worker status`, or any other status-checking command in a loop while waiting. The `eval wait` command uses PostgreSQL LISTEN/NOTIFY for instant notifications and will exit with a summary when all trials finish. You will be notified automatically.
 
-If the user needs to check status manually:
-- `eval show <campaign_id> --remote`
-- `eval worker status --remote`
-- `eval viewer --remote` (web UI)
+If the user asks for a status check, run `eval show <CID> --remote` once (not in a loop).
 
 ## Environment
 

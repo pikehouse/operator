@@ -196,15 +196,15 @@ done
 
 ### 7. Monitor & Evaluate
 
-Wait for the campaign to complete with live progress:
+Run `eval wait` as a **background** Bash command (`run_in_background: true`):
 
 ```bash
 source $PROJECT_ROOT/.env && uv run eval wait <new_campaign_id> --remote
 ```
 
-Run this as a background Bash command so you can continue working while it runs. It will show live progress and exit with a summary when all trials finish.
+You will be automatically notified when it completes. Do NOT poll for status in a loop — no `sleep`, no repeated `eval show` or `eval worker status` calls. The wait command uses PostgreSQL LISTEN/NOTIFY for instant updates.
 
-When complete, compare results against the previous campaign:
+When notified, compare results against the previous campaign:
 - Did the targeted chaos types improve?
 - Any regressions in previously-passing types?
 - Is the win rate at or above target?
