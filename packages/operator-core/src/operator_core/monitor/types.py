@@ -87,6 +87,7 @@ class Ticket:
     variant_system_prompt: str | None = None
     type: str = TicketType.VIOLATION_OBSERVED
     variant_tools_config: str | None = None  # JSON string
+    clearing_criteria: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -148,6 +149,7 @@ def row_to_ticket(row: Any) -> Ticket:
         variant_model=row["variant_model"],
         variant_system_prompt=row["variant_system_prompt"],
         variant_tools_config=row["variant_tools_config"],
+        clearing_criteria=row["clearing_criteria"],
         created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
         updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
     )

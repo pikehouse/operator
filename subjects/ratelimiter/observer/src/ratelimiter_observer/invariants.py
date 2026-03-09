@@ -38,6 +38,7 @@ class InvariantConfig:
     grace_period: timedelta = field(default_factory=lambda: timedelta(seconds=0))
     threshold: float = 0.0
     severity: str = "warning"
+    clearing_criteria: str = ""
 
 
 # Default invariant configurations
@@ -45,12 +46,14 @@ NODE_DOWN_CONFIG = InvariantConfig(
     name="node_down",
     grace_period=timedelta(seconds=0),  # Immediate - node down is critical
     severity="critical",
+    clearing_criteria="Node returns to Up state",
 )
 
 REDIS_DISCONNECTED_CONFIG = InvariantConfig(
     name="redis_disconnected",
     grace_period=timedelta(seconds=0),  # Immediate - Redis is critical
     severity="critical",
+    clearing_criteria="Redis connection is restored",
 )
 
 HIGH_LATENCY_CONFIG = InvariantConfig(
@@ -58,6 +61,7 @@ HIGH_LATENCY_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=60),  # 60 seconds - allow transient spikes
     threshold=100.0,  # 100ms P99 threshold
     severity="warning",
+    clearing_criteria="P99 latency drops below 100ms",
 )
 
 COUNTER_DRIFT_CONFIG = InvariantConfig(
@@ -65,6 +69,7 @@ COUNTER_DRIFT_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),  # 30 seconds - allow brief inconsistencies
     threshold=5.0,  # 5 count difference threshold
     severity="warning",
+    clearing_criteria="Counter drift between API and Redis drops below 5",
 )
 
 GHOST_ALLOWING_CONFIG = InvariantConfig(
@@ -72,6 +77,7 @@ GHOST_ALLOWING_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=0),  # Immediate - over-limit is critical
     threshold=0.0,  # Any over-limit allowing is a violation
     severity="warning",
+    clearing_criteria="No keys with limit=0 have remaining > 0",
 )
 
 OVER_LIMIT_CONFIG = InvariantConfig(
@@ -79,6 +85,7 @@ OVER_LIMIT_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=0),  # Immediate - over-limit is critical
     threshold=0.0,  # Any count > limit is a violation
     severity="warning",
+    clearing_criteria="All counter counts are at or below their limits",
 )
 
 
@@ -235,6 +242,7 @@ class RateLimiterInvariantChecker:
             last_seen=now,
             store_id=identifier,  # Use identifier for backward compat with store_id field
             severity=config.severity,
+            clearing_criteria=config.clearing_criteria or None,
         )
 
     def check_nodes_up(

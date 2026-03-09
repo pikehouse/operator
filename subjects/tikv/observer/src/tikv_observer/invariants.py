@@ -42,6 +42,7 @@ class InvariantConfig:
     grace_period: timedelta = field(default_factory=lambda: timedelta(seconds=0))
     threshold: float = 0.0
     severity: str = "warning"
+    clearing_criteria: str = ""
 
 
 # Default invariant configurations per CONTEXT.md
@@ -49,6 +50,7 @@ STORE_DOWN_CONFIG = InvariantConfig(
     name="store_down",
     grace_period=timedelta(seconds=0),  # Immediate - store down is critical
     severity="critical",
+    clearing_criteria="Store returns to Up state",
 )
 
 HIGH_LATENCY_CONFIG = InvariantConfig(
@@ -56,6 +58,7 @@ HIGH_LATENCY_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),  # 30 seconds - allow Prometheus rate window to stabilize
     threshold=100.0,  # 100ms P99 threshold
     severity="warning",
+    clearing_criteria="P99 latency drops below 100ms",
 )
 
 LOW_DISK_SPACE_CONFIG = InvariantConfig(
@@ -63,6 +66,7 @@ LOW_DISK_SPACE_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=0),  # Immediate - disk issues are critical
     threshold=70.0,  # 70% usage per CONTEXT.md
     severity="warning",
+    clearing_criteria="Disk usage drops below 70%",
 )
 
 LEADER_IMBALANCE_CONFIG = InvariantConfig(
@@ -70,6 +74,7 @@ LEADER_IMBALANCE_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=15),
     threshold=3.0,  # max - min leader count; avoids startup noise while catching 6-0-0 concentration
     severity="warning",
+    clearing_criteria="Leader count difference between stores drops to 3 or fewer",
 )
 
 HIGH_RAFT_LAG_CONFIG = InvariantConfig(
@@ -77,12 +82,14 @@ HIGH_RAFT_LAG_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=50.0,  # raft log entries behind
     severity="warning",
+    clearing_criteria="Raft log lag drops below 50 entries",
 )
 
 METRICS_UNAVAILABLE_CONFIG = InvariantConfig(
     name="metrics_unavailable",
     grace_period=timedelta(seconds=30),
     severity="warning",
+    clearing_criteria="Prometheus metrics become available for the store",
 )
 
 HIGH_RAFT_COMMIT_CONFIG = InvariantConfig(
@@ -90,6 +97,7 @@ HIGH_RAFT_COMMIT_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=50.0,  # 50ms, baseline is ~6ms
     severity="warning",
+    clearing_criteria="Raft commit P99 drops below 50ms",
 )
 
 HIGH_SCRAPE_DURATION_CONFIG = InvariantConfig(
@@ -97,6 +105,7 @@ HIGH_SCRAPE_DURATION_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=0.5,  # 500ms; baseline is ~10ms, network latency inflates scrape time
     severity="warning",
+    clearing_criteria="Prometheus scrape duration drops below 500ms",
 )
 
 STALE_HEARTBEAT_CONFIG = InvariantConfig(
@@ -104,6 +113,7 @@ STALE_HEARTBEAT_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=0),  # Immediate — staleness IS the grace
     threshold=60.0,  # seconds since last heartbeat
     severity="critical",
+    clearing_criteria="Store heartbeat received within last 60 seconds",
 )
 
 PD_HEALTH_CONFIG = InvariantConfig(
@@ -111,6 +121,7 @@ PD_HEALTH_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=15),  # Brief grace: PD elections take ~5-10s
     threshold=3.0,  # Expected PD node count
     severity="critical",
+    clearing_criteria="All PD nodes are healthy and responsive",
 )
 
 
@@ -293,6 +304,7 @@ class TiKVInvariantChecker:
             last_seen=now,
             store_id=store_id,
             severity=config.severity,
+            clearing_criteria=config.clearing_criteria or None,
         )
 
     def check_stores_up(

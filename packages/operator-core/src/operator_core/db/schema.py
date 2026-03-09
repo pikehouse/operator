@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS tickets (
     variant_model TEXT,                    -- Variant model override (e.g., claude-sonnet-4-20250514)
     variant_system_prompt TEXT,            -- Variant system prompt override
     variant_tools_config TEXT,             -- Variant tools config JSON
+    clearing_criteria TEXT,                -- Plain-text description of what "fixed" looks like
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

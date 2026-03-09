@@ -41,6 +41,7 @@ class InvariantViolation:
     last_seen: datetime
     store_id: str | None = None
     severity: str = "warning"
+    clearing_criteria: str | None = None
 
 
 @runtime_checkable

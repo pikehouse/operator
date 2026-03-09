@@ -42,6 +42,8 @@ async def process_ticket(
     """
     # Build ticket description
     ticket_text = f"Ticket #{ticket.id}: {ticket.invariant_name}\n{ticket.message}"
+    if ticket.clearing_criteria:
+        ticket_text += f"\n\nClearing criteria (ticket auto-resolves when):\n{ticket.clearing_criteria}"
     if ticket.metric_snapshot:
         ticket_text += f"\n\nMetrics:\n{json.dumps(ticket.metric_snapshot, indent=2)}"
 

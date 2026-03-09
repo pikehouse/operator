@@ -30,6 +30,7 @@ class InvariantConfig:
     grace_period: timedelta = field(default_factory=lambda: timedelta(seconds=0))
     threshold: float = 0.0
     severity: str = "warning"
+    clearing_criteria: str = ""
 
 
 # Invariant configurations
@@ -38,12 +39,14 @@ POOL_EXHAUSTION_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=90.0,  # total/max > 90% OR waiting > 0
     severity="critical",
+    clearing_criteria="Pool utilization drops below 90% with zero waiting connections",
 )
 
 DB_UNREACHABLE_CONFIG = InvariantConfig(
     name="db_unreachable",
     grace_period=timedelta(seconds=0),  # Immediate
     severity="critical",
+    clearing_criteria="Database becomes reachable",
 )
 
 IDLE_IN_TRANSACTION_CONFIG = InvariantConfig(
@@ -51,6 +54,7 @@ IDLE_IN_TRANSACTION_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=60),
     threshold=3.0,  # count > 3
     severity="warning",
+    clearing_criteria="Fewer than 3 idle-in-transaction sessions",
 )
 
 LOCK_CONTENTION_CONFIG = InvariantConfig(
@@ -58,6 +62,7 @@ LOCK_CONTENTION_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=15),
     threshold=5.0,  # waiting_on_lock > 5
     severity="warning",
+    clearing_criteria="Fewer than 5 sessions waiting on locks",
 )
 
 HIGH_LATENCY_CONFIG = InvariantConfig(
@@ -65,6 +70,7 @@ HIGH_LATENCY_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=60),
     threshold=500.0,  # p99 > 500ms
     severity="warning",
+    clearing_criteria="P99 latency drops below 500ms",
 )
 
 HIGH_ERROR_RATE_CONFIG = InvariantConfig(
@@ -72,6 +78,7 @@ HIGH_ERROR_RATE_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=5.0,  # error_rate > 5%
     severity="critical",
+    clearing_criteria="Error rate drops below 5%",
 )
 
 TABLE_BLOAT_CONFIG = InvariantConfig(
@@ -79,6 +86,7 @@ TABLE_BLOAT_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=2.0,  # dead_tuples / live_tuples > 2.0 for any table
     severity="warning",
+    clearing_criteria="Dead tuple ratio drops below 2.0x for all tables",
 )
 
 HIGH_SEARCH_LATENCY_CONFIG = InvariantConfig(
@@ -86,6 +94,7 @@ HIGH_SEARCH_LATENCY_CONFIG = InvariantConfig(
     grace_period=timedelta(seconds=30),
     threshold=2000.0,  # search P99 > 2000ms
     severity="warning",
+    clearing_criteria="Search latency drops below 2000ms",
 )
 
 
@@ -327,6 +336,7 @@ class ChatDBAppInvariantChecker:
             first_seen=first_seen,
             last_seen=now,
             severity=config.severity,
+            clearing_criteria=config.clearing_criteria or None,
         )
 
     def clear_state(self) -> None:

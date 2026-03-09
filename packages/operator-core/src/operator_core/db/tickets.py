@@ -61,6 +61,13 @@ class TicketDB:
     async def _ensure_schema(self) -> None:
         """Create tables and indexes if they don't exist."""
         await self._conn.executescript(SCHEMA_SQL)
+        # Migration: add clearing_criteria column to existing databases
+        try:
+            await self._conn.execute(
+                "ALTER TABLE tickets ADD COLUMN clearing_criteria TEXT"
+            )
+        except Exception:
+            pass  # Column already exists
         await self._conn.commit()
 
     def _row_to_ticket(self, row: aiosqlite.Row) -> Ticket:
@@ -144,8 +151,8 @@ class TicketDB:
             INSERT INTO tickets (
                 violation_key, invariant_name, store_id, message, severity,
                 first_seen_at, last_seen_at, batch_key, metric_snapshot, subject_context,
-                type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                type, clearing_criteria
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 violation_key,
@@ -159,6 +166,7 @@ class TicketDB:
                 snapshot_json,
                 subject_context,
                 type,
+                violation.clearing_criteria,
             ),
         )
         await self._conn.commit()
